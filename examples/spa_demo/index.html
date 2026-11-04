@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>spa_demo — 图书清单 SPA</title>
+  <style>
+    :root { --primary: #2563eb; --danger: #dc2626; --bg: #f8fafc; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; margin: 0; background: var(--bg); color: #1e293b; }
+    header { background: var(--primary); color: #fff; padding: 14px 24px; display: flex; gap: 20px; align-items: center; }
+    header a { color: #fff; text-decoration: none; font-weight: 600; margin-right: 16px; }
+    header a.active { text-decoration: underline; }
+    main { max-width: 720px; margin: 28px auto; padding: 0 16px; }
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+    h1 { font-size: 22px; margin: 0 0 12px; }
+    h2 { font-size: 18px; margin: 0 0 12px; }
+    input, select, button { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; }
+    input { width: 100%; margin-bottom: 10px; }
+    .row { display: flex; gap: 10px; }
+    .row > div { flex: 1; }
+    .btn { background: var(--primary); color: #fff; border: none; cursor: pointer; }
+    .btn.danger { background: var(--danger); }
+    .error { color: var(--danger); font-size: 13px; margin: 4px 0 8px; min-height: 16px; }
+    ul { list-style: none; padding: 0; }
+    li { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+    li:last-child { border-bottom: none; }
+    .meta { color: #64748b; font-size: 13px; }
+    #view { min-height: 200px; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>spa_demo</strong>
+    <nav id="nav">
+      <a href="#/books">图书列表</a>
+      <a href="#/books/new">新增图书</a>
+    </nav>
+  </header>
+  <main>
+    <div id="view"></div>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
