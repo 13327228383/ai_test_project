@@ -62,8 +62,10 @@ _doStartStep*.txt
 .reasonix/
 .cache/
 
-# ★ sentence-transformers 模型缓存（自动下载，固定路径）
-models/
+# ★ sentence-transformers 模型缓存（自动下载，固定路径，仅限仓库根目录）
+#   根因修复(2026-11-04)：原写 `models/` 未锚定，会连带忽略 `src/models/`
+#   （RBAC 权限模型源码）→ 公开快照丢失源码、CI 报 `No module named 'src.models'`。
+/models/
 
 # Confluence MCP npm 依赖（npx -y 自动下载，本地仅锁版本）
 src/pipeline/steps/step1/mcp/node_modules/

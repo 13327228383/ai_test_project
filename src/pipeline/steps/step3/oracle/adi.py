@@ -99,6 +99,9 @@ ADI_SCORE_TABLE: dict[str, int] = {
     "form_label_association": 2,  # label/控件关联=属性级
     "field_constraint": 2,  # 控件 DOM 约束属性核对=属性级
     "access_control": 2,  # 访问控制行为断言（403/登录墙）=协议/行为级
+    # ★ 2026-11-04：补齐 any_of / security_probe 的深度分（此前静默 0 分）
+    "any_of": 2,  # 析取式组合断言：分支行为级（等价于其中最强分支的门槛）
+    "security_probe": 3,  # 安全探针：载荷注入后的行为/内容级核验
     # ── 1 分 存在性/状态/性能级 (15) ──
     "element_exists": 1,
     "element_visible": 1,

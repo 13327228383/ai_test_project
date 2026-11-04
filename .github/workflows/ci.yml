@@ -166,7 +166,11 @@ jobs:
       - name: 安装 Chromium 内核（spa_demo 浏览器道必需）
         # 依赖包里的 playwright 只提供 API，浏览器内核需单独下载；缺内核时
         # C4a 浏览器道用例会直接失败（而非跳过），故在本 job 显式安装。
-        run: python -m playwright install --with-deps chromium
+        # 显式先装 playwright：上一步 `-r requirements.txt || true` 会吞掉安装失败，
+        # 实测该步可能整体未装成（`No module named playwright`），此处兜底保证可用。
+        run: |
+          python -m pip install "playwright>=1.40.0"
+          python -m playwright install --with-deps chromium
 
       - name: 反补丁门禁 + 链路生命周期
         run: pytest tests/test_core tests/test_chains -q

@@ -901,6 +901,22 @@ CHECK_TAXONOMY: dict[str, dict[str, Any]] = {
         "aliases": ["semantic_check", "semantic"],
         "description": "AI 语义文本判定断言（机械文本优先、语义兜底）",
     },
+    # ── ★ 2026-11-04：执行端已注册但词表未登记的两族（漂移门禁实测）──
+    #   实测 registered_check_types() 含 ui:any_of / ui:security_probe，但
+    #   resolve_check_type 归一失败 → ADI 按 0 分静默误判（同 F5 历史根因）。
+    #   登记为权威族并使 `_check` 形态对称（由 resolve_check_type 规则 3 兜底）。
+    "any_of": {
+        "tool_name": "",
+        "track": "ui",
+        "aliases": ["any_of_check"],
+        "description": "析取式断言（任一分支成立即通过，全不成立才失败）",
+    },
+    "security_probe": {
+        "tool_name": "",
+        "track": "ui",
+        "aliases": ["security_probe_check"],
+        "description": "安全探针断言（载荷注入后核验页面行为：回显/报错/拦截）",
+    },
     "db_table_accessed": {
         "tool_name": "",
         "track": "db",
