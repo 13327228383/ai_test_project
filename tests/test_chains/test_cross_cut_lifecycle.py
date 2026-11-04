@@ -27,6 +27,32 @@ from src.pipeline.steps.step4.empirical.target_empirical import TargetEmpiricalV
 _ROOT = Path(__file__).resolve().parents[2]
 _REPORT = _ROOT / "logs" / "reports" / "empirical_api_demo_report.json"
 
+# 前置条件（诚实跳过，不虚假变绿）：本文件真实拉起靶子系统子进程，故必须存在
+#   examples/api_demo/app.py 与 examples/spa_demo/ 两份夹具。
+# 开源仓库按「不上传靶子系统」约定剔除了 examples/ —— 此时链级测试既无法建立
+#   网络边界外的真 SUT，也不应把"夹具缺席"报成引擎缺陷（实测 CI 两 job 均以
+#   `功能探针无产出（C4b 断链）` 失败）。故统一在模块级显式跳过并写明原因，
+#   本地（含 examples/）行为完全不变。
+_SUT_PRECONDITIONS = (
+    _ROOT / "examples" / "api_demo" / "app.py",
+    _ROOT / "examples" / "spa_demo",
+)
+_missing_fixtures = [str(_p) for _p in _SUT_PRECONDITIONS if not _p.exists()]
+
+
+@pytest.fixture(autouse=True)
+def _require_sut_fixtures():
+    """夹具缺席时逐例跳过（用例照常被收集，pytest 退出码仍为 0）。
+
+    不用模块级 skip：全部用例在收集期跳过会让 pytest 返回 exit 5（no tests ran），
+    CI 依旧判红，只是把"失败"换成"收集为空"——同样是假信号。
+    """
+    if _missing_fixtures:
+        pytest.skip(
+            "缺少靶子系统夹具（本仓库按开源约定不含 examples/）: "
+            + ", ".join(_missing_fixtures)
+        )
+
 
 def _run_api_demo() -> dict:
     cfg = get_target_cfg("api_demo")
