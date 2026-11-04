@@ -1,0 +1,1021 @@
+{% extends "_layout_base.html" %}
+{% block title %}文件上传 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+文件上传
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnRefresh" data-perm="file.upload" data-tooltip="刷新已上传文件列表" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+  刷新列表
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════ 信息栏 ════════════ -->
+<div class="fu-info-bar">
+  <div class="fu-info-item">
+    <span class="fu-info-label">已上传文件</span>
+    <span class="fu-info-value" id="fileCount">0</span>
+  </div>
+  <div class="fu-info-item">
+    <span class="fu-info-label">总大小</span>
+    <span class="fu-info-value" id="totalSize">0 B</span>
+  </div>
+  <div class="fu-info-item">
+    <span class="fu-info-label">支持类型</span>
+    <span class="fu-info-value fu-info-types" id="supportedTypes">.csv .xlsx .xls .md .docx .doc .pdf .xmind .json .sql .txt</span>
+  </div>
+</div>
+
+<!-- ════════════ 主面板 ════════════ -->
+<div class="fu-panel">
+
+  <!-- 拖拽上传区 -->
+  <div class="fu-drop-zone" id="dropZone" tabindex="0">
+    <div class="fu-drop-zone-icon">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+    </div>
+    <div class="fu-drop-zone-title">拖拽文件到此处，或 <span class="fu-drop-zone-link">点击选择文件</span></div>
+    <div class="fu-drop-zone-hint">支持 .csv .xlsx .xls .md .docx .doc .xmind .json .sql .txt，单文件不超过 50MB</div>
+    <input type="file" id="fileInput" multiple hidden>
+  </div>
+
+  <!-- 待上传文件表 -->
+  <div class="fu-pending-section" id="pendingSection" hidden>
+    <div class="fu-section-header">
+      <span class="fu-section-title">待上传文件</span>
+      <span class="fu-section-count" id="pendingCount">0</span>
+      <button class="fu-btn-ghost-sm" id="btnClearPending" type="button" data-tooltip="清空当前待上传文件列表" data-tooltip-pos="top">清空待传</button>
+    </div>
+    <div class="fu-table-wrap">
+      <table class="fu-table">
+        <thead>
+          <tr>
+            <th class="fu-th-name">文件名</th>
+            <th class="fu-th-cat">分类预览（后端识别）</th>
+            <th class="fu-th-size">大小</th>
+            <th class="fu-th-weight">权重</th>
+            <th class="fu-th-action">操作</th>
+          </tr>
+        </thead>
+        <tbody id="pendingBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 已上传文件折叠区 -->
+  <div class="fu-uploaded-section" id="uploadedSection">
+    <div class="fu-uploaded-header" id="uploadedHeader">
+      <svg class="fu-uploaded-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      <span class="fu-section-title">已上传文件</span>
+      <span class="fu-uploaded-badge" id="uploadedBadge">0</span>
+    </div>
+    <div class="fu-uploaded-body" id="uploadedBody">
+      <div class="fu-empty-state" id="uploadedEmpty">暂无已上传文件</div>
+      <div class="fu-uploaded-list" id="uploadedList"></div>
+    </div>
+  </div>
+
+  <!-- 底部操作 -->
+  <div class="fu-action-row">
+    <button class="fu-btn-ghost" id="btnCancel" type="button" data-tooltip="取消并清空待上传文件" data-tooltip-pos="top">取消</button>
+    <button class="fu-btn-primary" id="btnUploadAll" type="button" disabled data-tooltip="逐个上传待传文件到后端" data-tooltip-pos="top">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      全部上传
+    </button>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ── 嵌入模式（iframe 内）：隐藏布局框架，仅显示上传功能本体 ── */
+html.embed-mode .app-layout > .sidebar { display: none !important; }
+html.embed-mode .topbar { display: none !important; }
+html.embed-mode .main-content { padding: 0; }
+html.embed-mode .content-body { padding: 0; overflow-y: auto; }
+html.embed-mode .fu-info-bar { padding: 10px 16px; gap: 20px; margin-bottom: 10px; }
+html.embed-mode .fu-panel { padding: 14px; gap: 12px; border-radius: 0; border: none; box-shadow: none; }
+html.embed-mode .fu-drop-zone { padding: 16px 24px; gap: 6px; }
+html.embed-mode .fu-drop-zone-icon { display: none; }
+html.embed-mode .fu-drop-zone-title { font-size: var(--fs-small); }
+</style>
+<script>
+// 嵌入模式检测：在 iframe 中加载时自动隐藏侧边栏/面包屑/topbar
+if (window.self !== window.top) {
+  document.documentElement.classList.add('embed-mode');
+}
+</script>
+<style>
+/* ════════════ 信息栏 ════════════ */
+.fu-info-bar {
+  display: flex;
+  gap: 32px;
+  padding: 16px 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.fu-info-item { display: flex; flex-direction: column; gap: 4px; }
+.fu-info-label { font-size: var(--fs-small); color: var(--text-secondary); }
+.fu-info-value {
+  font-size: var(--fs-h3); font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+.fu-info-primary { color: var(--color-primary); }
+.fu-info-types { font-size: var(--fs-small); font-family: var(--font-mono); }
+
+/* ════════════ 主面板 ════════════ */
+.fu-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--surface-shadow-float);
+  padding: 24px;
+  display: flex; flex-direction: column;
+  gap: 20px;
+}
+
+/* ════════════ 拖拽区 ════════════ */
+.fu-drop-zone {
+  border: 2px dashed var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  padding: 40px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+}
+.fu-drop-zone:hover,
+.fu-drop-zone.dragover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+.fu-drop-zone.dragover {
+  box-shadow: 0 0 24px var(--color-primary-tint);
+}
+.fu-drop-zone-icon {
+  color: var(--text-tertiary);
+  transition: color 0.15s;
+}
+.fu-drop-zone:hover .fu-drop-zone-icon,
+.fu-drop-zone.dragover .fu-drop-zone-icon {
+  color: var(--color-primary);
+}
+.fu-drop-zone-title {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  color: var(--text-primary);
+}
+.fu-drop-zone-link {
+  color: var(--color-primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.fu-drop-zone-hint {
+  font-size: var(--fs-small);
+  color: var(--text-tertiary);
+}
+
+/* ════════════ Section Header ════════════ */
+.fu-pending-section,
+.fu-uploaded-section {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+.fu-section-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 16px;
+  background: var(--border-subtle);
+  border-bottom: 1px solid var(--border-default);
+}
+.fu-section-title {
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.fu-section-count {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  background: var(--border-default);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+.fu-btn-ghost-sm {
+  margin-left: auto;
+  height: 26px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.fu-btn-ghost-sm:hover {
+  border-color: var(--state-error);
+  color: var(--state-error);
+}
+
+/* ════════════ Table ════════════ */
+.fu-table-wrap { max-height: 320px; overflow-y: auto; overflow-y: overlay; }
+.fu-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-small);
+  table-layout: fixed;
+  border: 1px solid var(--text-tertiary);
+}
+.fu-table thead th {
+  position: sticky; top: 0;
+  background: var(--bg-elevated);
+  padding: 10px 12px;
+  text-align: left;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--text-tertiary);
+  border-right: 1px solid var(--text-tertiary);
+}
+.fu-table thead th:last-child { border-right: none; }
+/* 列宽（class 治理，替代内联 width） */
+.fu-th-name { width: 30%; }
+.fu-th-cat { width: 22%; }
+.fu-th-size { width: 12%; }
+.fu-th-weight { width: 12%; }
+.fu-th-action { width: 12%; }
+.fu-table tbody tr {
+  border-bottom: 1px solid var(--text-tertiary);
+  transition: background 0.1s;
+}
+.fu-table tbody tr:hover { background: var(--border-faint); }
+.fu-table tbody tr:last-child { border-bottom: none; }
+.fu-table td { padding: 10px 12px; vertical-align: middle; color: var(--text-primary); overflow: hidden; border-right: 1px solid var(--text-tertiary); }
+.fu-table td:last-child { border-right: none; }
+
+.fu-file-name-cell { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
+.fu-file-icon {
+  width: 24px; height: 24px;
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px;
+  font-weight: var(--fw-bold);
+  font-family: var(--font-mono);
+  color: var(--text-on-color);
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fu-file-icon.pdf { background: var(--file-icon-pdf); }
+.fu-file-icon.docx, .fu-file-icon.doc { background: var(--file-icon-doc); }
+.fu-file-icon.xlsx, .fu-file-icon.xls { background: var(--file-icon-xlsx); }
+.fu-file-icon.csv { background: var(--file-icon-csv); }
+.fu-file-icon.json { background: var(--file-icon-json); }
+.fu-file-icon.sql { background: var(--file-icon-sql); }
+.fu-file-icon.md, .fu-file-icon.markdown { background: var(--file-icon-md); }
+.fu-file-icon.xmind { background: var(--file-icon-xmind); }
+.fu-file-icon.txt { background: var(--file-icon-txt); }
+.fu-file-icon.default { background: var(--text-tertiary); }
+.fu-file-name { font-weight: var(--fw-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.fu-file-ext { color: var(--text-tertiary); font-size: var(--fs-xs); flex-shrink: 0; }
+
+.fu-cat-cell { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
+.fu-cat-auto-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-quaternary);
+  flex-shrink: 0;
+}
+.fu-cat-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 3px 20px 3px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-hover);
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 5px center;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.fu-cat-select:hover {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+}
+.fu-cat-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.fu-weight-input {
+  width: 72px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: var(--fs-xs);
+  font-family: var(--font-mono);
+  outline: none;
+  text-align: center;
+}
+.fu-weight-input:focus {
+  border-color: var(--color-primary);
+}
+
+.fu-btn-del {
+  width: 26px; height: 26px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.fu-btn-del:hover {
+  border-color: var(--state-error);
+  color: var(--state-error);
+  background: var(--state-error-soft);
+}
+
+/* ════════════ 已上传折叠区 ════════════ */
+.fu-uploaded-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 16px;
+  background: var(--border-subtle);
+  border: none;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+}
+.fu-uploaded-header:hover { background: var(--border-default); }
+.fu-uploaded-chevron { transition: transform 0.2s; color: var(--text-tertiary); }
+.fu-uploaded-header.expanded .fu-uploaded-chevron { transform: rotate(180deg); }
+.fu-uploaded-badge {
+  font-size: var(--fs-xs);
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+.fu-uploaded-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+.fu-uploaded-body.show {
+  max-height: 600px;
+  overflow-y: auto;
+  overflow-y: overlay;
+}
+.fu-empty-state {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: var(--fs-small);
+}
+.fu-uploaded-list { display: flex; flex-direction: column; }
+.fu-uploaded-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-default);
+  transition: background 0.1s;
+}
+.fu-uploaded-item:hover { background: var(--border-faint); }
+.fu-uploaded-item:last-child { border-bottom: none; }
+.fu-uploaded-item > .fu-file-icon { flex-shrink: 0; }
+.fu-uf-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fu-uf-cat {
+  font-size: var(--fs-xs);
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  min-width: 64px;
+  text-align: center;
+  white-space: nowrap;
+}
+.fu-uf-meta {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  display: flex; gap: 12px;
+  flex-shrink: 0;
+}
+.fu-uf-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.fu-uf-weight-input {
+  width: 56px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: var(--fs-xs);
+  font-family: var(--font-mono);
+  outline: none;
+  text-align: center;
+}
+.fu-uf-weight-input:focus { border-color: var(--color-primary); }
+
+/* ════════════ Action Row ════════════ */
+.fu-action-row {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-default);
+}
+.fu-btn-ghost {
+  height: var(--control-height-lg);
+  padding: 0 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+  font-family: var(--font-sans);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.fu-btn-ghost:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+.fu-btn-primary {
+  height: var(--control-height-lg);
+  padding: 0 24px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--color-primary);
+  color: var(--text-inverse);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.fu-btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  box-shadow: 0 0 16px var(--color-primary-glow);
+}
+.fu-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ════════════ Upload Progress Bar ════════════ */
+.fu-upload-progress {
+  height: 4px;
+  background: var(--border-default);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin-top: 8px;
+  display: none;
+}
+.fu-upload-progress.show { display: block; }
+.fu-upload-progress-bar {
+  height: 100%;
+  background: var(--color-primary);
+  width: 0%;
+  transition: width 0.2s;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+'use strict';
+
+const A = window._A;
+if (!A) { console.error('[file-upload] _A 未初始化'); return; }
+const $ = A.$, escHtml = A.escHtml, escAttr = A.escAttr, api = A.api, appendLog = A.appendLog;
+
+// ── 常量 ──
+const ALLOWED_EXTENSIONS = ['.csv', '.xlsx', '.xls', '.md', '.markdown', '.docx', '.doc', '.pptx', '.pdf', '.xmind', '.json', '.sql', '.txt'];
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
+const FILE_CATEGORIES = {
+  "requirement": "需求文档",
+  "data_dict": "数据字典",
+  "api_supplement": "接口补充",
+  "design_supplement": "设计补充",
+  "test_data": "测试数据",
+  "ddl_schema": "DDL/Schema",
+};
+const FORMAT_CATEGORY_MAP = {
+  ".sql": "ddl_schema",
+  ".csv": "test_data",
+  ".xlsx": "data_dict",
+  ".xls": "data_dict",
+  ".json": "data_dict",
+  ".md": "requirement",
+  ".markdown": "requirement",
+  ".docx": "requirement",
+  ".doc": "requirement",
+  ".pdf": "requirement",
+  ".xmind": "requirement",
+  ".txt": "requirement",
+};
+
+// ── 状态 ──
+const state = {
+  pendingFiles: [],   // [{file, weight, ext}]  分类由后端识别，前端不预填
+  uploadedFiles: [],  // [{id, filename, format, category, category_label, weight, hash, length, created_at}]
+  uploading: false,
+  uploadedExpanded: true,
+};
+
+// ── 元素引用 ──
+const els = {
+  curProject: $('curProject'),
+  fileCount: $('fileCount'),
+  totalSize: $('totalSize'),
+  dropZone: $('dropZone'),
+  fileInput: $('fileInput'),
+  pendingSection: $('pendingSection'),
+  pendingCount: $('pendingCount'),
+  pendingBody: $('pendingBody'),
+  btnClearPending: $('btnClearPending'),
+  uploadedSection: $('uploadedSection'),
+  uploadedHeader: $('uploadedHeader'),
+  uploadedBody: $('uploadedBody'),
+  uploadedBadge: $('uploadedBadge'),
+  uploadedEmpty: $('uploadedEmpty'),
+  uploadedList: $('uploadedList'),
+  btnCancel: $('btnCancel'),
+  btnUploadAll: $('btnUploadAll'),
+  btnRefresh: $('btnRefresh'),
+};
+
+// ════════════ 工具函数 ════════════
+
+function getExt(filename) {
+  const idx = filename.lastIndexOf('.');
+  return idx >= 0 ? filename.substring(idx).toLowerCase() : '';
+}
+
+function getFileIconClass(ext) {
+  const e = ext.replace('.', '');
+  if (['pdf', 'docx', 'doc', 'xlsx', 'xls', 'csv', 'json', 'sql', 'md', 'markdown', 'xmind', 'txt'].includes(e)) {
+    return 'fu-file-icon ' + e;
+  }
+  return 'fu-file-icon default';
+}
+
+// 图标内显示文本：长扩展名缩写（如 markdown→MD, jpeg→JPG）
+const FILE_ICON_TEXT_MAP = { markdown: 'MD', jpeg: 'JPG', jpg: 'JPG' };
+function getFileIconText(ext) {
+  const e = ext.replace('.', '').toLowerCase();
+  return (FILE_ICON_TEXT_MAP[e] || e).toUpperCase().substring(0, 4);
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+}
+
+function formatTime(ts) {
+  if (!ts) return '-';
+  return String(ts).replace('T', ' ').substring(0, 19);
+}
+
+function isAllowedFile(filename) {
+  return ALLOWED_EXTENSIONS.includes(getExt(filename));
+}
+
+// ════════════ 待上传文件管理 ════════════
+
+function addPendingFiles(fileList) {
+  for (const file of fileList) {
+    if (!isAllowedFile(file.name)) {
+      appendLog('⚠️ 文件 ' + file.name + ' 类型不允许，已跳过');
+      A.toast('不支持的文件格式: ' + file.name + '（支持 ' + ALLOWED_EXTENSIONS.join(' ') + '）', 'error');
+      continue;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      appendLog('⚠️ 文件 ' + file.name + ' 超过 50MB，已跳过');
+      A.toast(file.name + ' 超过 50MB 大小限制，已跳过', 'error');
+      continue;
+    }
+    // 去重（按 name+size）
+    const exists = state.pendingFiles.some(p => p.file.name === file.name && p.file.size === file.size);
+    if (exists) {
+      appendLog('⚠️ 文件 ' + file.name + ' 已在待传列表，已跳过');
+      continue;
+    }
+    const ext = getExt(file.name);
+    const autoCat = FORMAT_CATEGORY_MAP[ext] || 'requirement';
+    state.pendingFiles.push({
+      file: file,
+      ext: ext,
+      weight: 0.5,
+      category: autoCat,  // 系统自动识别，用户可手动重选
+    });
+  }
+  renderPending();
+  updateUploadAllButton();
+}
+
+function removePending(idx) {
+  state.pendingFiles.splice(idx, 1);
+  renderPending();
+  updateUploadAllButton();
+}
+
+function clearPending() {
+  state.pendingFiles = [];
+  renderPending();
+  updateUploadAllButton();
+}
+
+function renderPending() {
+  if (state.pendingFiles.length === 0) {
+    els.pendingSection.style.display = 'none';
+    els.pendingCount.textContent = '0';
+    return;
+  }
+  els.pendingSection.style.display = 'block';
+  els.pendingCount.textContent = state.pendingFiles.length;
+  els.pendingBody.innerHTML = state.pendingFiles.map((p, idx) => {
+    const ext = p.ext.replace('.', '');
+    const iconClass = getFileIconClass(p.ext);
+    // ★ 分类：系统自动识别为默认值，用户可通过下拉框手动重选
+    return '<tr>' +
+      '<td><div class="fu-file-name-cell">' +
+        '<div class="' + iconClass + '">' + escHtml(getFileIconText(p.ext)) + '</div>' +
+        '<div><div class="fu-file-name">' + escHtml(p.file.name) + '</div>' +
+        '<div class="fu-file-ext">.' + escHtml(ext) + '</div></div>' +
+      '</div></td>' +
+      '<td><div class="fu-cat-cell">' +
+        '<div class="fu-cat-auto-icon" title="系统已自动识别，可手动调整"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div>' +
+        '<select class="fu-cat-select" data-idx="' + idx + '">' +
+          Object.keys(FILE_CATEGORIES).map(function(key) {
+            var sel = key === p.category ? ' selected' : '';
+            return '<option value="' + escAttr(key) + '"' + sel + '>' + escHtml(FILE_CATEGORIES[key]) + '</option>';
+          }).join('') +
+        '</select>' +
+      '</div></td>' +
+      '<td>' + formatSize(p.file.size) + '</td>' +
+      '<td><input type="number" class="fu-weight-input" data-idx="' + idx + '" min="0" max="1" step="0.1" value="' + p.weight + '"></td>' +
+      '<td><button class="fu-btn-del" data-idx="' + idx + '" data-tooltip="从待传列表移除该文件" data-tooltip-pos="top">' +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
+      '</button></td>' +
+    '</tr>';
+  }).join('');
+
+  // 绑定事件（分类下拉 + 权重输入 + 删除按钮）
+  els.pendingBody.querySelectorAll('.fu-cat-select').forEach(sel => {
+    sel.addEventListener('change', function() {
+      const idx = parseInt(this.dataset.idx);
+      state.pendingFiles[idx].category = this.value;
+    });
+  });
+  els.pendingBody.querySelectorAll('.fu-weight-input').forEach(inp => {
+    inp.addEventListener('change', function() {
+      const idx = parseInt(this.dataset.idx);
+      let v = parseFloat(this.value);
+      if (isNaN(v)) v = 0.5;
+      v = Math.max(0, Math.min(1, v));
+      this.value = v;
+      state.pendingFiles[idx].weight = v;
+    });
+  });
+  els.pendingBody.querySelectorAll('.fu-btn-del').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const idx = parseInt(this.dataset.idx);
+      removePending(idx);
+    });
+  });
+}
+
+function updateUploadAllButton() {
+  els.btnUploadAll.disabled = state.pendingFiles.length === 0 || state.uploading;
+}
+
+// ════════════ 已上传文件管理 ════════════
+
+async function loadUploadedFiles() {
+  try {
+    const d = await api('GET', '/api/step1/uploads');
+    if (!d || !d.ok) {
+      appendLog('⚠️ 加载已上传文件失败: ' + (d && d.error ? d.error : '未知'));
+      return;
+    }
+    state.uploadedFiles = d.files || [];
+    renderUploaded();
+    updateInfoBar();
+  } catch (e) {
+    appendLog('⚠️ 加载已上传文件异常: ' + String(e));
+  }
+}
+
+function renderUploaded() {
+  els.uploadedBadge.textContent = state.uploadedFiles.length;
+  if (state.uploadedFiles.length === 0) {
+    els.uploadedEmpty.style.display = 'block';
+    els.uploadedList.innerHTML = '';
+    return;
+  }
+  els.uploadedEmpty.style.display = 'none';
+  els.uploadedList.innerHTML = state.uploadedFiles.map(f => {
+    const ext = '.' + (f.format || 'txt');
+    const iconClass = getFileIconClass(ext);
+    return '<div class="fu-uploaded-item" data-hash="' + escAttr(f.hash) + '">' +
+      '<div class="' + iconClass + '">' + escHtml(getFileIconText(ext)) + '</div>' +
+      '<span class="fu-uf-cat">' + escHtml(f.category_label || FILE_CATEGORIES[f.category] || '-') + '</span>' +
+      '<div class="fu-uf-name" title="' + escAttr(f.filename) + '">' + escHtml(f.filename) + '</div>' +
+      '<div class="fu-uf-meta">' +
+        '<span>' + formatSize(f.length || 0) + '</span>' +
+        '<span>' + formatTime(f.created_at) + '</span>' +
+      '</div>' +
+      '<div class="fu-uf-actions">' +
+        '<input type="number" class="fu-uf-weight-input" data-hash="' + escAttr(f.hash) + '" min="0" max="1" step="0.1" value="' + (f.weight != null ? f.weight : 0.5) + '" title="权重">' +
+        '<button class="fu-btn-del" data-hash="' + escAttr(f.hash) + '" data-tooltip="从已上传列表删除该文件" data-tooltip-pos="top">' +
+          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>' +
+        '</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  // 绑定权重修改
+  els.uploadedList.querySelectorAll('.fu-uf-weight-input').forEach(inp => {
+    inp.addEventListener('change', async function() {
+      const hash = this.dataset.hash;
+      let v = parseFloat(this.value);
+      if (isNaN(v)) v = 0.5;
+      v = Math.max(0, Math.min(1, v));
+      this.value = v;
+      try {
+        const d = await api('PUT', '/api/step1/uploads/' + encodeURIComponent(hash) + '/weight', { weight: v });
+        if (d && d.ok) {
+          appendLog('✅ 权重已更新: ' + hash.substring(0, 8) + ' = ' + v);
+          // 同步本地状态
+          const f = state.uploadedFiles.find(x => x.hash === hash);
+          if (f) f.weight = v;
+        } else {
+          appendLog('⚠️ 权重更新失败: ' + (d && d.error ? d.error : '未知'));
+        }
+      } catch (e) {
+        appendLog('⚠️ 权重更新异常: ' + String(e));
+      }
+    });
+  });
+
+  // 绑定删除
+  els.uploadedList.querySelectorAll('.fu-btn-del').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      const hash = this.dataset.hash;
+      if (!(await A.confirm('确认删除该文件？', { danger: true }))) return;
+      try {
+        const d = await api('DELETE', '/api/step1/uploads/' + encodeURIComponent(hash));
+        if (d && d.ok) {
+          appendLog('✅ 已删除: ' + hash.substring(0, 8));
+          state.uploadedFiles = state.uploadedFiles.filter(x => x.hash !== hash);
+          renderUploaded();
+          updateInfoBar();
+        } else {
+          A.toast('删除失败: ' + (d && d.error ? d.error : '未知'), 'error');
+        }
+      } catch (e) {
+        A.toast('删除异常: ' + String(e), 'error');
+      }
+    });
+  });
+}
+
+async function updateInfoBar() {
+  // 当前项目 — 优先用 A._currentProject，未设置则从 API 获取
+  if (A._currentProject) {
+    if (els.curProject) els.curProject.textContent = A._currentProjectName || A._currentProject;
+  } else {
+    try {
+      const r = await A.api('GET', '/api/projects');
+      if (r && r.current) {
+        A._currentProject = r.current;
+        // ★ 查找 display_name
+        var pl = r.project_list || [];
+        var found = pl.find(function(p) { return p.name === r.current; });
+        A._currentProjectName = (found && found.display_name) || r.current;
+        if (els.curProject) els.curProject.textContent = A._currentProjectName;
+      } else {
+        if (els.curProject) els.curProject.textContent = '-';
+      }
+    } catch(e) {
+      if (els.curProject) els.curProject.textContent = '-';
+    }
+  }
+  els.fileCount.textContent = state.uploadedFiles.length;
+  const totalBytes = state.uploadedFiles.reduce((sum, f) => sum + (f.length || 0), 0);
+  els.totalSize.textContent = formatSize(totalBytes);
+}
+
+// ════════════ 上传 ════════════
+
+async function uploadAll() {
+  if (state.pendingFiles.length === 0 || state.uploading) return;
+  state.uploading = true;
+
+  let successCount = 0;
+  let failCount = 0;
+  for (let i = 0; i < state.pendingFiles.length; i++) {
+    const p = state.pendingFiles[i];
+    try {
+      const formData = new FormData();
+      formData.append('file', p.file);
+      formData.append('weight', String(p.weight));
+      formData.append('category', p.category || '');
+      const r = await fetch('/api/step1/upload', { method: 'POST', body: formData });
+      const d = await r.json();
+      if (d && d.ok) {
+        successCount++;
+        appendLog('✅ 上传成功: ' + p.file.name + ' (' + (d.category_label || '-') + ')');
+      } else {
+        failCount++;
+        appendLog('⚠️ 上传失败: ' + p.file.name + ' - ' + (d && d.error ? d.error : '未知'));
+      }
+    } catch (e) {
+      failCount++;
+      appendLog('⚠️ 上传异常: ' + p.file.name + ' - ' + String(e));
+    }
+  }
+
+  state.pendingFiles = [];
+  renderPending();
+  appendLog('上传完成: 成功 ' + successCount + ' 个, 失败 ' + failCount + ' 个');
+  // 重新加载已上传列表
+  await loadUploadedFiles();
+  state.uploading = false;
+}
+
+// ════════════ 事件 ════════════
+
+function bindEvents() {
+  // 拖拽
+  els.dropZone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    this.classList.add('dragover');
+  });
+  els.dropZone.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    this.classList.remove('dragover');
+  });
+  els.dropZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    this.classList.remove('dragover');
+    const files = e.dataTransfer.files;
+    if (files && files.length) addPendingFiles(files);
+  });
+  // 点击选择
+  els.dropZone.addEventListener('click', function() {
+    els.fileInput.click();
+  });
+  // 键盘支持
+  els.dropZone.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      els.fileInput.click();
+    }
+  });
+  els.fileInput.addEventListener('change', function() {
+    if (this.files && this.files.length) addPendingFiles(this.files);
+    this.value = '';
+  });
+
+  // 清空待传
+  // T05/P2-2：内部改用 await A.confirm(...)（Promise），处理器必须声明为 async
+  els.btnClearPending.addEventListener('click', async function() {
+    if (state.pendingFiles.length === 0) return;
+    if (!(await A.confirm('确认清空所有待上传文件？', { danger: true }))) return;
+    clearPending();
+  });
+
+  // 已上传折叠
+  els.uploadedHeader.addEventListener('click', function() {
+    state.uploadedExpanded = !state.uploadedExpanded;
+    this.classList.toggle('expanded', state.uploadedExpanded);
+    els.uploadedBody.classList.toggle('show', state.uploadedExpanded);
+  });
+  // 已上传文件默认展开（2026-09-01）
+  els.uploadedHeader.classList.add('expanded');
+  els.uploadedBody.classList.add('show');
+
+  // 全部上传
+  els.btnUploadAll.addEventListener('click', function() {
+    A.withBtnLoading(els.btnUploadAll, '上传中...', async function() {
+      await uploadAll();
+      updateUploadAllButton();
+    });
+  });
+
+  // 取消（清空待传）
+  els.btnCancel.addEventListener('click', function() {
+    clearPending();
+  });
+
+  // 刷新
+  els.btnRefresh.addEventListener('click', function() {
+    A.withBtnLoading(els.btnRefresh, '刷新中...', loadUploadedFiles);
+  });
+}
+
+// ════════════ 入口 ════════════
+
+async function loadAll() {
+  await loadUploadedFiles();
+  // ★ 文件列表渲染完成后应用只读模式（项目成员）
+  applyReadonlyMode();
+}
+
+// ── 项目成员只读模式 ──
+// 无 file.upload 权限时：隐藏上传区 + 禁用删除/权重 + 插入警告横幅
+// ★ 必须在 renderUploaded() 之后调用，因为文件项是动态生成的
+function applyReadonlyMode() {
+  if (A.hasPerm('file.upload')) return; // 管理员无需只读
+  // 隐藏拖拽上传区
+  var dropZone = document.getElementById('dropZone');
+  if (dropZone) dropZone.style.display = 'none';
+  // 隐藏待上传区
+  var pendingSection = document.getElementById('pendingSection');
+  if (pendingSection) pendingSection.style.display = 'none';
+  // 隐藏底部操作行（取消 / 全部上传）
+  var actionRow = document.querySelector('.fu-action-row');
+  if (actionRow) actionRow.style.display = 'none';
+  // 隐藏已上传文件列表中的删除按钮
+  document.querySelectorAll('.fu-btn-del').forEach(function(btn) {
+    btn.style.display = 'none';
+  });
+  // 禁用已上传文件列表中的权重输入
+  document.querySelectorAll('.fu-uf-weight-input').forEach(function(inp) {
+    inp.setAttribute('disabled', '');
+    inp.style.cursor = 'not-allowed';
+    inp.style.opacity = '0.6';
+  });
+  // 插入只读提示横幅（避免重复插入）
+  var panel = document.querySelector('.fu-panel');
+  if (panel && !panel.querySelector('.fu-readonly-banner')) {
+    var banner = document.createElement('div');
+    banner.className = 'fu-readonly-banner';
+    banner.style.cssText = 'padding:10px 16px;margin-bottom:12px;background:var(--state-warning-soft);border:1px solid var(--state-warning);border-radius:6px;color:var(--state-warning-text);font-size:13px;text-align:center;font-weight:500;';
+    banner.textContent = '当前为执行者身份，文件列表仅可查看，如需上传或删除请联系项目管理员';
+    panel.insertBefore(banner, panel.firstChild);
+  }
+}
+
+A._onAuthOk = function() {
+  if (A._renderSidebarUser) A._renderSidebarUser();
+  if (A.applyPermissions) A.applyPermissions();
+  loadAll();
+  A._startStepBadgePolling();
+};
+
+bindEvents();
+
+if (A._currentUser) {
+  loadAll();
+}
+
+})();
+</script>
+{% endblock %}

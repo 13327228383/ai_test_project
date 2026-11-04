@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>注册新用户 — E2E 智能测试引擎</title>
+<link rel="icon" type="image/jpeg" href="{{ static_ver('favicon.jpg') }}">
+<link rel="stylesheet" href="{{ static_ver('app-design.css') }}">
+<style>
+/* ════════════ 注册页独立布局（无 sidebar）════════════ */
+.register-page { position: fixed; inset: 0; overflow: hidden; background: var(--bg-base); }
+
+/* LAYER 1: 暗化 dashboard 背景（装饰） */
+.register-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+.register-bg-sidebar {
+  position: absolute; left: 0; top: 0; bottom: 0; width: var(--sidebar-width);
+  background: var(--sidebar-bg); border-right: var(--sidebar-border);
+  display: flex; flex-direction: column; padding: var(--space-6);
+}
+.register-bg-logo { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-8); }
+.register-bg-logo-icon { width: 28px; height: 28px; border-radius: var(--radius-md); background: linear-gradient(135deg, var(--color-primary), var(--step1-color)); display: flex; align-items: center; justify-content: center; }
+.register-bg-logo-icon img { width: 20px; height: 20px; border-radius: 4px; object-fit: cover; }
+.register-bg-logo-text { font-size: var(--fs-h3); font-weight: var(--fw-semibold); color: var(--text-primary); }
+.register-bg-line { height: 32px; border-radius: var(--radius-md); background: var(--border-subtle); margin-bottom: var(--space-2); }
+.register-bg-main { margin-left: var(--sidebar-width); padding: var(--space-6) var(--space-8); }
+.register-bg-kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-5); margin-bottom: var(--space-6); }
+.register-bg-kpi { height: 100px; border-radius: var(--radius-lg); background: var(--bg-surface); border: var(--surface-border); }
+.register-bg-panel { border-radius: var(--radius-lg); background: var(--bg-surface); border: var(--surface-border); height: 300px; }
+
+/* LAYER 2: 暗化遮罩 + 居中模态框 */
+.register-overlay {
+  position: fixed; inset: 0; z-index: 10;
+  background: var(--bg-overlay);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  overflow-y: auto; padding: var(--space-6) 0;
+}
+.register-card {
+  width: 480px; max-width: calc(100vw - 48px);
+  background: var(--bg-surface); border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 24px 64px var(--bg-overlay), 0 0 0 1px var(--border-subtle);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* HEADER */
+.register-header { display: flex; align-items: center; justify-content: space-between; padding: var(--space-5) var(--space-6); border-bottom: 1px solid var(--border-default); }
+.register-header-left { display: flex; align-items: center; gap: var(--space-3); }
+.register-header-icon { width: 36px; height: 36px; border-radius: var(--radius-md); background: var(--color-primary-soft); border: 1px solid var(--color-primary-border); display: flex; align-items: center; justify-content: center; }
+.register-header-title { font-size: var(--fs-h2); font-weight: var(--fw-semibold); color: var(--text-primary); line-height: var(--lh-tight); }
+.register-header-sub { font-size: var(--fs-xs); color: var(--text-tertiary); margin-top: 2px; }
+.register-close-btn { width: 32px; height: 32px; border-radius: var(--radius-md); border: 1px solid var(--border-default); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; color: var(--text-secondary); }
+.register-close-btn:hover { background: var(--bg-elevated); border-color: var(--border-hover); }
+
+/* BODY */
+.register-body { padding: var(--space-6); display: flex; flex-direction: column; }
+.register-form { display: flex; flex-direction: column; gap: var(--space-4); }
+.register-field-label { display: block; font-size: var(--fs-small); font-weight: var(--fw-medium); color: var(--text-secondary); margin-bottom: var(--space-2); }
+.register-input-wrapper { position: relative; }
+.register-input-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); pointer-events: none; }
+.register-input {
+  width: 100%; height: var(--control-height-lg);
+  padding: 0 var(--space-3) 0 36px;
+  background: var(--bg-elevated); color: var(--text-primary);
+  border: 1px solid var(--border-default); border-radius: var(--radius-md);
+  font-size: var(--fs-body); font-family: var(--font-sans);
+  outline: none; transition: border-color 0.15s;
+}
+.register-input:focus { border-color: var(--color-primary); }
+.register-input.has-toggle { padding-right: 40px; }
+.register-pwd-toggle {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: var(--text-tertiary); cursor: pointer;
+  display: flex; align-items: center; padding: 2px; transition: color 0.15s;
+}
+.register-pwd-toggle:hover { color: var(--text-secondary); }
+.register-submit-btn {
+  width: 100%; height: var(--control-height-lg);
+  background: var(--color-primary); color: var(--text-inverse);
+  font-size: var(--fs-body); font-weight: var(--fw-semibold);
+  font-family: var(--font-sans); border: none; border-radius: var(--radius-md);
+  cursor: pointer; transition: all 0.15s; margin-top: var(--space-2);
+  box-shadow: 0 2px 8px var(--color-primary-soft);
+}
+.register-submit-btn:hover { background: var(--color-primary-hover); box-shadow: 0 4px 16px var(--color-primary-soft); }
+.register-submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* HINT */
+.register-hints { margin-top: var(--space-4); text-align: center; }
+.register-hint { font-size: var(--fs-xs); color: var(--text-tertiary); margin-bottom: var(--space-2); }
+.register-hint strong { color: var(--text-secondary); font-weight: var(--fw-medium); }
+.register-back-link { margin-top: var(--space-4); font-size: var(--fs-small); color: var(--text-tertiary); }
+.register-back-link a { color: var(--color-primary); text-decoration: none; font-weight: var(--fw-medium); transition: color 0.15s; }
+.register-back-link a:hover { text-decoration: underline; }
+
+/* ERROR / SUCCESS MESSAGE */
+.register-msg {
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
+  font-size: var(--fs-xs); margin-top: var(--space-2); display: none;
+}
+.register-msg.show { display: block; }
+.register-msg-error { background: var(--state-error-soft); border: 1px solid var(--state-error-border); color: var(--state-error-text); }
+.register-msg-success { background: var(--state-success-soft); border: 1px solid var(--state-success-border); color: var(--state-success-text); }
+</style>
+</head>
+<body>
+
+<!-- LAYER 1: 装饰背景 -->
+<div class="register-page">
+  <div class="register-bg">
+    <div class="register-bg-sidebar">
+      <div class="register-bg-logo">
+        <div class="register-bg-logo-icon">
+          <img src="{{ static_ver('logo.jpg') }}" alt="E2E">
+        </div>
+        <div class="register-bg-logo-text">E2E 智能测试引擎</div>
+      </div>
+      <div class="register-bg-line"></div>
+      <div class="register-bg-line"></div>
+      <div class="register-bg-line"></div>
+      <div class="register-bg-line"></div>
+    </div>
+    <div class="register-bg-main">
+      <div class="register-bg-kpi-row">
+        <div class="register-bg-kpi"></div>
+        <div class="register-bg-kpi"></div>
+        <div class="register-bg-kpi"></div>
+        <div class="register-bg-kpi"></div>
+      </div>
+      <div class="register-bg-panel"></div>
+    </div>
+  </div>
+
+  <!-- LAYER 2: 遮罩 + 模态框 -->
+  <div class="register-overlay">
+    <div class="register-card">
+      <!-- HEADER -->
+      <div class="register-header">
+        <div class="register-header-left">
+          <div class="register-header-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          </div>
+          <div>
+            <div class="register-header-title">注册新用户</div>
+            <div class="register-header-sub">创建账号以使用 E2E 智能测试引擎</div>
+          </div>
+        </div>
+        <button class="register-close-btn" id="btnClose" title="返回登录">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- BODY -->
+      <div class="register-body">
+        <form class="register-form" id="registerForm" autocomplete="off" onsubmit="return false;">
+          <!-- 用户名 -->
+          <div>
+            <label class="register-field-label">用户名</label>
+            <div class="register-input-wrapper">
+              <svg class="register-input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <input type="text" class="register-input" id="regUserId" placeholder="请输入用户名（字母/数字/下划线）" maxlength="64">
+            </div>
+          </div>
+          <!-- 显示名称 -->
+          <div>
+            <label class="register-field-label">显示名称</label>
+            <div class="register-input-wrapper">
+              <svg class="register-input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <input type="text" class="register-input" id="regName" placeholder="请输入显示名称" maxlength="64">
+            </div>
+          </div>
+          <!-- 密码 -->
+          <div>
+            <label class="register-field-label">密码</label>
+            <div class="register-input-wrapper">
+              <svg class="register-input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <input type="password" class="register-input has-toggle" id="regPwd1" placeholder="请输入密码（至少 8 位，含字母和数字）">
+              <button type="button" class="register-pwd-toggle" data-target="regPwd1">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+          <!-- 确认密码 -->
+          <div>
+            <label class="register-field-label">确认密码</label>
+            <div class="register-input-wrapper">
+              <svg class="register-input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <input type="password" class="register-input has-toggle" id="regPwd2" placeholder="请再次输入密码">
+              <button type="button" class="register-pwd-toggle" data-target="regPwd2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- 错误/成功消息 -->
+          <div class="register-msg" id="regMsg"></div>
+
+          <!-- 注册按钮 -->
+          <button type="submit" class="register-submit-btn" id="btnRegister">注册</button>
+        </form>
+
+        <!-- 提示 -->
+        <div class="register-hints">
+          <div class="register-hint">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            默认角色：<strong>只读用户（viewer）</strong>
+          </div>
+          <div class="register-hint">如需其他角色，请联系管理员</div>
+          <div class="register-back-link">
+            已有账号？<a href="/login">返回登录</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{{ static_ver('app-common.js') }}"></script>
+<script>
+(function() {
+  'use strict';
+  var A = window._A;
+  if (!A) return;
+  var $ = A.$, api = A.api;
+
+  // 注册页：已登录用户直接跳转 dashboard
+  A._onAuthOk = function() {
+    // admin 从用户管理页面过来注册新用户，不重定向
+    if (A._currentUser && A._currentUser.role !== 'admin') {
+      window.location.href = '/dashboard';
+    }
+  };
+  A._onAuthFail = function() {
+    // 未登录留在注册页，不跳转
+  };
+
+  // 密码切换
+  document.querySelectorAll('.register-pwd-toggle').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var id = this.getAttribute('data-target');
+      var input = document.getElementById(id);
+      if (input) {
+        input.type = input.type === 'password' ? 'text' : 'password';
+      }
+    });
+  });
+
+  // 关闭按钮 → 返回登录
+  var btnClose = $('btnClose');
+  if (btnClose) btnClose.addEventListener('click', function() {
+    window.location.href = '/login';
+  });
+
+  function showMsg(type, text) {
+    var el = $('regMsg');
+    if (!el) return;
+    el.className = 'register-msg show register-msg-' + type;
+    el.textContent = text;
+  }
+  function clearMsg() {
+    var el = $('regMsg');
+    if (el) el.className = 'register-msg';
+  }
+
+  // 注册按钮
+  var btn = $('btnRegister');
+  if (btn) btn.addEventListener('click', async function() {
+    clearMsg();
+    var userId = $('regUserId').value.trim();
+    var name = $('regName').value.trim();
+    var pwd1 = $('regPwd1').value;
+    var pwd2 = $('regPwd2').value;
+
+    if (!userId || !name || !pwd1 || !pwd2) {
+      showMsg('error', '请填写所有字段');
+      return;
+    }
+    if (pwd1 !== pwd2) {
+      showMsg('error', '两次输入的密码不一致');
+      return;
+    }
+    if (pwd1.length < 8) {
+      showMsg('error', '密码至少 8 位');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = '注册中...';
+    try {
+      var r = await api('POST', '/api/register', {
+        user_id: userId,
+        name: name,
+        password: pwd1,
+      });
+      if (r && r.ok) {
+        showMsg('success', '注册成功，正在跳转...');
+        // 自注册后后端已自动登录，跳转 dashboard
+        setTimeout(function() {
+          window.location.href = '/dashboard';
+        }, 800);
+      } else {
+        showMsg('error', (r && r.error) ? r.error : '注册失败');
+        btn.disabled = false;
+        btn.textContent = '注册';
+      }
+    } catch (e) {
+      showMsg('error', '网络错误：' + (e.message || e));
+      btn.disabled = false;
+      btn.textContent = '注册';
+    }
+  });
+
+  // 回车键提交
+  ['regUserId', 'regName', 'regPwd1', 'regPwd2'].forEach(function(id) {
+    var el = $(id);
+    if (el) el.addEventListener('keydown', function(e) {
+      if (e && e.key === 'Enter' && btn && !btn.disabled) {
+        e.preventDefault();
+        btn.click();
+      }
+    });
+  });
+
+  // 如果已登录（如 BFCache 恢复），跳转 dashboard
+  // admin 可以从用户管理页面跳转过来注册新用户，不重定向
+  if (A._currentUser && A._currentUser.role !== 'admin') {
+    window.location.href = '/dashboard';
+  }
+})();
+</script>
+</body>
+</html>

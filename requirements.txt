@@ -1,0 +1,58 @@
+bokeh==3.8.0
+cryptography>=42.0.0
+botocore==1.40.46
+brotlicffi==1.1.0.0
+Flask>=3.0.0
+requests>=2.31.0
+pydantic>=2.0.0
+PyMySQL>=1.1.0
+cycler==0.11.0
+dask==2025.11.0
+defusedxml==0.7.1
+ipython==9.7.0
+ipywidgets==8.1.7
+jsonpointer==3.0.0
+keyring==25.7.0
+lxml==5.3.0
+mypy==1.17.1
+numexpr==2.14.1
+plotly==6.3.0
+psutil>=5.9.0
+prometheus-client>=0.15.0
+pycares==4.10.0
+pycurl==7.45.7
+pyqt5_sip==12.17.0
+pytest==8.4.2
+# jsonschema: 契约深度校验（contract_builder.validate_response_schema）完整 JSON Schema 校验依赖。
+# ★ 根因修复(2026-08-16): 此前未声明，导致 _HAS_JSONSCHEMA=False、嵌套类型不匹配被漏检（假通过）。
+jsonschema>=4.17.0
+pywin32==311
+qtpy==2.4.3
+rfc3339_validator==0.1.4
+rfc3986_validator==0.1.1
+s3fs==2025.10.0
+simplejson==3.20.2
+sniffio==1.3.0
+sympy==1.14.0
+tables==3.10.2
+xarray==2025.10.1
+xlrd==2.0.2
+# yaspy: 崖山数据库官方 Python 驱动（src/extensions/db/db_core/execute.py 等 import）。
+# 原 pin yaspy==1.0.0 在 PyPI 不存在（可用版本 1.2.0~1.2.3），pip 解析直接报错；
+# 2026-08-06 修正为 PyPI 现存最新版 yaspy==1.2.3（已 pip download 验证存在）。
+yaspy==1.2.3
+sentence-transformers>=2.2.0
+playwright>=1.40.0
+# PyYAML: perf_rules.yaml / system_config 等 YAML 配置源解析依赖。
+# ★ 2026-08-29: 此前仅靠 bokeh/plotly 间接带，缺装时 load_rules 静默回落内置
+#   规则，perf_rules.yaml 靶子配置整体失效；显式声明以确保配置驱动生效。
+PyYAML>=6.0
+openpyxl>=3.1.0
+# 需求文档解析：docx/pptx 为 OOXML 格式（旧版 .doc/.xls 由 FileParser 入口统一拒绝并要求另存）；
+# defusedxml 用于 XMind 思维导图解析。
+python-docx>=1.1.0
+python-pptx>=0.6.23
+defusedxml>=0.7.1
+# PDF 需求文档解析：pymupdf 提供文本抽取，pymupdf4llm 输出带标题/阅读序的 Markdown。
+pymupdf>=1.24
+pymupdf4llm>=0.0.17

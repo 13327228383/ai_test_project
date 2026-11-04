@@ -1,0 +1,738 @@
+{% extends "_layout_base.html" %}
+{% block title %}置信度拦截 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+置信度拦截 (Step4)
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnRefresh">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+  刷新列表
+</button>
+<button class="btn-topbar" id="btnOpenReview">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+  打开审核面板
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════ 信息栏 ════════════ -->
+<div class="cb-info-bar">
+  <div class="cb-info-item">
+    <span class="cb-info-label">拦截阈值</span>
+    <span class="cb-info-value" id="threshold">0.50</span>
+  </div>
+  <div class="cb-info-item">
+    <span class="cb-info-label">拦截总数</span>
+    <span class="cb-info-value cb-info-danger" id="blockedCount">0</span>
+  </div>
+  <div class="cb-info-item">
+    <span class="cb-info-label">已处理</span>
+    <span class="cb-info-value cb-info-success" id="processedCount">0</span>
+  </div>
+  <div class="cb-info-item">
+    <span class="cb-info-label">待处理</span>
+    <span class="cb-info-value cb-info-warn" id="pendingCount">0</span>
+  </div>
+</div>
+
+<!-- ════════════ 警告横幅 ════════════ -->
+<div class="cb-alert-banner" id="alertBanner">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+  <span id="alertText">请选择项目后加载低置信度拦截用例</span>
+</div>
+
+<!-- ════════════ 主面板 ════════════ -->
+<div class="cb-panel">
+
+  <!-- 工具栏 -->
+  <div class="cb-toolbar">
+    <input type="text" id="searchInput" class="cb-search" placeholder="搜索 case_id / 标题...">
+    <select id="statusFilter" class="cb-filter">
+      <option value="">全部状态</option>
+      <option value="pending">待处理</option>
+      <option value="approved">已通过</option>
+      <option value="rejected">已驳回</option>
+    </select>
+    <select id="confidenceFilter" class="cb-filter">
+      <option value="">全部置信度</option>
+      <option value="low">低 (&lt;0.3)</option>
+      <option value="mid">中 (0.3-0.5)</option>
+    </select>
+    <div class="cb-toolbar-info">
+      显示 <span id="visibleCount">0</span> / <span id="totalItemsCount">0</span> 条
+    </div>
+  </div>
+
+  <!-- 拦截卡片列表 -->
+  <div class="cb-list" id="blockedList">
+    <div class="cb-empty-state">暂无拦截用例</div>
+  </div>
+
+  <!-- 底部操作 -->
+  <div class="cb-action-row">
+    <span class="cb-selected-info">已选 <span id="selectedCount">0</span> 条</span>
+    <button class="cb-btn-secondary" id="btnSelectAll" type="button">全选</button>
+    <button class="cb-btn-danger" id="btnRejectSelected" type="button">驳回选中</button>
+    <button class="cb-btn-success" id="btnApproveAll" type="button">全部通过</button>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ★ 页面级 flex 布局：让主面板填满内容区剩余高度，消除底部空白（与 intent/review 等页面保持同一模式） */
+.content-body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ════════════ 信息栏 ════════════ */
+.cb-info-bar {
+  display: flex; gap: 32px;
+  padding: 16px 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.cb-info-item { display: flex; flex-direction: column; gap: 4px; }
+.cb-info-label { font-size: var(--fs-small); color: var(--text-secondary); }
+.cb-info-value {
+  font-size: var(--fs-h3); font-weight: var(--fw-semibold);
+  color: var(--text-primary); font-family: var(--font-mono);
+}
+.cb-info-primary { color: var(--color-primary); }
+.cb-info-danger { color: var(--state-error-text); }
+.cb-info-warn { color: var(--state-warning-text); }
+.cb-info-success { color: var(--state-success-text); }
+
+/* ════════════ 警告横幅 ════════════ */
+.cb-alert-banner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 20px;
+  background: var(--state-warning-soft);
+  border: 1px solid var(--state-warning);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  color: var(--state-warning-text);
+  font-size: var(--fs-small);
+  flex-shrink: 0;
+}
+
+/* ════════════ 主面板 ════════════ */
+.cb-panel {
+  flex: 1;               /* ★ 撑满内容区剩余高度 */
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+/* 工具栏 */
+.cb-toolbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--border-faint);
+  flex-shrink: 0;
+}
+.cb-search {
+  flex: 1;
+  height: var(--control-height);
+  padding: 0 12px;
+  border-radius: var(--control-radius);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: var(--fs-small);
+  outline: none;
+}
+.cb-search:focus { border-color: var(--color-primary); }
+.cb-filter {
+  height: var(--control-height);
+  padding: 0 12px;
+  border-radius: var(--control-radius);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: var(--fs-small);
+  outline: none;
+  cursor: pointer;
+}
+.cb-toolbar-info {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.cb-toolbar-info span { color: var(--text-primary); font-family: var(--font-mono); font-weight: var(--fw-semibold); }
+
+/* 列表 */
+.cb-list {
+  flex: 1;               /* ★ 填满可用高度，内部滚动 */
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 20px;
+}
+.cb-empty-state {
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: var(--fs-small);
+}
+
+/* 拦截卡 */
+.cb-card {
+  padding: 14px 16px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  transition: border-color 0.15s;
+  background: var(--bg-elevated);
+}
+.cb-card:hover { border-color: var(--border-hover); }
+.cb-card.status-approved { border-left: 3px solid var(--state-success); }
+.cb-card.status-rejected { border-left: 3px solid var(--state-error); }
+.cb-card.status-pending { border-left: 3px solid var(--state-warning); }
+
+.cb-card-row1 {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 8px;
+}
+.cb-card-cb { cursor: pointer; }
+.cb-card-id {
+  font-family: var(--font-mono);
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  font-size: var(--fs-small);
+  flex-shrink: 0;
+}
+.cb-card-title {
+  flex: 1;
+  font-size: var(--fs-small);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cb-card-conf {
+  display: flex; align-items: center; gap: 6px;
+  flex-shrink: 0;
+}
+.cb-conf-bar {
+  width: 60px;
+  height: 6px;
+  background: var(--border-default);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.cb-conf-fill {
+  height: 100%;
+  background: var(--state-error);
+  border-radius: var(--radius-full);
+}
+.cb-conf-fill.mid { background: var(--state-warning); }
+.cb-conf-fill.high { background: var(--state-success); }
+.cb-conf-value {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--state-error-text);
+  min-width: 36px;
+  text-align: right;
+}
+
+.cb-card-summary {
+  padding: 8px 10px;
+  background: var(--state-error-soft);
+  border-left: 3px solid var(--state-error);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+.cb-card-summary-label {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.cb-card-actions {
+  display: flex; gap: 8px;
+  justify-content: flex-end;
+}
+.cb-btn-link, .cb-btn-success, .cb-btn-error, .cb-btn-secondary, .cb-btn-danger {
+  height: 28px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  font-family: var(--font-sans);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+}
+.cb-btn-link {
+  background: transparent;
+  color: var(--color-primary);
+}
+.cb-btn-link:hover { background: var(--color-primary-soft); }
+.cb-btn-success {
+  background: var(--state-success);
+  color: var(--text-on-color);
+}
+.cb-btn-success:hover { background: var(--state-success); }
+.cb-btn-error {
+  background: transparent;
+  border-color: var(--state-error);
+  color: var(--state-error-text);
+}
+.cb-btn-error:hover { background: var(--state-error); color: var(--text-on-color); }
+
+/* 底部操作 */
+.cb-action-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-default);
+  background: var(--border-faint);
+  flex-shrink: 0;
+}
+.cb-selected-info {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  margin-right: auto;
+}
+.cb-selected-info span { color: var(--text-primary); font-family: var(--font-mono); font-weight: var(--fw-semibold); }
+.cb-btn-secondary {
+  background: transparent;
+  border-color: var(--border-default);
+  color: var(--text-secondary);
+}
+.cb-btn-secondary:hover { border-color: var(--border-hover); color: var(--text-primary); }
+.cb-btn-danger {
+  background: transparent;
+  border-color: var(--state-error);
+  color: var(--state-error-text);
+}
+.cb-btn-danger:hover { background: var(--state-error); color: var(--text-on-color); }
+.cb-btn-link:disabled, .cb-btn-success:disabled, .cb-btn-error:disabled,
+.cb-btn-secondary:disabled, .cb-btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.cb-btn-link:disabled:hover, .cb-btn-success:disabled:hover, .cb-btn-error:disabled:hover,
+.cb-btn-secondary:disabled:hover, .cb-btn-danger:disabled:hover {
+  background: transparent;
+  border-color: var(--border-default);
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+'use strict';
+
+const A = window._A;
+if (!A) { console.error('[confidence-block] _A 未初始化'); return; }
+const $ = A.$, escHtml = A.escHtml, escAttr = A.escAttr, api = A.api, appendLog = A.appendLog;
+
+// ── 状态 ──
+const state = {
+  blocked: [],
+  filtered: [],
+  selectedIds: new Set(),
+  stats: {},
+  threshold: 0.50,
+};
+
+// ── 元素引用 ──
+const els = {
+  curProject: $('curProject'),
+  threshold: $('threshold'),
+  blockedCount: $('blockedCount'),
+  processedCount: $('processedCount'),
+  pendingCount: $('pendingCount'),
+  alertText: $('alertText'),
+  searchInput: $('searchInput'),
+  statusFilter: $('statusFilter'),
+  confidenceFilter: $('confidenceFilter'),
+  visibleCount: $('visibleCount'),
+  totalItemsCount: $('totalItemsCount'),
+  blockedList: $('blockedList'),
+  selectedCount: $('selectedCount'),
+  btnSelectAll: $('btnSelectAll'),
+  btnRejectSelected: $('btnRejectSelected'),
+  btnApproveAll: $('btnApproveAll'),
+  btnRefresh: $('btnRefresh'),
+  btnOpenReview: $('btnOpenReview'),
+};
+
+// ════════════ 工具函数 ════════════
+
+// ★ 修复(2026-09-24)：原死兜底键 c.execution_confidence 后端从不返回，改用真实可用键
+//   _evidence_confidence 与 _confidence；后者为 0-100 百分数字符串，归一化为 0-1
+//   （同 getConfClass / getConfidence 判定量纲）。
+function normalizeConf(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return (v > 1 ? v / 100 : v);
+  const n = parseFloat(v);
+  if (isNaN(n)) return null;
+  return n > 1 ? n / 100 : n;
+}
+function getConfidence(c) {
+  if (c == null) return null;
+  if (typeof c === 'number') return c;
+  if (c._avg_confidence != null) return c._avg_confidence;
+  if (c.confidence != null) {
+    if (typeof c.confidence === 'number') return c.confidence;
+    if (typeof c.confidence === 'object') {
+      return c.confidence._avg_confidence != null ? c.confidence._avg_confidence : c.confidence.score;
+    }
+  }
+  if (c._evidence_confidence != null) return c._evidence_confidence;
+  if (c._confidence != null) return normalizeConf(c._confidence);
+  return null;
+}
+
+function getConfClass(score) {
+  if (score == null) return 'mid';
+  if (score >= 0.5) return 'high';
+  if (score >= 0.3) return 'mid';
+  return 'low';
+}
+
+function getReviewStatus(c) {
+  return c._review_status || c.review_status || 'pending';
+}
+
+function getStatusLabel(s) {
+  if (s === 'approved') return '已通过';
+  if (s === 'rejected') return '已驳回';
+  return '待处理';
+}
+
+// ════════════ 数据加载 ════════════
+
+async function loadBlockedList() {
+  els.blockedList.innerHTML = '<div class="cb-empty-state">加载中...</div>';
+  try {
+    const d = await api('GET', '/api/cases/review');
+    if (!d || !d.ok) {
+      const errMsg = escHtml((d && d.error) || '未知');
+      els.blockedList.innerHTML = '<div class="cb-empty-state">加载失败: ' + errMsg + '</div>';
+      els.alertText.textContent = '加载失败: ' + errMsg;
+      return;
+    }
+    const intents = d.intents || [];
+    state.stats = d.stats || {};
+    // 过滤拦截的用例：置信度 < 阈值
+    state.blocked = intents.filter(c => {
+      const score = getConfidence(c);
+      return score != null && score < state.threshold;
+    });
+    renderStats();
+    applyFilters();
+  } catch (e) {
+    const errMsg = escHtml(String(e));
+    els.blockedList.innerHTML = '<div class="cb-empty-state">加载异常: ' + errMsg + '</div>';
+    els.alertText.textContent = '加载异常: ' + errMsg;
+    appendLog('⚠️ 加载拦截列表失败: ' + String(e));
+  }
+}
+
+function renderStats() {
+  if (A._currentProject) {
+    if (els.curProject) els.curProject.textContent = A._currentProjectName || A._currentProject || '-';
+  }
+  els.threshold.textContent = state.threshold.toFixed(2);
+  const total = state.blocked.length;
+  const processed = state.blocked.filter(c => {
+    const s = getReviewStatus(c);
+    return s === 'approved' || s === 'rejected';
+  }).length;
+  const pending = total - processed;
+  els.blockedCount.textContent = total;
+  els.processedCount.textContent = processed;
+  els.pendingCount.textContent = pending;
+
+  if (total > 0) {
+    els.alertText.innerHTML = '检测到 <strong>' + total + '</strong> 个低置信度用例（置信度 &lt; ' + state.threshold.toFixed(2) + '），需要人工复核';
+  } else {
+    els.alertText.textContent = '当前没有低置信度拦截的用例';
+  }
+}
+
+// ════════════ 过滤 ════════════
+
+function applyFilters() {
+  const kw = els.searchInput.value.trim().toLowerCase();
+  const statusF = els.statusFilter.value;
+  const confF = els.confidenceFilter.value;
+  state.filtered = state.blocked.filter(c => {
+    if (kw) {
+      const id = (c.case_id || c._case_id || '').toLowerCase();
+      const title = (c.intent_title || c.title || '').toLowerCase();
+      if (!id.includes(kw) && !title.includes(kw)) return false;
+    }
+    if (statusF && getReviewStatus(c) !== statusF) return false;
+    if (confF) {
+      const score = getConfidence(c);
+      if (score == null) return false;
+      if (confF === 'low' && score >= 0.3) return false;
+      if (confF === 'mid' && (score < 0.3 || score >= 0.5)) return false;
+    }
+    return true;
+  });
+  renderList();
+}
+
+function renderList() {
+  els.visibleCount.textContent = state.filtered.length;
+  els.totalItemsCount.textContent = state.blocked.length;
+  els.selectedCount.textContent = state.selectedIds.size;
+
+  if (state.filtered.length === 0) {
+    els.blockedList.innerHTML = '<div class="cb-empty-state">暂无拦截用例</div>';
+    return;
+  }
+  els.blockedList.innerHTML = state.filtered.map(c => {
+    const id = c.case_id || c._case_id || '-';
+    const title = c.intent_title || c.title || '-';
+    const status = getReviewStatus(c);
+    const score = getConfidence(c);
+    const confClass = getConfClass(score);
+    const percent = score != null ? (score > 1 ? Math.round(score) : Math.round(score * 100)) : 0;
+    const scoreText = score != null ? score.toFixed(2) : '-';
+    const summary = c.ai_decision_summary || c._ai_summary || c.summary || 'AI 决策摘要不可用';
+    const checked = state.selectedIds.has(id) ? 'checked' : '';
+    return '<div class="cb-card status-' + status + '" data-case-id="' + escAttr(id) + '">' +
+      '<div class="cb-card-row1">' +
+        '<input type="checkbox" class="cb-card-cb" data-case-id="' + escAttr(id) + '" ' + checked + '>' +
+        '<span class="cb-card-id">' + escHtml(id) + '</span>' +
+        '<span class="cb-card-title">' + escHtml(title) + '</span>' +
+        '<div class="cb-card-conf">' +
+          '<div class="cb-conf-bar"><div class="cb-conf-fill ' + confClass + '" style="width:' + percent + '%"></div></div>' +
+          '<span class="cb-conf-value">' + scoreText + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="cb-card-summary">' +
+        '<div class="cb-card-summary-label">AI 决策摘要</div>' +
+        escHtml(summary) +
+      '</div>' +
+      '<div class="cb-card-actions">' +
+        '<button class="cb-btn-link" data-action="view" data-case-id="' + escAttr(id) + '">查看详情</button>' +
+        '<button class="cb-btn-error" data-action="reject" data-case-id="' + escAttr(id) + '">驳回</button>' +
+        '<button class="cb-btn-success" data-action="approve" data-case-id="' + escAttr(id) + '">通过</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  // 绑定事件
+  els.blockedList.querySelectorAll('.cb-card-cb').forEach(cb => {
+    cb.addEventListener('change', function() {
+      const cid = this.dataset.caseId;
+      if (this.checked) state.selectedIds.add(cid);
+      else state.selectedIds.delete(cid);
+      els.selectedCount.textContent = state.selectedIds.size;
+    });
+  });
+  els.blockedList.querySelectorAll('button[data-action]').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const action = this.dataset.action;
+      const cid = this.dataset.caseId;
+      if (action === 'view') viewDetail(cid);
+      else if (action === 'approve') approveCase(cid);
+      else if (action === 'reject') rejectCase(cid);
+    });
+  });
+}
+
+// ════════════ 操作 ════════════
+
+async function approveCase(caseId) {
+  try {
+    const d = await api('POST', '/api/cases/review/approve', { case_id: caseId });
+    if (d && d.ok) {
+      appendLog('✅ 已通过拦截用例: ' + caseId);
+      state.selectedIds.delete(caseId);
+      await loadBlockedList();
+    } else {
+      A.toast('通过失败: ' + (d && d.error ? d.error : '未知'), 'error');
+    }
+  } catch (e) {
+    A.toast('操作异常: ' + String(e), 'error');
+  }
+}
+
+async function rejectCase(caseId) {
+  const comment = prompt('驳回原因（可选）:');
+  if (comment === null) return;
+  try {
+    const body = { case_id: caseId };
+    if (comment) body.comment = comment;
+    const d = await api('POST', '/api/cases/review/reject', body);
+    if (d && d.ok) {
+      appendLog('✅ 已驳回拦截用例: ' + caseId);
+      state.selectedIds.delete(caseId);
+      await loadBlockedList();
+    } else {
+      A.toast('驳回失败: ' + (d && d.error ? d.error : '未知'), 'error');
+    }
+  } catch (e) {
+    A.toast('操作异常: ' + String(e), 'error');
+  }
+}
+
+function viewDetail(caseId) {
+  window.open('/intent-edit?case_id=' + encodeURIComponent(caseId), '_blank');
+}
+
+async function batchApprove() {
+  if (state.filtered.length === 0) {
+    A.toast('无拦截用例可操作', 'warning');
+    return;
+  }
+  if (!(await A.confirm('确认通过所有 ' + state.filtered.length + ' 个拦截用例？'))) return;
+  const caseIds = state.filtered.map(c => c.case_id || c._case_id).filter(Boolean);
+  try {
+    const d = await api('POST', '/api/cases/review/batch-approve', { case_ids: caseIds });
+    if (d && d.ok) {
+      appendLog('✅ 批量通过: ' + caseIds.length + ' 条');
+      state.selectedIds.clear();
+      await loadBlockedList();
+    } else {
+      A.toast('批量通过失败: ' + (d && d.error ? d.error : '未知'), 'error');
+    }
+  } catch (e) {
+    A.toast('操作异常: ' + String(e), 'error');
+  }
+}
+
+async function rejectSelected() {
+  if (state.selectedIds.size === 0) {
+    A.toast('请先勾选要驳回的用例', 'warning');
+    return;
+  }
+  if (!(await A.confirm('确认驳回选中的 ' + state.selectedIds.size + ' 个用例？'))) return;
+  const ids = Array.from(state.selectedIds);
+  for (const cid of ids) {
+    try {
+      await api('POST', '/api/cases/review/reject', { case_id: cid });
+    } catch (e) {
+      appendLog('⚠️ 驳回失败: ' + cid + ' - ' + String(e));
+    }
+  }
+  appendLog('✅ 批量驳回完成: ' + ids.length + ' 条');
+  state.selectedIds.clear();
+  await loadBlockedList();
+}
+
+function selectAll() {
+  if (state.selectedIds.size === state.filtered.length) {
+    state.selectedIds.clear();
+  } else {
+    state.filtered.forEach(c => {
+      const id = c.case_id || c._case_id;
+      if (id) state.selectedIds.add(id);
+    });
+  }
+  renderList();
+}
+
+function openReview() {
+  var existingModal = document.getElementById('reviewModal');
+  if (existingModal) existingModal.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'reviewModal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:var(--bg-overlay);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+  var container = document.createElement('div');
+  container.style.cssText = 'width:90vw;max-width:1400px;height:85vh;background:var(--bg-surface);border-radius:var(--radius-lg);display:flex;flex-direction:column;box-shadow:var(--shadow-lg);';
+
+  var header = document.createElement('div');
+  header.style.cssText = 'padding:16px 20px;border-bottom:1px solid var(--border-default);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;';
+  header.innerHTML = '<div style="font-size:16px;font-weight:600;color:var(--text-primary);">用例审核</div><button style="background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:4px;border-radius:4px;font-size:18px;" onclick="document.getElementById(\'reviewModal\').remove();">✕</button>';
+
+  var body = document.createElement('div');
+  body.style.cssText = 'flex:1;overflow:hidden;padding:0;';
+
+  var iframe = document.createElement('iframe');
+  iframe.src = '/intent-review';
+  iframe.style.cssText = 'width:100%;height:100%;border:none;';
+
+  body.appendChild(iframe);
+  container.appendChild(header);
+  container.appendChild(body);
+  overlay.appendChild(container);
+  document.body.appendChild(overlay);
+}
+
+// ════════════ SSE 事件处理（全局） ════════════
+// 填补 app.js 中 _showConfidenceBlockDialog 未定义的缺口
+
+A._showConfidenceBlockDialog = function(evtData) {
+  if (!evtData || !evtData.blocked) return;
+  const blocked = evtData.blocked || [];
+  const total = evtData.total || blocked.length;
+  const blockRate = evtData.block_rate != null ? evtData.block_rate : 0;
+  appendLog('⚠️ 收到置信度拦截事件: ' + blocked.length + ' 条 (拦截率 ' + (blockRate * 100).toFixed(1) + '%)');
+  // 跳转到本页展示
+  if (window.location.pathname !== '/confidence-block') {
+    window.location.href = '/confidence-block';
+  } else {
+    // 已在本页，刷新数据
+    loadBlockedList();
+  }
+};
+
+// ════════════ 事件 ════════════
+
+function bindEvents() {
+  els.searchInput.addEventListener('input', applyFilters);
+  els.statusFilter.addEventListener('change', applyFilters);
+  els.confidenceFilter.addEventListener('change', applyFilters);
+  els.btnSelectAll.addEventListener('click', selectAll);
+  els.btnRejectSelected.addEventListener('click', rejectSelected);
+  els.btnApproveAll.addEventListener('click', batchApprove);
+  els.btnRefresh.addEventListener('click', loadBlockedList);
+  els.btnOpenReview.addEventListener('click', openReview);
+}
+
+// ════════════ 入口 ════════════
+
+A._onAuthOk = function() {
+  if (A._renderSidebarUser) A._renderSidebarUser();
+  if (A.applyPermissions) A.applyPermissions();
+  loadBlockedList();
+  A._startStepBadgePolling();
+};
+
+bindEvents();
+
+if (A._currentUser) {
+  loadBlockedList();
+}
+
+})();
+</script>
+{% endblock %}

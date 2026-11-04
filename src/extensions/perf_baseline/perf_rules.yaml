@@ -1,0 +1,133 @@
+# -*- coding: utf-8 -*-
+# =============================================================================
+# 性能门禁规则 — perf_gate 唯一配置源
+# =============================================================================
+# 合并语义（§8.4）：defaults 与 targets.<name> **递归深合并**，叶子值以 target 为准。
+#   - metrics: []        → 该组（web / api）整体关停，不产出任何判定
+#   - thresholds 缺某项  → 该指标不做绝对校验（仍做相对校验）
+#   - relative           → 相对基线上浮的 PRE_GATE / FAIL 分界（单位：%）
+#
+# ★ 不写死靶子：代码只认 metric key，新增靶子只改本文件，无需改任何 Python。
+# ★ 阈值校准原则（T05）：绝对阈值 ≈ 实测 p95 × 1.5，避免开箱即红（假阳性）。
+#
+# 指标口径：
+#   web.ttfb_ms         responseStart - startTime（首字节）
+#   web.dcl_ms          domContentLoadedEventEnd - startTime
+#   web.load_ms         loadEventEnd - startTime（未触发 load 时回落 domComplete）
+#   web.resource_count  Resource Timing 条目数
+#   web.resource_bytes  Σ transferSize（字节）
+#   web.longtask_ms     Σ longtask.duration（PerformanceObserver 累加）
+#   web.cls_approx      Σ layout-shift.value（!hadRecentInput），P0 近似值
+#   api.elapsed_ms      响应到达 - 请求发出（ApiTracker）
+#   api.status_code     HTTP 状态码（只做绝对校验，不做相对）
+#   api.payload_bytes   响应体字节数（ApiTracker.resp_bytes）
+#
+# [未复核-需 GLM/DeepSeek 把关]
+# =============================================================================
+
+version: 1
+
+defaults:
+  enabled: true
+
+  web:
+    metrics:
+      - ttfb_ms
+      - dcl_ms
+      - load_ms
+      - resource_count
+      - resource_bytes
+      - longtask_ms
+      - cls_approx
+    thresholds:
+      ttfb_ms: 800
+      dcl_ms: 2500
+      load_ms: 5000
+      resource_count: 150
+      resource_bytes: 3145728      # 3 MiB
+      longtask_ms: 300
+      cls_approx: 0.25
+
+  api:
+    metrics:
+      - elapsed_ms
+      - status_code
+      - payload_bytes
+    thresholds:
+      elapsed_ms: 1500
+      status_code: 499             # ≥500 判 FAIL（服务端错误即客观坏）
+      payload_bytes: 1048576       # 1 MiB
+
+  relative:
+    pre_gate_pct: 80               # [80%, 100%) → PRE_GATE（只告警不阻断）
+    fail_pct: 100                  # ≥100% → FAIL
+    # ★ 绝对噪声地板（与上面的相对阈值**合并为同一条判据**，不是第二个判定入口）：
+    #   相对上浮只有同时满足「绝对增量 ≥ 本表地板」才成立。
+    #   why: 低绝对值指标（基线 ttfb 15ms）的百分比天然被噪声放大，
+    #   31.9ms vs 14.57ms = +119% 但绝对增量仅 17ms，属首访抖动而非退化。
+    #   未列出的指标 → 地板 0（纯相对判定，与历史行为一致）。
+    noise_floor:
+      ttfb_ms: 50                  # ms
+      dcl_ms: 100                  # ms
+      load_ms: 150                 # ms
+      longtask_ms: 100             # ms
+      cls_approx: 0.05             # 无量纲（布局偏移累计值）
+      resource_bytes: 262144       # 256 KiB
+      elapsed_ms: 50               # ms
+      payload_bytes: 65536         # 64 KiB
+
+# =============================================================================
+# 靶子专属覆盖（T05 校准）
+# =============================================================================
+targets:
+
+  # ── 电商前台：资源多、图片重，放宽 resource_* ─────────────────────────
+  smartshop:
+    web:
+      thresholds:
+        ttfb_ms: 900
+        dcl_ms: 3000
+        load_ms: 4500
+        resource_count: 200
+        resource_bytes: 5242880    # 5 MiB（商品图密集）
+    api:
+      thresholds:
+        elapsed_ms: 1200
+
+  # ── 项目管理台：交互密集、长任务偏多，收紧 load、放宽 longtask ────────
+  projecthub:
+    web:
+      thresholds:
+        ttfb_ms: 800
+        dcl_ms: 2800
+        load_ms: 4000
+        resource_count: 160
+        resource_bytes: 3145728
+        longtask_ms: 500
+    api:
+      thresholds:
+        elapsed_ms: 1000
+
+  # ── 纯 REST 服务：无页面，关停 web 组，只守 API ───────────────────────
+  api_demo:
+    web:
+      metrics: []                  # ★ 空列表 = 整组关停
+    api:
+      thresholds:
+        elapsed_ms: 800
+        payload_bytes: 524288      # 512 KiB
+
+  # ── SPA：首屏 bundle 大、load 天然慢，显著放宽 load_ms / cls ──────────
+  spa_demo:
+    web:
+      thresholds:
+        ttfb_ms: 700
+        dcl_ms: 3500
+        load_ms: 8000              # SPA 首屏 hydration 慢属正常
+        resource_count: 120
+        resource_bytes: 4194304    # 4 MiB
+        longtask_ms: 800
+        cls_approx: 0.35
+    api:
+      thresholds:
+        elapsed_ms: 1500

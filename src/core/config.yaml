@@ -1,0 +1,347 @@
+# -*- coding: utf-8 -*-
+# ─────────────────────────────────────────────────────────
+# E2E 智能测试引擎 — 系统级全局配置
+# ─────────────────────────────────────────────────────────
+# 本文件仅存储系统级全局配置（数据库连接、AI 模型、Playwright 等）。
+# 项目级配置全部存储在 MySQL 并通过 Web UI 编辑。
+#
+# ★ 清理原则 (v10, 2026-07-01):
+#   1. 仅保留系统级基础设施配置（DB连接 / 端口 / Provider URL / 字体路径）
+#   2. 项目级配置（target/figma key 等）→ MySQL user_credentials_v2 + 前端配置面板
+#   3. 已在 pipeline_config.py 有相同默认值的 → 删（pipeline_config 是唯一事实源）
+#   4. 死代码（YAML 重复键 / 无代码读取）→ 删
+# ─────────────────────────────────────────────────────────
+
+# =============================================================================
+# ★ 项目源码根目录（v6.1 通用性修复，2026-08-12）
+#   auto-discovery 引擎在此目录下扫描项目结构（manage.py / models.py 等）。
+#   默认值：空（回退到 src/pipeline/step3 的 parent[3]/examples）
+#   示例：PROJECT_SOURCE_DIR: "d:/projects/examples"
+# =============================================================================
+PROJECT_SOURCE_DIR: ""
+
+# =============================================================================
+# ★ Step4 浏览器执行引擎 & 插件配置
+# 所有插件的默认开关、阈值参数集中在此。修改后无需重启：
+#   python -c "from src.core.config_loader import config; config.reload('你的项目')"
+# 项目级覆盖：在 MySQL project_configs.config_json 中写入相同结构即可覆盖默认值
+# =============================================================================
+step4_plugins:
+  # ★ 基础插件（5个）
+  ground_truth:
+    enabled: true
+    min_text_delta: 0
+
+  visual_baseline:
+    enabled: true
+    pixel_diff_threshold: 0.01
+
+  self_healing:
+    enabled: true
+    max_attempts: 3
+
+  long_term_memory:
+    enabled: true
+    short_term_capacity: 10
+
+  performance_monitor:
+    enabled: true
+    thresholds:
+      FCP: 1800
+      LCP: 2500
+
+  # ★ P0 治理插件（6个）
+  harness_governance:
+    enabled: true
+    token_budget_per_step: 2000
+    max_tools_per_step: 15
+    dangerous_actions:
+      - delete
+      - drop
+      - truncate
+      - exec
+    require_structured_evaluation: true
+
+  self_healing_vision:
+    enabled: true
+    similarity_threshold: 0.7
+
+  scorecard_oracle:
+    enabled: true
+    dimensions:
+      functional:       { weight: 0.40, threshold: 0.80 }
+      stability:        { weight: 0.20, threshold: 0.70 }
+      performance:      { weight: 0.15, threshold: 0.70 }
+      visual:           { weight: 0.15, threshold: 0.70 }
+      data_integrity:   { weight: 0.10, threshold: 0.80 }
+    overall_threshold: 0.75
+
+  token_budget:
+    enabled: true
+    budgets:
+      system_prompt: 1500
+      history: 3000
+      page_state: 2000
+      memory: 1000
+      plan_output: 1500
+
+  flaky_guard:
+    enabled: true
+    failure_rate_threshold: 0.3
+    min_runs: 3
+    root_cause_keywords:
+      environment: [ connection, dns, ssl, certificate, proxy ]
+      timing:      [ timeout, wait, stale, race ]
+      data:        [ not found, duplicate, constraint, missing ]
+      ai_hallucination: [ hallucination, imaginary, nonexistent ]
+
+  multi_agent:
+    enabled: true
+    roles:
+      - planner
+      - executor
+      - verifier
+    max_context_per_agent: 4000
+
+  # ★ 性能门禁采集插件（仅数据源；判定/报告由 PERF_GATE_ENABLED 单独门控）
+  # ★ 默认 ON（enabled: true）——「可用性·验证闭环」接入后，常规流水线对每页
+  #   采集性能样本（PerformanceObserver + API 指标），供 step5 PERF_GATE_ENABLED
+  #   门禁判定/报告。插件零副作用且全 try-except，采集失败绝不阻断用例执行。
+  #   关闭：本项置 false 即停止采集（报告区块随之诚实显示无数据）。
+  perf_collector:
+    enabled: true
+    spill: true                    # 样本同步落 data/perf_runtime/<run_id>.jsonl 兜底
+
+# ★ 性能门禁报告开关（step5 report_generator 门控，默认 ON）。
+#   开启后报告在存在采集样本时渲染「性能门禁」区块；无样本诚实不渲染。
+PERF_GATE_ENABLED: true
+
+# ★ 可访问性（a11y）报告开关（step5 report_generator 门控，默认 ON → 全量展示）。
+#   数据源：oracle_results（oracle_type='accessibility'，step4 采集落库）。
+#   需 step4 门禁真正执行（A11Y_GATE_ENABLED=true / 用例声明 checks.a11y）才有数据；
+#   无数据时诚实不渲染区块。
+A11Y_REPORT_ENABLED: true
+
+# ★ 可访问性（a11y）全量门禁（step4 _a11y_gate 门控，默认 ON）。
+#   开启后：每个含页面/可用 DOM 的 UI 步骤，默认都跑 src/extensions/a11y 的
+#   22 条通用规则检查器并标注 [a11y_violations:N]。fail-open——只加证据不改
+#   passed（除非用例 opt-in fail_on_a11y）；无页面/取 HTML 失败记 skipped 不误杀。
+#   关闭：本项置 false，或环境变量 A11Y_GATE_ENABLED 未设为真值且无显式声明的
+#   用例，即保持「逐用例声明再运行」的旧行为。
+A11Y_GATE_ENABLED: true
+
+# ★ 视觉（visual）复核报告开关（step5 report_generator 门控，默认 ON → 全量展示）。
+#   数据源：visual_review（run 级 execution_id=0，VLM/本地降级均可，无期望诚实 NO_DATA）。
+#   无复核记录时诚实不渲染区块；绝不伪造结论。
+VISUAL_REPORT_ENABLED: true
+
+# ★ 安全（security）报告开关（step5 report_generator 门控，默认 ON → 全量展示）。
+#   数据源：oracle_results（oracle_type='security'，step4 横切门禁采集落库）。
+#   规则驱动（OWASP Top 10），与 a11y/perf/visual 对齐；无数据时诚实不渲染区块。
+SECURITY_REPORT_ENABLED: true
+
+# =============================================================================
+# ★ 变更影响→回归范围 知识库（2026-08-26，低成本设计）
+#   默认开箱即用：知识完全来自引擎已有的 executions 表 + project_configs，
+#   零新配置 / 零新依赖 / 零 AI 调用。下方仅暴露 3 个可选调优项，通常无需改动。
+#   - CHANGE_IMPACT_KB_ENABLED：总开关，默认 true（只读历史数据，无副作用）。
+#   - CHANGE_IMPACT_KB_TOP_K：单轮最多推荐的回归用例数，默认 20。
+#   - CHANGE_IMPACT_KB_MIN_SIMILARITY：变更信号与用例的重叠度阈值，默认 0.3。
+#   变更信号来源（无需用户额外配置）：优先取调用入参，其次取
+#   project_configs.deployDoc / changed_modules（转测文档/变更清单，前端填即可）。
+# =============================================================================
+CHANGE_IMPACT_KB_ENABLED: true
+CHANGE_IMPACT_KB_TOP_K: 20
+CHANGE_IMPACT_KB_MIN_SIMILARITY: 0.3
+
+# =============================================================================
+# ★ W3 多身份越权测试开关（2026-08-12）
+#   IDENTITY_POOL_ENABLED：身份池总开关（默认 OFF → 零行为变更）
+#   PRIVILEGE_MATRIX_ENABLED：越权矩阵生成开关（默认 OFF → 零行为变更）
+#   开启后：step3 自动追加越权测试用例（横向/纵向/IDOR），
+#   step4 执行时 per-case 身份热切换（PER_CASE_IDENTITY_ENABLED 另行控制）
+# =============================================================================
+IDENTITY_POOL_ENABLED: false
+PRIVILEGE_MATRIX_ENABLED: false
+
+# =============================================================================
+# ★ 契约测试开关（2026-08-12）
+#   CONTRACT_ENABLED：契约断言生成/执行开关（默认 OFF → 零行为变更）
+#   CONTRACT_SCHEMA_SOURCE：契约来源（yapi / openapi）
+#   CONTRACT_OPENAPI_SPEC：OpenAPI spec 文件路径或 URL（source=openapi 时生效）
+# =============================================================================
+CONTRACT_ENABLED: false
+CONTRACT_SCHEMA_SOURCE: "yapi"
+CONTRACT_OPENAPI_SPEC: ""
+
+# =============================================================================
+# ★ 存储引擎配置（测试引擎自身的数据库）
+# =============================================================================
+storage:
+  engine: "mysql"
+
+  mysql:
+    host: "127.0.0.1"
+    port: 3306
+    user: "root"
+    password: "ADMIN"
+    database: "ai_test_engine"
+    charset: "utf8mb4"
+
+# =============================================================================
+# AI 系统级默认值（仅保留 pipeline_config 没有的兜底值）
+# ★ 以下值仅在用户未通过前端/API Key 面板配置时作为系统级兜底
+# ★ cloud_retry / risk_analyzer / local_check_cache_ttl 等已迁移到 pipeline_config
+# =============================================================================
+ai:
+  # 默认 Provider（会话级 Provider 识别兜底值）
+  default_provider: "ollama"
+  # ★ 模型名不入 config.yaml：必须通过前端面板配置入库（user_credentials）
+  #   以下字段保留 key 供 env 覆盖，但默认值为空（避免静默使用错误模型消耗云端额度）
+  verification_model: ""
+  model: ""
+  # API 调用超时（秒）
+  # ★ 根因修复(2026-08-25): 复杂用例生成（供应商新增/搜索等多用例产出）单次 AI
+  #   调用超过 120s（实测 229s 超时），导致 REQ-VERIFY-AI-001 生成失败。提升到
+  #   300s，给云端模型足够时间返回完整用例 JSON。
+  timeout: 300
+  # ★ 本地 Ollama 大任务超时（蓝红报告视角/Step2 AI 拆解等），7b 慢需放宽
+  local_timeout: 900
+  # 各 Provider 默认 API 地址
+  openai_base_url: "https://api.openai.com"
+  anthropic_base_url: "https://api.anthropic.com"
+  # 健康检查默认模型（前端未配置时为空，跳过 chat 健康检查）
+  health_check_default_model: ""
+
+# =============================================================================
+# Ollama 本地模型配置
+# =============================================================================
+ollama:
+  # ★ 2026-09-22 全覆盖靶子验证轮：指向 AI 接力服务（Ollama 协议兼容，
+  #   scripts/ai_stand_in_server.py:11435）。prompt 落盘 → 智能体按真实 prompt
+  #   生成应答 → 引擎原链路记账。验证轮结束后改回 http://localhost:11434。
+  api_base: "http://localhost:11434"
+  # ★ 模型名不入 config.yaml：必须通过前端面板配置入库（*_LOCAL_MODEL）
+  model: "qwen2.5:7b"
+  enabled: true
+
+# =============================================================================
+# ★ Oracle（判定器）配置 — T04 (2026-08-11)
+# [未复核-需 GLM/DeepSeek 把关]
+#
+# 消费方：src/oracle/vlm_adapter.py::_get_config() 读取 config.oracle.<key>
+#   该适配器此前已实现但 config.yaml 无 oracle 段 → getattr(config,"oracle",None)
+#   恒为 None → 三个 getter 永远回落硬编码默认值，配置形同虚设。本段补齐后
+#   ollama_url / vlm_model / vlm_timeout 才真正可配。
+#
+# 注意：与上面的 `ollama:` 段职责不同——`ollama:` 是**文本 LLM** 的本地 provider
+#   地址；本段是**视觉 Oracle(VLM)** 专用，模型与超时都不同（VLM 推理慢得多），
+#   故独立成段而非复用，避免一处改动互相牵连。
+# =============================================================================
+oracle:
+  # 本地 VLM 服务地址（Ollama /api/chat 兼容）
+  ollama_url: "http://127.0.0.1:11434"
+  # 视觉模型名。★ 与 ai.model 一致，留空则用 vlm_adapter 内置默认
+  #   (qwen2.5vl:3b)；显式配置可避免拉错模型。
+  vlm_model: "qwen2.5vl:3b"
+  # 单次 VLM 调用超时（秒）。3b 模型首次推理需 30-90s，勿低于 120。
+  vlm_timeout: 120
+
+# =============================================================================
+# Playwright 浏览器默认配置
+# =============================================================================
+playwright:
+  headless: false
+  viewport_width: 1920
+  viewport_height: 1080
+  timeout: 30000
+  screenshot_on_failure: true
+
+# =============================================================================
+# 智能会话上下文配置
+# =============================================================================
+session:
+  aware_login: true
+  state_cache_seconds: 120
+  smart_step_strip_login: true
+  smart_step_expand_import: true
+  system_knowledge_inject_prompt: true
+  data_schema_file: ""
+
+# =============================================================================
+# Provider URL 集中配置 (各 AI 服务商地址)
+# =============================================================================
+providers:
+  deepseek:
+    base_url: "https://api.deepseek.com"
+    models_url: "https://api.deepseek.com/v1/models"
+    pricing_url: "https://api-docs.deepseek.com/quick_start/pricing"
+  openai:
+    base_url: "https://api.openai.com"
+    models_url: "https://api.openai.com/v1/models"
+  anthropic:
+    base_url: "https://api.anthropic.com"
+  nvidia:
+    base_url: "https://integrate.api.nvidia.com"
+    models_url: "https://integrate.api.nvidia.com/v1/models"
+
+# =============================================================================
+# Figma 公共 API 地址（非项目级，所有项目共用）
+# Figma FILE KEY + TOKEN 在 user_credentials_v2 中按项目配置
+# =============================================================================
+figma:
+  api_base: "https://api.figma.com/v1"
+  website_base: "https://www.figma.com"
+
+# =============================================================================
+# Bootstrap 启动配置
+# =============================================================================
+bootstrap:
+  # ★ 首次启动时 admin 用户的默认密码（env BOOTSTRAP_ADMIN_PASSWORD 优先）
+  # 不配此项则生成随机 16 位密码（仅打印到日志）
+  default_password: "admin123"
+
+# =============================================================================
+# ★ 缓存/容量配置已迁移至 pipeline_config.py（唯一事实源）
+#   op_cache_max_capacity / fuzzy_match_default_threshold /
+#   adversarial_fast_reliability / red_team_fast_track_score
+#   消费方：step4/op_cache/base.py::_max_capacity（含 or 5000 硬兜底）
+# =============================================================================
+
+# =============================================================================
+# Web 服务
+# =============================================================================
+web:
+  bind_host: "0.0.0.0"
+  bind_port: 5001
+  base_url: "http://localhost:5001"
+  ci_default_base_url: "http://localhost:5001"
+
+# =============================================================================
+# 导出/字体
+# =============================================================================
+export:
+  fonts_search_paths:
+    - "C:/Windows/Fonts/simhei.ttf"
+    - "C:/Windows/Fonts/simsun.ttc"
+    - "C:/Windows/Fonts/msyh.ttc"
+    - "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"
+    - "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
+    - "/System/Library/Fonts/PingFang.ttc"
+
+# =============================================================================
+# RAG 引擎配置（系统级，pipeline_config 已有值的此处不重复）
+# =============================================================================
+rag:
+  # 相似度计算方法：auto=自动推断, cosine=余弦, dot=点积, bm25=纯BM25, hybrid=混合RRF
+  similarity_metric: "auto"
+
+  # 混合模式下 BM25 的权重（0-1），null=自动推断
+  hybrid_bm25_weight: null
+
+  # RRF（Reciprocal Rank Fusion）常数（k 值越大，低排名结果权重越高）
+  rrf_k: 60
+
+  # ★ L7 Cross-Encoder 重打分阈值（0.0-1.0），低于此值的 chunk 被过滤。
+  #   已迁移 pipeline_config.rag_l7_cross_encoder_threshold（唯一事实源）。
+  #   消费方：extensions/rag_engine/rag_filter.py:300（getattr pipeline_config）

@@ -1,0 +1,1381 @@
+{% extends "_layout_base.html" %}
+{% block head_extra %}
+<style>
+/* ════════════ project-mgmt.html 专用样式 ════════════ */
+
+/* 左右分栏布局 */
+.pm-layout {
+  display: flex;
+  gap: var(--space-4);
+  height: 100%;
+  min-height: 600px;
+}
+.pm-left-pane {
+  flex: 0 0 42%;
+  min-width: 360px;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  overflow: hidden;
+}
+.pm-right-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  overflow: hidden;
+}
+
+/* 面板头部 */
+.pm-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-default);
+}
+.pm-pane-title {
+  font-size: var(--fs-h2);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.pm-pane-count {
+  display: inline-block;
+  min-width: 22px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  text-align: center;
+}
+
+/* 搜索栏 */
+.pm-search-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.pm-search-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-height);
+  padding: 0 var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--control-radius);
+  flex: 1;
+}
+.pm-search-wrapper:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--color-primary-soft);
+}
+.pm-search-icon { color: var(--text-tertiary); flex-shrink: 0; }
+.pm-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: var(--fs-body);
+  font-family: var(--font-sans);
+}
+.pm-search-input::placeholder { color: var(--text-tertiary); }
+
+/* 过滤标签 */
+.pm-filter-tabs {
+  display: inline-flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.pm-filter-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  transition: all 0.15s ease;
+}
+.pm-filter-tab:hover { color: var(--text-primary); border-color: var(--border-hover); }
+.pm-filter-tab.active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  border-color: var(--color-primary-border);
+}
+.pm-tab-count {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  text-align: center;
+}
+.pm-filter-tab.active .pm-tab-count {
+  background: var(--color-primary);
+  color: var(--text-inverse);
+}
+
+/* 项目列表（左侧）*/
+.pm-project-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+  overflow-y: auto;
+}
+.pm-empty {
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: var(--fs-small);
+  background: var(--bg-elevated);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
+}
+.pm-empty-error { color: var(--state-error-text); }
+
+.pm-project-item {
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+.pm-project-item:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-surface);
+}
+.pm-project-item.pm-selected {
+  border-color: var(--color-primary);
+  border-left: 3px solid var(--color-primary);
+  background: var(--color-primary-soft);
+}
+.pm-project-item.pm-archived {
+  opacity: 0.7;
+}
+.pm-project-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  width: 100%;
+}
+.pm-project-info {
+  flex: 1;
+  min-width: 0;
+}
+.pm-project-name-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+  flex-wrap: wrap;
+}
+.pm-project-name {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.pm-version-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  background: var(--step2-soft);
+  color: var(--step2-color);
+  border: 1px solid var(--step2-border);
+  font-size: var(--fs-xs);
+  font-family: var(--font-mono);
+  font-weight: var(--fw-medium);
+}
+.pm-version-empty {
+  background: var(--bg-surface);
+  color: var(--text-tertiary);
+  border-color: var(--border-default);
+}
+.pm-status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.pm-status-active {
+  background: var(--state-success-soft);
+  color: var(--state-success-text);
+  border: 1px solid var(--state-success-border);
+}
+.pm-status-archived {
+  background: var(--state-warning-soft);
+  color: var(--state-warning-text);
+  border: 1px solid var(--state-warning-border);
+}
+.pm-project-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-1);
+}
+.pm-project-sep { color: var(--border-hover); }
+.pm-project-desc {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.pm-project-actions {
+  display: flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  align-items: center;
+}
+.pm-btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.pm-btn-action:hover:not(:disabled) {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+  background: var(--bg-surface);
+}
+.pm-btn-action:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.pm-btn-archive:hover:not(:disabled) {
+  background: var(--state-warning-soft);
+  color: var(--state-warning);
+  border-color: var(--state-warning-border);
+}
+.pm-btn-restore:hover:not(:disabled) {
+  background: var(--state-success-soft);
+  color: var(--state-success);
+  border-color: var(--state-success-border);
+}
+.pm-btn-delete:hover:not(:disabled) {
+  background: var(--state-error-soft);
+  color: var(--state-error);
+  border-color: var(--state-error-border);
+}
+
+/* 右侧项目提示条 */
+.pm-project-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+.pm-project-label {
+  color: var(--text-tertiary);
+}
+.pm-project-name, .pm-active-version {
+  color: var(--color-primary);
+  font-weight: var(--fw-semibold);
+  font-family: var(--font-mono);
+}
+.pm-project-sep {
+  color: var(--border-hover);
+}
+
+/* 新建版本按钮 */
+.pm-btn-new-version {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--control-height-sm);
+  padding: 0 var(--space-3);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--control-radius);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.pm-btn-new-version:hover:not(:disabled) {
+  background: var(--color-primary);
+  color: var(--text-inverse);
+  border-color: var(--color-primary);
+}
+.pm-btn-new-version:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 版本列表（右侧）*/
+.pm-version-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+  overflow-y: auto;
+}
+.pm-ver-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  transition: all 0.15s ease;
+}
+.pm-ver-item:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-surface);
+}
+.pm-ver-item.pm-ver-current {
+  border-left: 3px solid var(--color-primary);
+  background: var(--color-primary-soft);
+}
+.pm-ver-item.pm-ver-archived { opacity: 0.75; }
+.pm-ver-item.pm-ver-deleted { opacity: 0.5; }
+.pm-ver-info { flex: 1; min-width: 0; }
+.pm-ver-name-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+  flex-wrap: wrap;
+}
+.pm-ver-label {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+.pm-ver-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.pm-ver-status-active { background: var(--state-success-soft); color: var(--state-success-text); border: 1px solid var(--state-success-border); }
+.pm-ver-status-draft { background: var(--state-info-soft); color: var(--state-info-text); border: 1px solid var(--state-info-border); }
+.pm-ver-status-archived { background: var(--state-warning-soft); color: var(--state-warning-text); border: 1px solid var(--state-warning-border); }
+.pm-ver-status-deleted { background: var(--state-error-soft); color: var(--state-error-text); border: 1px solid var(--state-error-border); }
+.pm-ver-current-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  background: var(--color-primary);
+  color: var(--text-inverse);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.pm-ver-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-1);
+  flex-wrap: wrap;
+}
+.pm-ver-sep { color: var(--border-hover); }
+.pm-ver-desc {
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.pm-ver-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.pm-ver-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--control-height-sm);
+  padding: 0 var(--space-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--control-radius);
+  color: var(--text-secondary);
+  font-size: var(--fs-small);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.pm-ver-btn:hover:not(:disabled) {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+.pm-ver-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.pm-ver-btn-activate:hover:not(:disabled) { background: var(--state-success-soft); color: var(--state-success); border-color: var(--state-success-border); }
+.pm-ver-btn-archive:hover:not(:disabled) { background: var(--state-warning-soft); color: var(--state-warning); border-color: var(--state-warning-border); }
+.pm-ver-btn-delete:hover:not(:disabled) { background: var(--state-error-soft); color: var(--state-error); border-color: var(--state-error-border); }
+.pm-ver-btn-purge { color: var(--state-error); border-color: var(--state-error-border); }
+.pm-ver-btn-purge:hover:not(:disabled) { background: var(--state-error); color: var(--text-on-color); border-color: var(--state-error); }
+.pm-ver-btn-restore:hover:not(:disabled) { background: var(--color-primary-soft); color: var(--color-primary); border-color: var(--color-primary-border); }
+
+/* 新建版本表单卡片 */
+.pm-new-form-card {
+  padding: var(--space-4);
+  background: var(--bg-elevated);
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--radius-md);
+}
+.pm-new-form-title {
+  font-size: var(--fs-h2);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-3);
+}
+.pm-new-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.pm-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.pm-form-label {
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  color: var(--text-primary);
+}
+.pm-required { color: var(--state-error); }
+.pm-input {
+  height: var(--control-height);
+  padding: 0 var(--space-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--control-radius);
+  color: var(--text-primary);
+  font-size: var(--fs-body);
+  font-family: var(--font-sans);
+}
+.pm-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--color-primary-soft);
+}
+.pm-textarea {
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--control-radius);
+  color: var(--text-primary);
+  font-size: var(--fs-body);
+  font-family: var(--font-sans);
+  min-height: 60px;
+  resize: vertical;
+}
+.pm-textarea:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--color-primary-soft);
+}
+.pm-form-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+}
+.pm-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.pm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-height);
+  padding: 0 var(--space-4);
+  border-radius: var(--control-radius);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+.pm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.pm-btn-cancel {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+  color: var(--text-secondary);
+}
+.pm-btn-cancel:hover { color: var(--text-primary); border-color: var(--border-hover); }
+.pm-btn-primary {
+  background: var(--color-primary);
+  color: var(--text-inverse);
+}
+.pm-btn-primary:hover:not(:disabled) { background: var(--color-primary-hover); }
+
+/* 响应式：小屏退化为单列堆叠 */
+@media (max-width: 960px) {
+  .pm-layout {
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .pm-left-pane {
+    flex: 0 0 auto;
+    max-width: none;
+    min-width: 0;
+  }
+  .pm-right-pane {
+    min-height: 400px;
+  }
+}
+
+/* ════════════ 项目成员 + 元数据（P2-6 H4-H6 / M11-M12） ════════════ */
+.pm-members-section,
+.pm-meta-section {
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--border-default);
+  padding-top: var(--space-3);
+}
+.pm-member-form,
+.pm-meta-form {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+  margin: var(--space-2) 0;
+}
+.pm-member-list,
+.pm-meta-view {
+  margin-top: var(--space-2);
+}
+.pm-member-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  background: var(--bg-elevated);
+}
+.pm-member-name { font-weight: var(--fw-medium); font-size: var(--fs-small); }
+.pm-member-id { color: var(--text-tertiary); font-size: var(--fs-micro); }
+.pm-role-badge {
+  font-size: var(--fs-micro);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.pm-role-owner { background: var(--state-warning-soft); color: var(--state-warning-text); }
+.pm-role-member { background: var(--state-info-soft); color: var(--state-info-text); }
+.pm-member-remove {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--state-error);
+  color: var(--state-error);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  font-size: var(--fs-micro);
+  cursor: pointer;
+}
+.pm-member-remove:hover { background: var(--state-error-soft); }
+.pm-meta-row {
+  display: flex;
+  gap: var(--space-2);
+  padding: 4px 0;
+  font-size: var(--fs-small);
+}
+.pm-meta-label { color: var(--text-tertiary); width: 80px; flex-shrink: 0; }
+.pm-meta-value { color: var(--text-primary); word-break: break-all; }
+</style>
+{% endblock %}
+{% block title %}项目管理 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+项目管理
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnNewProject" data-perm="project.create" data-tooltip="创建新项目" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  新建项目
+</button>
+<button class="btn-topbar" id="btnRefreshProjects" data-perm="project.config.view" data-tooltip="重新加载项目列表" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  刷新
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════ 左右分栏布局 ════════════ -->
+<div class="pm-layout">
+
+  <!-- ════════════ 左侧：项目列表 ════════════ -->
+  <div class="pm-left-pane">
+    <div class="pm-pane-header">
+      <span class="pm-pane-title">项目列表</span>
+      <span class="pm-pane-count" id="pmLeftCount">0</span>
+    </div>
+
+    <!-- 搜索栏 -->
+    <div class="pm-search-bar">
+      <div class="pm-search-wrapper">
+        <svg class="pm-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="text" id="searchInput" class="pm-search-input" placeholder="搜索项目..." />
+      </div>
+    </div>
+
+    <!-- 过滤标签 -->
+    <div class="pm-filter-tabs">
+      <span class="pm-filter-tab active" data-status="all">全部 <span id="cntAll" class="pm-tab-count">0</span></span>
+      <span class="pm-filter-tab" data-status="active">活跃 <span id="cntActive" class="pm-tab-count">0</span></span>
+      <span class="pm-filter-tab" data-status="archived">已归档 <span id="cntArchived" class="pm-tab-count">0</span></span>
+    </div>
+
+    <!-- 项目列表 -->
+    <div class="pm-project-list" id="projectList">
+      <div class="pm-empty">加载中...</div>
+    </div>
+  </div>
+
+  <!-- ════════════ 右侧：版本列表 ════════════ -->
+  <div class="pm-right-pane" id="pmRightPane">
+    <div class="pm-pane-header">
+      <span class="pm-pane-title">版本列表</span>
+      <button class="pm-btn-new-version" id="btnNewVersion" data-perm="project.version.create" data-tooltip="新建版本" data-tooltip-pos="bottom" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新建版本
+      </button>
+    </div>
+
+    <!-- 新建版本表单（默认隐藏） -->
+    <div class="pm-new-form-card" id="newFormCard" style="display:none;">
+      <h3 class="pm-new-form-title">新建版本</h3>
+      <div class="pm-new-form">
+        <div class="pm-form-group">
+          <label class="pm-form-label">版本标签 <span class="pm-required">*</span></label>
+          <input type="text" id="newVersionLabel" class="pm-input" placeholder="例如: V2.0" />
+          <div class="pm-form-hint">仅支持字母、数字、点(.)、中划线(-)，1-32 字符</div>
+        </div>
+        <div class="pm-form-group">
+          <label class="pm-form-label">版本描述</label>
+          <textarea id="newVersionDesc" class="pm-textarea" rows="2" placeholder="简要说明此版本变更内容"></textarea>
+        </div>
+        <div class="pm-form-actions">
+          <button type="button" class="pm-btn pm-btn-cancel" id="btnCancelNew" data-tooltip="取消并隐藏表单" data-tooltip-pos="top">取消</button>
+          <button type="button" class="pm-btn pm-btn-primary" id="btnSubmitNew" data-tooltip="提交创建新版本" data-tooltip-pos="top">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            创建
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 版本列表 -->
+    <div class="pm-version-list" id="versionList">
+      <div class="pm-empty">请先在左侧选择一个项目</div>
+    </div>
+
+    <!-- ★ P2-6 H4/H5/H6: 项目成员管理 -->
+    <div class="pm-members-section" id="pmMembersSection" style="display:none;">
+      <div class="pm-pane-header">
+        <span class="pm-pane-title">项目成员</span>
+        <button class="pm-btn-new-version" id="btnAddMember" data-perm="project.config.edit" data-tooltip="添加项目成员" data-tooltip-pos="bottom">添加成员</button>
+      </div>
+      <div class="pm-member-form" id="pmMemberForm" style="display:none;">
+        <input type="text" id="pmMemberUserId" class="pm-input" placeholder="用户 ID / 用户名" />
+        <select id="pmMemberLevel" class="pm-input" style="width:auto;">
+          <option value="member">成员</option>
+          <option value="owner">所有者</option>
+        </select>
+        <button type="button" class="pm-btn pm-btn-primary" id="btnAddMemberConfirm">添加</button>
+        <button type="button" class="pm-btn pm-btn-cancel" id="btnCancelMemberForm">取消</button>
+      </div>
+      <div class="pm-member-list" id="pmMemberList"><div class="pm-empty">选择项目后加载成员</div></div>
+    </div>
+
+    <!-- ★ P2-6 M11/M12: 项目元数据 -->
+    <div class="pm-meta-section" id="pmMetaSection" style="display:none;">
+      <div class="pm-pane-header">
+        <span class="pm-pane-title">项目元数据</span>
+        <button class="pm-btn-new-version" id="btnEditMeta" data-perm="project.config.edit" data-tooltip="编辑显示名称与描述" data-tooltip-pos="bottom">编辑</button>
+      </div>
+      <div class="pm-meta-view" id="pmMetaView"><div class="pm-empty">选择项目后加载</div></div>
+      <div class="pm-meta-form" id="pmMetaForm" style="display:none;">
+        <input type="text" id="pmMetaName" class="pm-input" placeholder="显示名称" maxlength="128" />
+        <textarea id="pmMetaDesc" class="pm-textarea" rows="2" placeholder="项目描述" maxlength="512"></textarea>
+        <button type="button" class="pm-btn pm-btn-primary" id="btnSaveMeta">保存</button>
+        <button type="button" class="pm-btn pm-btn-cancel" id="btnCancelMetaForm">取消</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  'use strict';
+  var A = window._A;
+  if (!A) return;
+  var $ = A.$, esc = A.escHtml, escAttr = A.escAttr;
+
+  // ── 状态 ──
+  var allProjects = [];      // 后端返回的全部项目
+  var currentStatus = 'all';
+  var searchText = '';
+  var currentProject = '';   // 当前选中的项目名（用于右侧版本列表）
+  var versions = [];
+  var activeId = null;
+
+  // ════════════ 项目列表 ════════════
+
+  async function loadProjects() {
+    var list = $('projectList');
+    if (list) list.innerHTML = '<div class="pm-empty">加载中...</div>';
+    var r = await A.api('GET', '/api/projects');
+    if (r && r.ok && r.project_list) {
+      allProjects = r.project_list;
+      // 保持当前选中项目；若已不存在则清空
+      if (currentProject && !allProjects.some(function(p) { return p.name === currentProject; })) {
+        currentProject = '';
+      }
+      if (!currentProject && r.current) currentProject = r.current;
+      renderList();
+      updateCounts();
+      // 自动加载选中项目的版本
+      loadVersions();
+    } else {
+      if (list) list.innerHTML = '<div class="pm-empty pm-empty-error">' + esc((r && r.error) || '加载失败') + '</div>';
+    }
+  }
+
+  function filterProjects() {
+    return allProjects.filter(function(p) {
+      if (currentStatus !== 'all') {
+        var st = p.status || 'active';
+        if (st !== currentStatus) return false;
+      }
+      if (searchText) {
+        var q = searchText.toLowerCase();
+        var text = [p.name, p.display_name, p.description].join(' ').toLowerCase();
+        if (text.indexOf(q) < 0) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderList() {
+    var list = $('projectList');
+    if (!list) return;
+    var filtered = filterProjects();
+    var cntEl = $('pmLeftCount');
+    if (cntEl) cntEl.textContent = filtered.length;
+    if (filtered.length === 0) {
+      list.innerHTML = '<div class="pm-empty">' + (searchText || currentStatus !== 'all' ? '无匹配项目' : '暂无项目，点击右上角"新建项目"创建') + '</div>';
+      return;
+    }
+    var html = filtered.map(function(p) {
+      var isSelected = p.name === currentProject;
+      var isArchived = (p.status || 'active') === 'archived';
+      var statusBadge = isArchived
+        ? '<span class="pm-status-badge pm-status-archived">已归档</span>'
+        : '<span class="pm-status-badge pm-status-active">活跃</span>';
+      var verBadge = p.active_version
+        ? '<span class="pm-version-badge">' + esc(p.active_version) + '</span>'
+        : '<span class="pm-version-badge pm-version-empty">无版本</span>';
+
+      // 归档项目显示"恢复"，活跃项目显示"归档"
+      var actions = '';
+      if (isArchived) {
+        actions += '<button class="pm-btn-action pm-btn-restore" data-action="restore" data-name="' + esc(p.name) + '" data-perm="project.delete" data-tooltip="恢复项目" data-tooltip-pos="top">'
+          + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>'
+          + '</button>';
+        actions += '<button class="pm-btn-action pm-btn-delete" data-action="hard-delete" data-name="' + esc(p.name) + '" data-perm="project.delete" data-tooltip="物理删除项目" data-tooltip-pos="top">'
+          + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
+          + '</button>';
+      } else {
+        actions += '<button class="pm-btn-action pm-btn-archive" data-action="archive" data-name="' + esc(p.name) + '" data-perm="project.delete" data-tooltip="归档项目" data-tooltip-pos="top"'
+          + (isSelected ? ' disabled' : '') + '>'
+          + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>'
+          + '</button>';
+      }
+
+      return '<div class="pm-project-item' + (isSelected ? ' pm-selected' : '') + (isArchived ? ' pm-archived' : '') + '" data-name="' + esc(p.name) + '">'
+        + '<div class="pm-project-main">'
+          + '<div class="pm-project-info">'
+            + '<div class="pm-project-name-row">'
+              + '<span class="pm-project-name">' + esc(p.display_name || p.name) + '</span>'
+              + verBadge
+              + statusBadge
+            + '</div>'
+            + '<div class="pm-project-meta">'
+              + '<span class="pm-project-date" title="创建时间">' + (p.created_at ? esc(p.created_at) : '—') + '</span>'
+              + '<span class="pm-project-sep">·</span>'
+              + '<span class="pm-project-created-by" title="创建人">' + (p.created_by ? esc(p.created_by) : '—') + '</span>'
+            + '</div>'
+            + '<div class="pm-project-desc">' + esc(p.description || '暂无描述') + '</div>'
+          + '</div>'
+          + '<div class="pm-project-actions">' + actions + '</div>'
+        + '</div>'
+      + '</div>';
+    }).join('');
+    list.innerHTML = html;
+
+    // 重新应用权限（隐藏无权限的按钮）
+    if (A.applyPermissions) A.applyPermissions();
+
+    // 绑定项目卡片点击（切换右侧版本列表）
+    A.$$('.pm-project-item', list).forEach(function(item) {
+      item.addEventListener('click', function(e) {
+        // 忽略点击操作按钮的情况
+        if (e.target.closest('.pm-project-actions')) return;
+        var name = item.getAttribute('data-name');
+        if (!name) return;
+        currentProject = name;
+        // 高亮选中项
+        A.$$('.pm-project-item', list).forEach(function(x) { x.classList.remove('pm-selected'); });
+        item.classList.add('pm-selected');
+        // 真正切换后端当前项目（与顶栏下拉一致）：否则登录闸门读到空 current，
+        // 选完项目点「控制台」仍被弹回项目列表（切换失败）。
+        // 归档项目不可切换（后端按 status=active 校验），跳过。
+        if (item.classList.contains('pm-archived')) { loadVersions(); return; }
+        A.api('POST', '/api/project', { name: name }).then(function(r) {
+          if (r && r.ok) {
+            A._currentProject = name;
+            var p = allProjects.find(function(x) { return x.name === name; });
+            A._currentProjectName = (p && p.display_name) || name;
+            if (A.invalidateProjectsCache) A.invalidateProjectsCache();
+          } else {
+            if (A.toast) A.toast('切换项目失败: ' + ((r && r.error) || '未知错误'), 'error');
+          }
+          loadVersions();
+        }).catch(function() { loadVersions(); });
+      });
+    });
+
+    // 绑定项目操作按钮
+    A.$$('.pm-btn-action', list).forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (btn.disabled) return;
+        var action = btn.getAttribute('data-action');
+        var name = btn.getAttribute('data-name');
+        handleProjectAction(action, name, btn);
+      });
+    });
+  }
+
+  // ── 项目操作处理 ──
+  function handleProjectAction(action, name, btn) {
+    if (!name || !btn) return;
+    var loadingText = action === 'archive' ? '归档中...' : (action === 'restore' ? '恢复中...' : '删除中...');
+    A.withBtnLoading(btn, loadingText, async function() {
+      if (action === 'archive') {
+        if (!(await A.confirm('确定归档项目 "' + name + '"？归档后可在面板恢复。'))) return;
+        var r1 = await A.api('DELETE', '/api/project/' + encodeURIComponent(name));
+        if (r1 && (r1.ok || r1.action)) {
+          A._toast && A._toast('已归档: ' + name, 'success');
+          loadProjects();
+        } else {
+          A._toast && A._toast('归档失败: ' + (r1 && r1.error || '未知错误'), 'error');
+        }
+      } else if (action === 'restore') {
+        var r2 = await A.api('POST', '/api/project/' + encodeURIComponent(name) + '/restore');
+        if (r2 && r2.ok) {
+          A._toast && A._toast('已恢复: ' + name, 'success');
+          loadProjects();
+        } else {
+          A._toast && A._toast('恢复失败: ' + (r2 && r2.error || '未知错误'), 'error');
+        }
+      } else if (action === 'hard-delete') {
+        if (!(await A.confirm('警告：物理删除将清除项目所有数据且不可恢复！\n确定物理删除项目 "' + name + '"？', { danger: true }))) return;
+        if (!(await A.confirm('再次确认：物理删除项目 "' + name + '"？此操作不可撤销！', { danger: true }))) return;
+        var r3 = await A.api('DELETE', '/api/project/' + encodeURIComponent(name) + '?hard=1');
+        if (r3 && (r3.ok || r3.action === 'deleted')) {
+          A._toast && A._toast('已物理删除: ' + name, 'success');
+          loadProjects();
+        } else {
+          A._toast && A._toast('删除失败: ' + (r3 && r3.error || '未知错误'), 'error');
+        }
+      }
+    });
+  }
+
+  // ── 计数 ──
+  function updateCounts() {
+    var all = allProjects.length;
+    var active = 0, archived = 0;
+    allProjects.forEach(function(p) {
+      if ((p.status || 'active') === 'archived') archived++;
+      else active++;
+    });
+    var set = function(id, v) { var el = $(id); if (el) el.textContent = v; };
+    set('cntAll', all);
+    set('cntActive', active);
+    set('cntArchived', archived);
+  }
+
+  // ════════════ 版本列表 ════════════
+
+  async function loadVersions() {
+    var listEl = $('versionList');
+    var btnNew = $('btnNewVersion');
+    // 未选择项目时清空右侧
+    if (!currentProject) {
+      versions = [];
+      activeId = null;
+      if (listEl) listEl.innerHTML = '<div class="pm-empty">请先在左侧选择一个项目</div>';
+      if ($('curProject')) $('curProject').textContent = '未选择';
+      if ($('curActive')) $('curActive').textContent = '—';
+      if (btnNew) btnNew.disabled = true;
+      hideNewForm();
+      var ms = $('pmMembersSection');
+      if (ms) ms.style.display = 'none';
+      var metaS = $('pmMetaSection');
+      if (metaS) metaS.style.display = 'none';
+      return;
+    }
+    if (btnNew) btnNew.disabled = false;
+    if (listEl) listEl.innerHTML = '<div class="pm-empty">加载中...</div>';
+    // ★ P2-6 H4/M11: 项目选中时联动加载成员 + 元数据
+    var ms = $('pmMembersSection');
+    if (ms) ms.style.display = 'block';
+    loadProjectMembers(currentProject);
+    var metaS = $('pmMetaSection');
+    if (metaS) metaS.style.display = 'block';
+    loadProjectMeta(currentProject);
+    try {
+      var r = await A.api('GET', '/api/project/versions?project=' + encodeURIComponent(currentProject));
+      if (r && r.versions) {
+        versions = r.versions || [];
+        activeId = r.active_id;
+        if ($('curProject')) $('curProject').textContent = r.project || currentProject;
+        if ($('curActive')) $('curActive').textContent = r.active_label || '—';
+        renderVersions();
+      } else {
+        if (listEl) listEl.innerHTML = '<div class="pm-empty pm-empty-error">' + esc((r && r.error) || '加载失败') + '</div>';
+        if ($('curProject')) $('curProject').textContent = '未选择';
+        if ($('curActive')) $('curActive').textContent = '—';
+      }
+    } catch (e) {
+      if (listEl) listEl.innerHTML = '<div class="pm-empty pm-empty-error">加载异常: ' + esc(String(e)) + '</div>';
+    }
+  }
+
+  function versionStatusBadge(v, isActive) {
+    var status = v.status || 'draft';
+    if (isActive) return '<span class="pm-ver-status pm-ver-status-active">活跃</span>';
+    if (status === 'archived') return '<span class="pm-ver-status pm-ver-status-archived">已归档</span>';
+    if (status === 'deleted') return '<span class="pm-ver-status pm-ver-status-deleted">已删除</span>';
+    return '<span class="pm-ver-status pm-ver-status-draft">草稿</span>';
+  }
+
+  function renderVersions() {
+    var listEl = $('versionList');
+    if (!listEl) return;
+    if (versions.length === 0) {
+      listEl.innerHTML = '<div class="pm-empty">暂无版本，点击右上角"新建版本"创建</div>';
+      return;
+    }
+    var html = versions.map(function(v) {
+      var isActive = v.id === activeId;
+      var status = v.status || 'draft';
+      var actions = '';
+      // 活跃版本不能归档/激活/删除
+      if (!isActive && status !== 'deleted') {
+        actions += '<button class="pm-ver-btn pm-ver-btn-activate" data-action="ver-activate" data-id="' + escAttr(v.id) + '" data-perm="project.version.edit" data-tooltip="激活该版本" data-tooltip-pos="top">'
+          + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>激活</button>';
+        if (status !== 'archived') {
+          actions += '<button class="pm-ver-btn pm-ver-btn-archive" data-action="ver-archive" data-id="' + escAttr(v.id) + '" data-perm="project.version.archive" data-tooltip="归档该版本" data-tooltip-pos="top">'
+            + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>归档</button>';
+        }
+      }
+      if (status === 'deleted') {
+        actions += '<button class="pm-ver-btn pm-ver-btn-restore" data-action="ver-restore" data-id="' + escAttr(v.id) + '" data-perm="project.version.delete" data-tooltip="恢复该版本" data-tooltip-pos="top">'
+          + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>恢复</button>';
+      }
+      if (!isActive && status !== 'deleted') {
+        actions += '<button class="pm-ver-btn pm-ver-btn-delete" data-action="ver-delete" data-id="' + escAttr(v.id) + '" data-perm="project.version.delete" data-tooltip="删除版本" data-tooltip-pos="top">'
+          + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>删除</button>';
+      }
+      if (status === 'deleted') {
+        actions += '<button class="pm-ver-btn pm-ver-btn-purge" data-action="ver-purge" data-id="' + escAttr(v.id) + '" data-perm="project.version.delete" data-tooltip="永久删除版本（不可恢复）" data-tooltip-pos="top">'
+          + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>物理删除</button>';
+      }
+
+      // 去掉 "v " 前缀，避免 "v V0.02" 冗余显示
+      return '<div class="pm-ver-item' + (isActive ? ' pm-ver-current' : '') + (status === 'deleted' ? ' pm-ver-deleted' : '') + (status === 'archived' ? ' pm-ver-archived' : '') + '" data-id="' + escAttr(v.id) + '">'
+        + '<div class="pm-ver-info">'
+          + '<div class="pm-ver-name-row">'
+            + '<span class="pm-ver-label">' + esc(v.version_label || '') + '</span>'
+            + versionStatusBadge(v, isActive)
+            + (isActive ? '<span class="pm-ver-current-badge">当前</span>' : '')
+          + '</div>'
+          + '<div class="pm-ver-meta">'
+            + '<span title="版本ID">ID: ' + esc(v.id) + '</span>'
+            + '<span class="pm-ver-sep">·</span>'
+            + '<span title="创建人">' + esc(v.created_by || '—') + '</span>'
+            + '<span class="pm-ver-sep">·</span>'
+            + '<span title="创建时间">' + esc(v.created_at || '—') + '</span>'
+          + '</div>'
+          + '<div class="pm-ver-desc">' + esc(v.description || '无描述') + '</div>'
+        + '</div>'
+        + '<div class="pm-ver-actions">' + actions + '</div>'
+      + '</div>';
+    }).join('');
+    listEl.innerHTML = html;
+
+    // 应用权限
+    if (A.applyPermissions) A.applyPermissions();
+
+    // 绑定版本操作按钮
+    A.$$('.pm-ver-btn', listEl).forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (btn.disabled) return;
+        var action = btn.getAttribute('data-action');
+        var id = btn.getAttribute('data-id');
+        handleVersionAction(action, id, btn);
+      });
+    });
+  }
+
+  // ── 版本操作处理 ──
+  function handleVersionAction(action, id, btn) {
+    if (!id || !btn) return;
+    var loadingMap = {
+      'ver-activate': '激活中...',
+      'ver-archive': '归档中...',
+      'ver-delete': '删除中...',
+      'ver-restore': '恢复中...',
+      'ver-purge': '物理删除中...'
+    };
+    A.withBtnLoading(btn, loadingMap[action] || '处理中...', async function() {
+      var r = null;
+      var proj = currentProject;
+      if (action === 'ver-activate') {
+        if (!(await A.confirm('确定激活此版本？激活后其他版本将被自动归档。'))) return;
+        r = await A.api('POST', '/api/project/versions/' + id + '/activate?project=' + encodeURIComponent(proj));
+      } else if (action === 'ver-archive') {
+        if (!(await A.confirm('确定归档此版本？归档后可在列表恢复。'))) return;
+        r = await A.api('POST', '/api/project/versions/' + id + '/archive?project=' + encodeURIComponent(proj));
+      } else if (action === 'ver-delete') {
+        if (!(await A.confirm('确定删除此版本？删除后可在列表恢复（30天内）。', { danger: true }))) return;
+        r = await A.api('POST', '/api/project/versions/' + id + '/delete?project=' + encodeURIComponent(proj));
+      } else if (action === 'ver-restore') {
+        r = await A.api('POST', '/api/project/versions/' + id + '/restore?project=' + encodeURIComponent(proj));
+      } else if (action === 'ver-purge') {
+        if (!(await A.confirm('警告：物理删除将永久移除此版本及其所有关联数据（需求、用例、执行记录等），不可恢复！确定继续？', { danger: true }))) return;
+        r = await A.api('DELETE', '/api/project/versions/' + id + '/purge?project=' + encodeURIComponent(proj));
+      }
+      if (r && r.ok) {
+        var msgMap = {
+          'ver-activate': '版本已激活',
+          'ver-archive': '版本已归档',
+          'ver-delete': '版本已删除',
+          'ver-restore': '版本已恢复',
+          'ver-purge': '版本已永久删除'
+        };
+        A._toast && A._toast(msgMap[action] || '操作成功', 'success');
+        // 刷新版本列表 + 项目列表（活跃版本可能变化）
+        loadVersions();
+        loadProjects();
+      } else {
+        A._toast && A._toast('操作失败: ' + (r && r.error || '未知错误'), 'error');
+      }
+    });
+  }
+
+  // ════════════ 新建版本表单 ════════════
+
+  function showNewForm() {
+    var card = $('newFormCard');
+    if (card) {
+      card.style.display = 'block';
+      var input = $('newVersionLabel');
+      if (input) input.focus();
+    }
+  }
+
+  function hideNewForm() {
+    var card = $('newFormCard');
+    if (!card) return;
+    card.style.display = 'none';
+    var label = $('newVersionLabel');
+    var desc = $('newVersionDesc');
+    if (label) label.value = '';
+    if (desc) desc.value = '';
+  }
+
+  // 清空表单输入但保持表单展开（用于连续创建）
+  function clearFormInputs() {
+    var label = $('newVersionLabel');
+    var desc = $('newVersionDesc');
+    if (label) label.value = '';
+    if (desc) desc.value = '';
+    var input = $('newVersionLabel');
+    if (input) input.focus();
+  }
+
+  async function submitNewVersion(btn) {
+    var label = ($('newVersionLabel').value || '').trim();
+    var desc = ($('newVersionDesc').value || '').trim();
+    if (!label) { A._toast && A._toast('请输入版本标签', 'error'); return; }
+    if (!/^[A-Za-z0-9.\-]{1,32}$/.test(label)) {
+      A._toast && A._toast('版本标签只能包含字母、数字、点、中划线', 'error');
+      return;
+    }
+    var body = { version_name: label, description: desc };
+    A.withBtnLoading(btn, '创建中...', async function() {
+      var r = await A.api('POST', '/api/project/versions?project=' + encodeURIComponent(currentProject), body);
+      if (r && r.ok) {
+        A._toast && A._toast('版本已创建: ' + label, 'success');
+        // 刷新版本列表 + 项目列表（活跃版本可能变化）
+        loadVersions();
+        loadProjects();
+        // 清空表单输入但保持表单展开，便于连续创建
+        clearFormInputs();
+      } else {
+        A._toast && A._toast('创建失败: ' + (r && r.error || '未知错误'), 'error');
+      }
+    });
+  }
+
+  // ════════════ 事件绑定 ════════════
+
+  var search = $('searchInput');
+  if (search) search.addEventListener('input', function() {
+    searchText = search.value.trim();
+    renderList();
+  });
+
+  A.$$('.pm-filter-tab').forEach(function(t) {
+    t.addEventListener('click', function() {
+      A.$$('.pm-filter-tab').forEach(function(x){ x.classList.remove('active'); });
+      t.classList.add('active');
+      currentStatus = t.getAttribute('data-status');
+      renderList();
+    });
+  });
+
+  var btnRefresh = $('btnRefreshProjects');
+  if (btnRefresh) btnRefresh.addEventListener('click', function() {
+    A.withBtnLoading(btnRefresh, '加载中...', loadProjects);
+  });
+
+  var btnNew = $('btnNewProject');
+  if (btnNew) btnNew.addEventListener('click', function() {
+    window.location.href = '/new-project';
+  });
+
+  var btnNewVersion = $('btnNewVersion');
+  if (btnNewVersion) btnNewVersion.addEventListener('click', function() {
+    if (btnNewVersion.disabled) return;
+    if (!currentProject) {
+      A._toast && A._toast('请先在左侧选择一个项目', 'error');
+      return;
+    }
+    showNewForm();
+  });
+
+  var btnCancelNew = $('btnCancelNew');
+  if (btnCancelNew) btnCancelNew.addEventListener('click', function() {
+    hideNewForm();
+  });
+
+  var btnSubmitNew = $('btnSubmitNew');
+  if (btnSubmitNew) btnSubmitNew.addEventListener('click', function() {
+    submitNewVersion(btnSubmitNew);
+  });
+
+  // ── ★ P2-6 H4/H5/H6: 项目成员 ──
+  function loadProjectMembers(project) {
+    var listEl = $('pmMemberList');
+    if (!listEl) return;
+    listEl.innerHTML = '<div class="pm-empty">加载中...</div>';
+    A.api('GET', '/api/projects/' + encodeURIComponent(project) + '/members').then(function(r) {
+      if (!r || r.error) {
+        listEl.innerHTML = '<div class="pm-empty pm-empty-error">' + esc((r && r.error) || '加载失败') + '</div>';
+        return;
+      }
+      var members = r.members || [];
+      if (members.length === 0) {
+        listEl.innerHTML = '<div class="pm-empty">暂无成员，点击「添加成员」</div>';
+        return;
+      }
+      listEl.innerHTML = members.map(function(m) {
+        var roleBadge = m.role === 'owner'
+          ? '<span class="pm-role-badge pm-role-owner">所有者</span>'
+          : '<span class="pm-role-badge pm-role-member">成员</span>';
+        return '<div class="pm-member-item">' +
+          '<span class="pm-member-name">' + esc(m.name || m.user_id) + '</span>' +
+          '<span class="pm-member-id">(' + esc(m.user_id) + ')</span>' +
+          roleBadge +
+          '<button type="button" class="pm-member-remove" data-project="' + esc(project) + '" data-uid="' + esc(m.user_id) + '" data-perm="project.config.edit" title="移除成员">移除</button>' +
+          '</div>';
+      }).join('');
+      if (A.applyPermissions) A.applyPermissions();
+      // ★ H6: DELETE /api/projects/<project>/members/<user_id>
+      A.$$('.pm-member-remove', listEl).forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var proj = btn.getAttribute('data-project');
+          var uid = btn.getAttribute('data-uid');
+          A.confirm('确定从项目移除成员「' + uid + '」？', { danger: true, title: '移除项目成员' }).then(function(ok) {
+            if (!ok) return;
+            A.api('DELETE', '/api/projects/' + encodeURIComponent(proj) + '/members/' + encodeURIComponent(uid)).then(function(r) {
+              if (r && r.ok) {
+                if (A.toast) A.toast('已移除', 'success');
+                loadProjectMembers(proj);
+              } else {
+                if (A.toast) A.toast((r && r.error) || '移除失败', 'error');
+              }
+            });
+          });
+        });
+      });
+    });
+  }
+
+  var btnAddMember = $('btnAddMember');
+  if (btnAddMember) btnAddMember.addEventListener('click', function() {
+    var form = $('pmMemberForm');
+    if (form) form.style.display = form.style.display === 'none' ? 'block' : 'none';
+  });
+  var btnCancelMemberForm = $('btnCancelMemberForm');
+  if (btnCancelMemberForm) btnCancelMemberForm.addEventListener('click', function() {
+    var form = $('pmMemberForm');
+    if (form) form.style.display = 'none';
+  });
+  var btnAddMemberConfirm = $('btnAddMemberConfirm');
+  if (btnAddMemberConfirm) btnAddMemberConfirm.addEventListener('click', function() {
+    var uid = ($('pmMemberUserId').value || '').trim();
+    var level = $('pmMemberLevel').value;
+    if (!uid) { if (A.toast) A.toast('请输入用户 ID', 'error'); return; }
+    // ★ H5: POST /api/projects/<project>/members
+    A.api('POST', '/api/projects/' + encodeURIComponent(currentProject) + '/members', {
+      user_id: uid,
+      level: level
+    }).then(function(r) {
+      if (r && r.ok) {
+        if (A.toast) A.toast('已添加成员', 'success');
+        $('pmMemberUserId').value = '';
+        var form = $('pmMemberForm');
+        if (form) form.style.display = 'none';
+        loadProjectMembers(currentProject);
+      } else {
+        if (A.toast) A.toast((r && r.error) || '添加失败', 'error');
+      }
+    });
+  });
+
+  // ── ★ P2-6 M11/M12: 项目元数据 ──
+  function loadProjectMeta(project) {
+    var view = $('pmMetaView');
+    if (!view) return;
+    view.innerHTML = '<div class="pm-empty">加载中...</div>';
+    A.api('GET', '/api/project/meta?project=' + encodeURIComponent(project)).then(function(r) {
+      if (!r || r.error) {
+        view.innerHTML = '<div class="pm-empty pm-empty-error">' + esc((r && r.error) || '加载失败') + '</div>';
+        return;
+      }
+      view.innerHTML = '<div class="pm-meta-row"><span class="pm-meta-label">显示名称</span><span class="pm-meta-value">' + esc(r.display_name || project) + '</span></div>' +
+        '<div class="pm-meta-row"><span class="pm-meta-label">项目名</span><span class="pm-meta-value">' + esc(r.project_name || project) + '</span></div>' +
+        '<div class="pm-meta-row"><span class="pm-meta-label">描述</span><span class="pm-meta-value">' + esc(r.description || '—') + '</span></div>';
+      var nameEl = $('pmMetaName');
+      if (nameEl) nameEl.value = r.display_name || project;
+      var descEl = $('pmMetaDesc');
+      if (descEl) descEl.value = r.description || '';
+    });
+  }
+
+  var btnEditMeta = $('btnEditMeta');
+  if (btnEditMeta) btnEditMeta.addEventListener('click', function() {
+    var form = $('pmMetaForm');
+    if (form) form.style.display = 'block';
+  });
+  var btnCancelMetaForm = $('btnCancelMetaForm');
+  if (btnCancelMetaForm) btnCancelMetaForm.addEventListener('click', function() {
+    var form = $('pmMetaForm');
+    if (form) form.style.display = 'none';
+  });
+  var btnSaveMeta = $('btnSaveMeta');
+  if (btnSaveMeta) btnSaveMeta.addEventListener('click', function() {
+    var displayName = ($('pmMetaName').value || '').trim();
+    var description = ($('pmMetaDesc').value || '').trim();
+    // ★ M12: POST /api/project/meta
+    A.api('POST', '/api/project/meta', {
+      project: currentProject,
+      display_name: displayName,
+      description: description
+    }).then(function(r) {
+      if (r && r.ok) {
+        if (A.toast) A.toast('已保存元数据', 'success');
+        var form = $('pmMetaForm');
+        if (form) form.style.display = 'none';
+        loadProjectMeta(currentProject);
+        loadProjects();
+      } else {
+        if (A.toast) A.toast((r && r.error) || '保存失败', 'error');
+      }
+    });
+  });
+
+  // ── 登录态守卫 ──
+  A._onAuthOk = function() {
+    A._renderSidebarUser();
+    A.applyPermissions();
+    loadProjects();
+    A._startStepBadgePolling();
+  };
+  if (A._currentUser) {
+    loadProjects();
+  }
+})();
+</script>
+
+{% endblock %}

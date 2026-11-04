@@ -1,0 +1,414 @@
+{% extends "_layout_base.html" %}
+{% block title %}版本管理 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="12 6 12 12 16 14"/><circle cx="12" cy="12" r="10"/></svg>
+版本管理
+{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ════════ 版本管理 —— 令牌化布局类（下沉原内联样式） ════════ */
+.vm-page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;}
+.vm-page-title{font-size:1.5rem;font-weight:600;margin:0;}
+.vm-page-sub{color:var(--text-secondary);font-size:0.875rem;margin:4px 0 0;}
+.vm-project-bar{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;}
+.vm-project-bar select{min-width:240px;}
+.vm-label{font-size:0.875rem;color:var(--text-secondary);}
+.vm-section-card{background:var(--bg-card);border:1px solid var(--border-default);border-radius:8px;padding:16px;margin-bottom:20px;}
+/* ★ 统一布局(2026-09-05)：版本对比卡为最后一个真实内容块，填满剩余高度消除底部空白 */
+#vmCompareSection{flex:1;min-height:0;}
+.vm-section-title{font-size:0.95rem;font-weight:600;margin:0 0 12px;}
+.vm-row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;}
+.vm-row-center{align-items:center;}
+.vm-field-label{font-size:0.75rem;color:var(--text-secondary);display:block;margin-bottom:4px;}
+.vm-input{width:200px;padding:6px 10px;border:1px solid var(--border-default);border-radius:6px;font-size:0.875rem;box-sizing:border-box;background:var(--bg-input);color:var(--text-primary);}
+.vm-input--lg{width:300px;}
+.vm-input::placeholder{color:var(--text-tertiary);}
+.vm-input:focus,.vm-select:focus{border-color:var(--color-primary);box-shadow:0 0 0 3px var(--color-primary-soft);outline:none;}
+.vm-select option{background:var(--bg-elevated);color:var(--text-primary);}
+.vm-select{min-width:180px;padding:6px 10px;border:1px solid var(--border-default);border-radius:6px;font-size:0.875rem;box-sizing:border-box;background:var(--bg-input);color:var(--text-primary);}
+.vm-vs{color:var(--text-secondary);}
+.vm-compare-result{margin-top:16px;}
+.vm-empty{text-align:center;padding:48px 0;color:var(--text-secondary);}
+.vm-empty svg{opacity:.3;margin-bottom:12px;}
+.vm-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:500;vertical-align:middle;}
+.vm-badge--active{background:var(--state-success-soft);color:var(--state-success);}
+.vm-badge--draft{background:var(--color-primary-soft);color:var(--color-primary);}
+.vm-badge--archived{background:var(--state-warning-soft);color:var(--state-warning);}
+.vm-badge--deleted{background:var(--state-error-soft);color:var(--state-error);}
+.vm-badge--plain{background:none;color:var(--text-secondary);}
+.vm-ver-row{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border-default);}
+.vm-ver-row.is-active{background:var(--state-success-soft);}
+.vm-ver-row.is-deleted{opacity:.6;}
+.vm-ver-main{flex:1;min-width:0;}
+.vm-ver-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.vm-ver-label{font-weight:600;font-size:0.9rem;}
+.vm-ver-current{background:var(--state-success);color:var(--text-on-color);padding:1px 6px;border-radius:3px;font-size:0.7rem;vertical-align:middle;}
+.vm-ver-sub{font-size:0.75rem;color:var(--text-secondary);margin-top:4px;word-break:break-word;}
+.vm-ver-actions{display:flex;align-items:center;margin-left:12px;}
+.vm-ver-actions .pm-ver-btn{padding:4px 10px;font-size:0.75rem;margin-left:4px;}
+.vm-compare-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;}
+.vm-compare-card{border:1px solid var(--border-default);border-radius:8px;padding:12px;}
+.vm-compare-h4{font-size:0.85rem;font-weight:600;margin:0 0 8px;}
+.vm-compare-sub{font-size:0.8rem;color:var(--text-secondary);margin-bottom:8px;}
+.vm-diff-line{font-size:0.8rem;margin:8px 0 4px;}
+.vm-diff-added{color:var(--state-success);}
+.vm-diff-removed{color:var(--state-error);}
+.vm-diff-changed{color:var(--state-warning);}
+.vm-diff-item{font-size:0.75rem;padding-left:12px;margin-top:2px;}
+.vm-diff-ok{color:var(--state-success);}
+.vm-diff-ko{color:var(--state-error);text-decoration:line-through;}
+.vm-diff-note{font-size:0.8rem;color:var(--text-secondary);margin-top:8px;}
+.vm-diff-error{color:var(--state-error);padding:12px;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="vm-page-header">
+  <div>
+    <h1 class="vm-page-title">版本管理</h1>
+    <p class="vm-page-sub">靶子系统版本的全生命周期管理：创建、激活、归档、删除、物理删除、版本对比</p>
+  </div>
+</div>
+
+<!-- 项目选择器 -->
+<div class="vm-project-bar">
+  <label class="vm-label">选择项目：</label>
+  <select id="vmProjectSelect" class="vm-select">
+    <option value="">— 请选择项目 —</option>
+  </select>
+  <button id="vmRefreshBtn" class="pm-btn pm-btn-secondary">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+    刷新
+  </button>
+</div>
+
+<!-- 创建新版本 -->
+<div id="vmCreateSection" class="vm-section-card">
+  <h3 class="vm-section-title">创建新版本</h3>
+  <div class="vm-row">
+    <div>
+      <label class="vm-field-label">版本标签</label>
+      <input type="text" id="vmNewLabel" placeholder="如 v1.0.0 或 20260812" class="vm-input">
+    </div>
+    <div>
+      <label class="vm-field-label">描述（可选）</label>
+      <input type="text" id="vmNewDesc" placeholder="版本描述" class="vm-input vm-input--lg">
+    </div>
+    <button id="vmCreateBtn" class="pm-btn pm-btn-primary" data-perm="project.version.create">创建版本</button>
+  </div>
+</div>
+
+<!-- 版本对比 -->
+<div id="vmCompareSection" class="vm-section-card">
+  <h3 class="vm-section-title">版本对比</h3>
+  <div class="vm-row vm-row-center">
+    <select id="vmCompareV1" class="vm-select"><option value="">版本 A</option></select>
+    <span class="vm-vs">vs</span>
+    <select id="vmCompareV2" class="vm-select"><option value="">版本 B</option></select>
+    <button id="vmCompareBtn" class="pm-btn pm-btn-secondary">对比</button>
+  </div>
+  <div id="vmCompareResult" class="vm-compare-result"></div>
+</div>
+
+<!-- 版本列表 -->
+<div id="vmListSection">
+  <div id="vmEmpty" class="vm-empty">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    <p>请选择项目以查看版本列表</p>
+  </div>
+  <div id="vmList"></div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var currentProject = '';
+  var versionsCache = [];
+
+  // === 工具函数 ===
+  function esc(s) { return String(s||'').replace(/[<>&"']/g, function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+  function statusBadge(status) {
+    var map = {
+      'active': ['vm-badge--active', '活跃'],
+      'draft': ['vm-badge--draft', '草稿'],
+      'archived': ['vm-badge--archived', '归档'],
+      'deleted': ['vm-badge--deleted', '已删除']
+    };
+    var hit = map[status];
+    return hit
+      ? '<span class="vm-badge '+hit[0]+'">'+hit[1]+'</span>'
+      : '<span class="vm-badge vm-badge--plain">'+esc(status)+'</span>';
+  }
+
+  async function api(method, url) {
+    try {
+      var opts = { method: method, headers: {'Content-Type':'application/json'}, credentials: 'same-origin' };
+      var res = await fetch(url, opts);
+      return await res.json();
+    } catch(e) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  function toast(msg, type) {
+    var el = document.createElement('div');
+    el.style.cssText = 'position:fixed;top:20px;right:20px;padding:10px 20px;border-radius:8px;font-size:0.875rem;z-index:9999;animation:fadeIn 0.2s;' +
+      (type === 'success' ? 'background:var(--state-success);color:var(--text-on-color);' : 'background:var(--state-error);color:var(--text-on-color);');
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(function(){ el.remove(); }, 3000);
+  }
+
+  // === 加载项目列表 ===
+  async function loadProjects() {
+    var r = await api('GET', '/api/projects');
+    if (!r.ok || !r.projects) return;
+    var sel = document.getElementById('vmProjectSelect');
+    sel.innerHTML = '<option value="">— 请选择项目 —</option>';
+    // ★ /api/projects 返回的 projects 是字符串数组，真正的元数据在 project_list（对象数组）。
+    //   修正：遍历 project_list 取 name/display_name。
+    var list = r.project_list || [];
+    list.forEach(function(p) {
+      sel.innerHTML += '<option value="'+esc(p.name)+'">'+esc(p.display_name || p.name)+'</option>';
+    });
+    // ★ 自动选中项目：优先 URL ?project= 深链参数，其次当前项目，与侧边栏/topbar 保持一致。
+    var urlProj = new URLSearchParams(window.location.search).get('project') || '';
+    var cur = urlProj || r.current || '';
+    var hasCur = Array.prototype.some.call(sel.options, function(o){ return o.value === cur; });
+    if (cur && hasCur) {
+      sel.value = cur;
+      currentProject = cur;
+      document.getElementById('vmCreateSection').style.display = 'block';
+      document.getElementById('vmCompareSection').style.display = 'block';
+      loadVersions();
+    }
+  }
+
+  // === 加载版本列表 ===
+  async function loadVersions() {
+    if (!currentProject) return;
+    var r = await api('GET', '/api/project/versions?project='+encodeURIComponent(currentProject));
+    if (!r.ok) {
+      toast('加载版本失败: '+(r.error||''), 'error');
+      return;
+    }
+    versionsCache = r.versions || [];
+    document.getElementById('vmEmpty').style.display = versionsCache.length ? 'none' : 'block';
+    renderVersions(versionsCache, r.active_id);
+    updateCompareSelectors(versionsCache);
+  }
+
+  function renderVersions(versions, activeId) {
+    var html = '';
+    versions.forEach(function(v) {
+      var isActive = v.id === activeId;
+      var status = v.status || 'draft';
+      var actions = '';
+
+      if (!isActive && status !== 'deleted') {
+        actions += '<button class="pm-ver-btn pm-ver-btn-activate" data-action="ver-activate" data-id="'+v.id+'" data-perm="project.version.edit">激活</button>';
+        if (status !== 'archived') {
+          actions += '<button class="pm-ver-btn pm-ver-btn-archive" data-action="ver-archive" data-id="'+v.id+'" data-perm="project.version.archive">归档</button>';
+        }
+        actions += '<button class="pm-ver-btn pm-ver-btn-delete" data-action="ver-delete" data-id="'+v.id+'" data-perm="project.version.delete">删除</button>';
+      }
+      if (status === 'deleted') {
+        actions += '<button class="pm-ver-btn pm-ver-btn-restore" data-action="ver-restore" data-id="'+v.id+'" data-perm="project.version.delete">恢复</button>';
+        actions += '<button class="pm-ver-btn pm-ver-btn-purge" data-action="ver-purge" data-id="'+v.id+'" data-perm="project.version.delete">物理删除</button>';
+      }
+
+      html += '<div class="vm-ver-row'+(isActive?' is-active':'')+(status==='deleted'?' is-deleted':'')+'">' +
+        '<div class="vm-ver-main">' +
+          '<div class="vm-ver-line">' +
+            '<span class="vm-ver-label">'+esc(v.version_label)+'</span>' +
+            statusBadge(status) +
+            (isActive ? '<span class="vm-ver-current">当前</span>' : '') +
+          '</div>' +
+          '<div class="vm-ver-sub">' +
+            'ID: '+esc(v.id)+' · '+esc(v.description||'无描述')+' · 创建: '+esc((v.created_at||'').replace(' GMT','')) +
+          '</div>' +
+        '</div>' +
+        '<div class="vm-ver-actions">'+actions+'</div>' +
+      '</div>';
+    });
+    document.getElementById('vmList').innerHTML = html;
+  }
+
+  function updateCompareSelectors(versions) {
+    var v1Sel = document.getElementById('vmCompareV1');
+    var v2Sel = document.getElementById('vmCompareV2');
+    var opts = '<option value="">选择版本</option>';
+    versions.forEach(function(v) {
+      opts += '<option value="'+v.id+'">'+esc(v.version_label)+' ('+esc(v.status)+')</option>';
+    });
+    v1Sel.innerHTML = opts;
+    v2Sel.innerHTML = opts;
+  }
+
+  // === 版本操作 ===
+  async function handleVersionAction(action, id, btn) {
+    var proj = currentProject;
+    var url, method = 'POST';
+    var confirmMsg = '';
+
+    if (action === 'ver-activate') {
+      confirmMsg = '确定激活此版本？其他活跃版本将被自动归档。';
+      url = '/api/project/versions/'+id+'/activate?project='+encodeURIComponent(proj);
+    } else if (action === 'ver-archive') {
+      confirmMsg = '确定归档此版本？';
+      url = '/api/project/versions/'+id+'/archive?project='+encodeURIComponent(proj);
+    } else if (action === 'ver-delete') {
+      confirmMsg = '确定删除此版本？删除后可在列表恢复。';
+      url = '/api/project/versions/'+id+'/delete?project='+encodeURIComponent(proj);
+    } else if (action === 'ver-restore') {
+      url = '/api/project/versions/'+id+'/restore?project='+encodeURIComponent(proj);
+    } else if (action === 'ver-purge') {
+      confirmMsg = '警告：物理删除将永久移除此版本及所有关联数据，不可恢复！确定继续？';
+      url = '/api/project/versions/'+id+'/purge?project='+encodeURIComponent(proj);
+      method = 'DELETE';
+    }
+
+    if (confirmMsg && !confirm(confirmMsg)) return;
+
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+    var r = await api(method, url);
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+
+    if (r.ok) {
+      var msgMap = {'ver-activate':'版本已激活','ver-archive':'版本已归档','ver-delete':'版本已删除','ver-restore':'版本已恢复','ver-purge':'版本已永久删除'};
+      toast(msgMap[action] || '操作成功', 'success');
+      loadVersions();
+    } else {
+      toast('操作失败: '+(r.error||''), 'error');
+    }
+  }
+
+  // === 创建版本 ===
+  async function createVersion() {
+    var label = document.getElementById('vmNewLabel').value.trim();
+    var desc = document.getElementById('vmNewDesc').value.trim();
+    if (!label) { toast('请输入版本标签', 'error'); return; }
+    if (!currentProject) { toast('请先选择项目', 'error'); return; }
+
+    // ★ 移除多余的 api('POST') 空请求（会携带空 body 二次提交）
+    var r;
+    try {
+      var res = await fetch('/api/project/versions?project='+encodeURIComponent(currentProject), {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({version_name: label, description: desc})
+      });
+      r = await res.json();
+    } catch(e) { r = {ok:false, error:e.message}; }
+
+    if (r.ok) {
+      toast('版本创建成功', 'success');
+      document.getElementById('vmNewLabel').value = '';
+      document.getElementById('vmNewDesc').value = '';
+      loadVersions();
+    } else {
+      toast('创建失败: '+(r.error||''), 'error');
+    }
+  }
+
+  // === 版本对比 ===
+  async function compareVersions() {
+    var v1 = document.getElementById('vmCompareV1').value;
+    var v2 = document.getElementById('vmCompareV2').value;
+    if (!v1 || !v2) { toast('请选择两个版本进行对比', 'error'); return; }
+    if (v1 === v2) { toast('请选择不同的版本', 'error'); return; }
+
+    var r = await api('GET', '/api/project/versions/compare?project='+encodeURIComponent(currentProject)+'&v1='+v1+'&v2='+v2);
+    var el = document.getElementById('vmCompareResult');
+    if (!r.ok) {
+      el.innerHTML = '<div class="vm-diff-error">对比失败: '+esc(r.error||'')+'</div>';
+      return;
+    }
+
+    var html = '<div class="vm-compare-grid">';
+
+    // 需求对比
+    var req = r.requirements || {};
+    html += '<div class="vm-compare-card">';
+    html += '<h4 class="vm-compare-h4">需求对比</h4>';
+    html += '<div class="vm-compare-sub">版本A: '+req.v1_count+' 条 → 版本B: '+req.v2_count+' 条</div>';
+    if (req.added && req.added.length) {
+      html += '<div class="vm-diff-line vm-diff-added">+ 新增 '+req.added.length+' 条</div>';
+      req.added.forEach(function(d){ html += '<div class="vm-diff-item vm-diff-ok">'+esc(d.title||d.req_id)+'</div>'; });
+    }
+    if (req.removed && req.removed.length) {
+      html += '<div class="vm-diff-line vm-diff-removed">- 移除 '+req.removed.length+' 条</div>';
+      req.removed.forEach(function(d){ html += '<div class="vm-diff-item vm-diff-ko">'+esc(d.title||d.req_id)+'</div>'; });
+    }
+    if (req.changed && req.changed.length) {
+      html += '<div class="vm-diff-line vm-diff-changed">~ 变更 '+req.changed.length+' 条</div>';
+    }
+    html += '<div class="vm-diff-note">不变: '+req.unchanged+' 条</div>';
+    html += '</div>';
+
+    // 用例对比
+    var tc = r.test_cases || {};
+    html += '<div class="vm-compare-card">';
+    html += '<h4 class="vm-compare-h4">用例对比</h4>';
+    html += '<div class="vm-compare-sub">版本A: '+tc.v1_count+' 条 → 版本B: '+tc.v2_count+' 条</div>';
+    if (tc.added && tc.added.length) {
+      html += '<div class="vm-diff-line vm-diff-added">+ 新增 '+tc.added.length+' 条</div>';
+      tc.added.slice(0,10).forEach(function(d){ html += '<div class="vm-diff-item vm-diff-ok">'+esc(d.title||d.case_id)+'</div>'; });
+      if (tc.added.length > 10) html += '<div class="vm-diff-note">... 还有 '+(tc.added.length-10)+' 条</div>';
+    }
+    if (tc.removed && tc.removed.length) {
+      html += '<div class="vm-diff-line vm-diff-removed">- 移除 '+tc.removed.length+' 条</div>';
+      tc.removed.slice(0,10).forEach(function(d){ html += '<div class="vm-diff-item vm-diff-ko">'+esc(d.title||d.case_id)+'</div>'; });
+      if (tc.removed.length > 10) html += '<div class="vm-diff-note">... 还有 '+(tc.removed.length-10)+' 条</div>';
+    }
+    html += '<div class="vm-diff-note">不变: '+tc.unchanged+' 条</div>';
+    html += '</div>';
+
+    html += '</div>';
+    el.innerHTML = html;
+  }
+
+  // === 事件绑定 ===
+  document.getElementById('vmProjectSelect').addEventListener('change', function() {
+    currentProject = this.value;
+    if (currentProject) {
+      loadVersions();
+      document.getElementById('vmCreateSection').style.display = 'block';
+      document.getElementById('vmCompareSection').style.display = 'block';
+    } else {
+      document.getElementById('vmCreateSection').style.display = 'none';
+      document.getElementById('vmCompareSection').style.display = 'none';
+      document.getElementById('vmList').innerHTML = '';
+      document.getElementById('vmEmpty').style.display = 'block';
+    }
+  });
+
+  document.getElementById('vmRefreshBtn').addEventListener('click', function() {
+    loadProjects();
+    if (currentProject) loadVersions();
+  });
+
+  document.getElementById('vmCreateBtn').addEventListener('click', createVersion);
+  document.getElementById('vmCompareBtn').addEventListener('click', compareVersions);
+
+  // 版本操作事件委托
+  document.getElementById('vmList').addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    var action = btn.getAttribute('data-action');
+    var id = btn.getAttribute('data-id');
+    if (action && id) handleVersionAction(action, id, btn);
+  });
+
+  // 初始化
+  loadProjects();
+  document.getElementById('vmCreateSection').style.display = 'none';
+  document.getElementById('vmCompareSection').style.display = 'none';
+})();
+</script>
+{% endblock %}

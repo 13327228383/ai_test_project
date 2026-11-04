@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- P0-9：原为 212KB 内联 base64 JPEG，改引 public/favicon.svg（构建后落到 /static/log-panel/favicon.svg） -->
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>日志面板 — E2E 智能测试引擎</title>
+    <!--
+      P0-5：已移除 Google Fonts 的 preconnect / stylesheet 三个 <link>。
+      站点 CSP 为 font-src 'self'，外部字体 100% 被拦截，属纯净负载；
+      字体族已在 src/index.css 与 tailwind.config.js 中声明为「Web 字体 → 系统字体」回退栈，
+      离线 / 内网环境下由系统字体正常渲染，无 pending 请求、无 CSP 报错。
+    -->
+    <script type="module">
+      if (import.meta.hot?.on) {
+        import.meta.hot.on('vite:error', (error) => {
+          if (error.err) {
+            console.error(
+              [error.err.message, error.err.frame].filter(Boolean).join('\n'),
+            )
+          }
+        })
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

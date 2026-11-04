@@ -1,0 +1,362 @@
+{% extends "_layout_base.html" %}
+{% block title %}审计日志 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+审计日志
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnRefresh">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  刷新
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════ Tab 切换 ════════════ -->
+<div class="al-tabs">
+  <span class="al-tab active" data-type="login">登录日志</span>
+  <span class="al-tab" data-type="action">操作日志</span>
+  <span class="al-tab" data-type="rag">RAG 使用日志</span>
+</div>
+
+<!-- ════════════ 筛选栏 ════════════ -->
+<div class="al-filter-bar">
+  <input type="text" id="filterUser" class="al-input" placeholder="用户ID" />
+  <input type="text" id="filterAction" class="al-input" placeholder="操作类型" />
+  <input type="text" id="filterExtra" class="al-input" placeholder="附加过滤(项目/case_id)" />
+  <select id="filterLimit" class="al-select">
+    <option value="50">50条</option>
+    <option value="100" selected>100条</option>
+    <option value="200">200条</option>
+    <option value="500">500条</option>
+  </select>
+  <button class="al-btn-search" id="btnSearch">查询</button>
+  <span class="al-count" id="resultCount">0 条</span>
+</div>
+
+<!-- ════════════ 日志表格 ════════════ -->
+<div class="al-table-wrap">
+  <table class="al-table" id="logTable">
+    <thead id="logHead"></thead>
+    <tbody id="logBody">
+      <tr><td colspan="99" class="al-empty">点击「查询」加载日志</td></tr>
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}
+
+{% block head_extra %}
+<style>
+.al-tabs {
+  display: flex; gap: 4px;
+  padding: 12px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+.al-tab {
+  padding: 8px 20px;
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s;
+}
+.al-tab:hover { background: var(--bg-hover); color: var(--text-primary); }
+.al-tab.active {
+  background: var(--color-primary);
+  color: var(--text-on-color);
+  font-weight: var(--fw-semibold);
+}
+
+.al-filter-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+.al-input {
+  padding: 6px 10px;
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--fs-small);
+  width: 160px;
+}
+.al-input:focus { outline: none; border-color: var(--color-primary); }
+.al-select {
+  padding: 6px 10px;
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--fs-small);
+}
+.al-btn-search {
+  padding: 7px 18px;
+  background: var(--color-primary);
+  color: var(--text-on-color);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-small);
+  cursor: pointer;
+  font-weight: var(--fw-semibold);
+}
+.al-btn-search:hover { opacity: 0.9; }
+.al-count {
+  margin-left: auto;
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.al-table-wrap {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: auto;
+  /* ★ 占满可视高度：由 flex 撑满剩余空间，替代固定 max-height，去除下方留白 */
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* ★ 占满可视高度（仅本页生效的内联样式，页面专属，不触及共享文件）：
+      .main-content 已是 flex 列且 .content-body 已 flex:1 撑满；
+      此处让 .content-body 再变为 flex 列容器，.al-table-wrap 的 flex:1 即可吃掉
+      tabs/筛选栏之外的全部剩余高度，消除下方留白。 */
+.content-body {
+  display: flex;
+  flex-direction: column;
+}
+.al-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-small);
+  border: 1px solid var(--text-tertiary);
+}
+.al-table thead {
+  position: sticky;
+  top: 0;
+  background: var(--bg-surface);
+  z-index: 1;
+}
+.al-table th {
+  padding: 10px 14px;
+  text-align: left;
+  font-weight: var(--fw-semibold);
+  color: var(--text-secondary);
+  border-bottom: 2px solid var(--text-tertiary);
+  border-right: 1px solid var(--text-tertiary);
+  white-space: nowrap;
+}
+.al-table th:last-child { border-right: none; }
+.al-table td {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--text-tertiary);
+  border-right: 1px solid var(--text-tertiary);
+  color: var(--text-primary);
+  vertical-align: top;
+}
+.al-table td:last-child { border-right: none; }
+.al-table tbody tr:hover { background: var(--bg-hover); }
+.al-table .col-time { font-family: var(--font-mono); white-space: nowrap; color: var(--text-secondary); }
+.al-table .col-id { font-family: var(--font-mono); color: var(--text-tertiary); }
+.al-table .col-detail { max-width: 400px; word-break: break-all; }
+.al-empty {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-tertiary);
+}
+
+/* 操作类型标签 */
+.al-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: var(--fw-semibold);
+}
+.al-badge-success { background: var(--state-success-soft); color: var(--state-success); }
+.al-badge-fail { background: var(--state-error-soft); color: var(--state-error); }
+.al-badge-info { background: var(--state-info-soft); color: var(--state-info); }
+.al-badge-warn { background: var(--state-warning-soft); color: var(--state-warning); }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  "use strict";
+  var A = window._A;
+  if (!A) return;
+  var $ = A.$, escHtml = A.escHtml, api = A.dedupedApi || A.api;
+
+  // ════════════ 状态 ════════════
+  var currentType = "login";
+  var COLUMNS = {
+    login: [
+      { key: "id", label: "ID", cls: "col-id" },
+      { key: "user_id", label: "用户ID" },
+      { key: "action", label: "动作", render: renderActionBadge },
+      { key: "ip_address", label: "IP" },
+      { key: "user_agent", label: "UA", cls: "col-detail" },
+      { key: "detail", label: "详情", cls: "col-detail" },
+      { key: "created_at", label: "时间", cls: "col-time" },
+    ],
+    action: [
+      { key: "id", label: "ID", cls: "col-id" },
+      { key: "user_id", label: "用户ID" },
+      { key: "scope_type", label: "范围" },
+      { key: "scope_id", label: "范围ID" },
+      { key: "action", label: "操作" },
+      { key: "ip_address", label: "IP" },
+      { key: "detail", label: "详情", cls: "col-detail" },
+      { key: "created_at", label: "时间", cls: "col-time" },
+    ],
+    rag: [
+      { key: "id", label: "ID", cls: "col-id" },
+      { key: "project", label: "项目" },
+      { key: "version_id", label: "版本ID" },
+      { key: "case_id", label: "用例ID" },
+      { key: "check_id", label: "检查点ID" },
+      { key: "req_id", label: "需求ID" },
+      { key: "rag_source_type", label: "来源类型" },
+      { key: "rag_source_id", label: "来源ID" },
+      { key: "field_used", label: "使用字段" },
+      { key: "created_at", label: "时间", cls: "col-time" },
+    ],
+  };
+
+  // ════════════ Tab 切换 ════════════
+  A.$$(".al-tab").forEach(function(tab) {
+    tab.addEventListener("click", function() {
+      A.$$(".al-tab").forEach(function(t) { t.classList.remove("active"); });
+      tab.classList.add("active");
+      currentType = tab.dataset.type;
+      updateFilterPlaceholders();
+      renderHead();
+      loadLogs();
+    });
+  });
+
+  function updateFilterPlaceholders() {
+    var userInp = $("filterUser");
+    var actInp = $("filterAction");
+    var extraInp = $("filterExtra");
+    if (currentType === "rag") {
+      userInp.placeholder = "项目名";
+      actInp.placeholder = "来源类型(db_schema/api_doc/figma_page)";
+      extraInp.placeholder = "case_id";
+    } else if (currentType === "action") {
+      userInp.placeholder = "用户ID";
+      actInp.placeholder = "操作类型(如 step1.run)";
+      extraInp.placeholder = "scope_id(项目名)";
+    } else {
+      userInp.placeholder = "用户ID";
+      actInp.placeholder = "动作(login/login_failed/logout)";
+      extraInp.placeholder = "(无附加过滤)";
+    }
+  }
+
+  // ════════════ 表头渲染 ════════════
+  function renderHead() {
+    var cols = COLUMNS[currentType] || [];
+    var html = "<tr>" + cols.map(function(c) {
+      return '<th class="' + (c.cls || "") + '">' + c.label + '</th>';
+    }).join("") + "</tr>";
+    document.getElementById("logHead").innerHTML = html;
+  }
+
+  // ════════════ 操作类型 badge ════════════
+  function renderActionBadge(val) {
+    if (!val) return "";
+    var cls = "al-badge-info";
+    if (val.indexOf("fail") >= 0 || val === "login_failed") cls = "al-badge-fail";
+    else if (val === "login" || val === "logout") cls = "al-badge-success";
+    return '<span class="al-badge ' + cls + '">' + escapeHtml(val) + '</span>';
+  }
+
+  function escapeHtml(s) { return escHtml(s); }
+
+  // ════════════ 加载日志 ════════════
+  function loadLogs() {
+    var params = new URLSearchParams();
+    params.set("type", currentType);
+    params.set("limit", $("filterLimit").value);
+
+    var v1 = $("filterUser").value.trim();
+    var v2 = $("filterAction").value.trim();
+    var v3 = $("filterExtra").value.trim();
+
+    if (currentType === "rag") {
+      if (v1) params.set("project", v1);
+      if (v2) params.set("rag_source_type", v2);
+      if (v3) params.set("case_id", v3);
+    } else if (currentType === "action") {
+      if (v1) params.set("user_id", v1);
+      if (v2) params.set("action", v2);
+      if (v3) params.set("scope_id", v3);
+    } else {
+      if (v1) params.set("user_id", v1);
+      if (v2) params.set("action", v2);
+    }
+
+    var body = $("logBody");
+    body.innerHTML = '<tr><td colspan="99" class="al-empty">加载中...</td></tr>';
+
+    api('GET', "/api/audit-logs?" + params.toString())
+      .then(function(data) {
+        if (!data.ok) {
+          body.innerHTML = '<tr><td colspan="99" class="al-empty ud-err">查询失败: ' + escapeHtml(data.error || "") + '</td></tr>';
+          $("resultCount").textContent = "0 条";
+          return;
+        }
+        var items = data.items || [];
+        // ★ 根因修复：total 由后端按相同过滤口径 COUNT(*)，反映真实匹配总数；
+        //   不再用「当前页 items.length」冒充总数（分页/过滤时会失真）。
+        var total = (typeof data.total === "number") ? data.total : items.length;
+        $("resultCount").textContent = total + " 条";
+        if (items.length === 0) {
+          body.innerHTML = '<tr><td colspan="99" class="al-empty">暂无日志记录</td></tr>';
+          return;
+        }
+        var cols = COLUMNS[currentType] || [];
+        body.innerHTML = items.map(function(item) {
+          return "<tr>" + cols.map(function(c) {
+            var val = item[c.key];
+            var content = c.render ? c.render(val) : escapeHtml(val);
+            return '<td class="' + (c.cls || "") + '">' + content + '</td>';
+          }).join("") + "</tr>";
+        }).join("");
+      })
+      .catch(function(err) {
+        body.innerHTML = '<tr><td colspan="99" class="al-empty ud-err">网络错误: ' + escapeHtml(err.message) + '</td></tr>';
+        $("resultCount").textContent = "0 条";
+      });
+  }
+
+  // ════════════ 事件绑定 ════════════
+  $("btnSearch").addEventListener("click", loadLogs);
+  $("btnRefresh").addEventListener("click", loadLogs);
+
+  // 回车查询
+  ["filterUser", "filterAction", "filterExtra"].forEach(function(id) {
+    $(id).addEventListener("keypress", function(e) {
+      if (e.key === "Enter") loadLogs();
+    });
+  });
+
+  // ════════════ 初始化 ════════════
+  updateFilterPlaceholders();
+  renderHead();
+  loadLogs();
+})();
+</script>
+{% endblock %}

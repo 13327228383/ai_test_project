@@ -1,0 +1,104 @@
+# ============================================================================
+# Git 换行策略（根因治理，2026-09-20）
+# ----------------------------------------------------------------------------
+# 背景：本仓库跑在同一台 Windows 工作区 + Linux CI 的双环境上。
+# 历史状态 core.autocrlf=true 导致三类持续性问题：
+#   1) 工作区文件是 CRLF、仓库 blob 是 LF，任何人「打开-保存」一个文件
+#      都会产出全文件换行 diff，真实改动被淹没（实测 47 个文件里大量如此）；
+#   2) src/frontend/FRONTEND_LOCK.json 是 SHA256 字节级指纹锁，
+#      CRLF(107698B) vs LF(104403B) 必然不一致 → Linux CI 永久 HASH MISMATCH；
+#   3) git 反复打印「LF will be replaced by CRLF」噪声，掩盖真实告警。
+#
+# 策略：仓库统一 LF（`eol=lf`），二进制显式标记 `binary` 禁止任何转换。
+# 注意：这不是把问题藏起来，而是让「工作区 == 仓库」。
+# 配套：FRONTEND_LOCK.json 仍保留 hash_mode=normalized-lf 作为纵深防御
+#      （防止外部工具再次写出 CRLF 时能立即定位，而不是崩溃）。
+# ============================================================================
+
+# --- 默认：所有文本统一 LF ---
+* text=auto eol=lf
+
+# --- 源码（显式声明，便于阅读与 grep）---
+*.py    text eol=lf
+*.pyi   text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.cjs   text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.jsx   text eol=lf
+
+*.html  text eol=lf
+*.htm   text eol=lf
+*.css   text eol=lf
+*.scss  text eol=lf
+*.less  text eol=lf
+
+*.json  text eol=lf
+*.jsonl text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.toml  text eol=lf
+*.ini   text eol=lf
+*.cfg   text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.sql   text eol=lf
+*.sh    text eol=lf
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+# --- 二进制：禁止换行/编码转换，避免损坏与假 diff ---
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.bmp   binary
+*.ico   binary
+*.webp  binary
+*.svg   text eol=lf
+*.pdf   binary
+*.zip   binary
+*.gz    binary
+*.7z    binary
+*.rar   binary
+*.whl   binary
+*.exe   binary
+*.dll   binary
+*.so    binary
+*.pyd   binary
+*.pyz   binary
+*.pkg   binary
+*.dat   binary
+*.pyc   binary
+*.pyo   binary
+*.db    binary
+*.sqlite binary
+*.sqlite3 binary
+*.mp3   binary
+*.wav   binary
+*.mp4   binary
+*.mov   binary
+*.avi   binary
+*.webm  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.eot   binary
+*.xlsx  binary
+*.xls   binary
+*.docx  binary
+*.doc   binary
+*.pptx  binary
+*.ppt   binary
+*.ass   binary
+*.srt   text eol=lf
+
+# --- 构建/依赖产物：永不参与统计与 diff ---
+dist/**            binary
+build/**           binary
+node_modules/**    binary
+**/*.egg-info/**   binary
+__pycache__/**     binary

@@ -1,0 +1,164 @@
+# CI 工作流
+#
+# 变更记录：
+#   2026-09-21 改为双 job：
+#     ① frontend-lock（核心门禁）：跑 src/frontend/verify_lock.py +
+#        src/frontend/selftest_verify_lock.py。纯静态、秒级、不需要 MySQL。
+#        其中「悬空属性门」检查用于防止此类事故复发：app-design.css 曾长期存在
+#        html:not([data-sb-ready="1"]) .sidebar .nav-item{pointer-events:none}，
+#        而全仓库没有任何代码设置 data-sb-ready → 规则恒成立 → 侧栏菜单永久不可点
+#        （用户表现为「切换功能区点了没反应」），且因缺乏显式痕迹被反复"修复"仍复发。
+#     ② unit-tests：保留 MySQL service 与 env 注入（原设计），但 tests/unit 已于
+#        2026-08-29 被移除，故先探测目录是否存在：存在则正常运行，缺失则显式跳过并输出
+#        notice —— 不静默变绿（假装跑过），也不因历史原因长期变红。
+#   历史：2026-08-16 启用 services.mysql（mysql:8），使 pytest 跑在真 MySQL 上。
+#
+# 注意（跨平台指纹）：FRONTEND_LOCK.json 的 sha256 按「换行归一化(CRLF→LF)」计算。
+#   仓库存储为 LF，而 Windows 工作区因 core.autocrlf=true 为 CRLF；
+#   若按字节级比对，Linux runner 必然误报 HASH MISMATCH。
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  frontend-lock:
+    name: 前端布局锁 + 悬空属性门
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: 布局锁 / 8 分区 / 悬空属性门校验
+        run: python src/frontend/verify_lock.py
+
+      - name: 校验器自测（单元场景 + 历史回归）
+        run: python src/frontend/selftest_verify_lock.py
+
+  unit-tests:
+    name: 引擎单元测试
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      STORAGE_MYSQL_HOST: 127.0.0.1
+      STORAGE_MYSQL_PORT: 3306
+      STORAGE_MYSQL_USER: root
+      STORAGE_MYSQL_PASSWORD: root
+      STORAGE_MYSQL_DATABASE: ai_test_engine
+      STORAGE_MYSQL_CHARSET: utf8mb4
+      # 兼容 _ENV_KEY_MAP（MYSQL_* → STORAGE_MYSQL_*）
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+      MYSQL_DATABASE: ai_test_engine
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ai_test_engine
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s --health-timeout=5s --health-retries=5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt || true
+          pip install pytest
+
+      - name: 探测测试目录
+        id: probe
+        run: |
+          if [ -d tests/unit ] && [ -n "$(find tests/unit -name 'test_*.py' -print -quit)" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+            echo "tests/unit 存在，将运行单元测试"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=跳过单元测试::tests/unit 不存在或为空（2026-08-29 已移除），本次门禁由 frontend-lock job 承担。若已恢复测试目录，此步骤会自动改为运行。"
+          fi
+
+      - name: Run unit tests
+        # 2026-10-02 审计修正：此前只探测 tests/unit（已移除，恒跳过）——
+        # 399 个真实测试从未在 CI 跑过。现跑全量套件，仅排除依赖浏览器安装的
+        # 前端 E2E（test_frontend 由本机/发布前跑）。
+        run: pytest tests -q --ignore=tests/test_frontend
+
+  # ③ chain-smoke（2026-10-02 新增）：链路生命周期快车道。
+  # 反补丁三禁门禁（tests/test_core）+ C4b/C6/C7 链级生命周期测试
+  # （tests/test_chains：真实拉起 api_demo SUT 子进程，验证
+  #   「功能性探针 → authz 横切在同一存活 SUT 上先后完成 → 报告落盘」的顺序不变量）。
+  # 动机：authz 横切曾因 SUT 被提前回收产生整链假 FAIL，组件级单测无法发现。
+  chain-smoke:
+    name: 链路快车道（api_demo 全生命周期）
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    env:
+      STORAGE_MYSQL_HOST: 127.0.0.1
+      STORAGE_MYSQL_PORT: 3306
+      STORAGE_MYSQL_USER: root
+      STORAGE_MYSQL_PASSWORD: root
+      STORAGE_MYSQL_DATABASE: ai_test_engine
+      STORAGE_MYSQL_CHARSET: utf8mb4
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+      MYSQL_DATABASE: ai_test_engine
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ai_test_engine
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s --health-timeout=5s --health-retries=5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt || true
+          pip install pytest
+
+      - name: 反补丁门禁 + 链路生命周期
+        run: pytest tests/test_core tests/test_chains -q

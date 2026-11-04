@@ -1,0 +1,675 @@
+{% extends "_layout_base.html" %}
+{% block title %}流水线参数配置 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+流水线参数配置
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar tooltip-wide" id="btnSaveAll" data-perm="project.config.edit" data-tooltip="保存配置&#10;取值逻辑：将所有未保存的修改（dirtyFields）PUT 到 /api/user-pipeline-config&#10;默认值：无&#10;大小影响：写入 pipeline_user_config 表，覆盖默认值，影响下次流水线执行" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+  保存配置
+</button>
+<button class="btn-topbar tooltip-wide" id="btnReload" data-perm="project.config.view" data-tooltip="重新加载&#10;取值逻辑：从 /api/user-pipeline-config 重新拉取 schema + config，丢弃当前未保存修改&#10;默认值：无&#10;大小影响：无持久化影响，仅刷新界面到上次保存状态" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  重新加载
+</button>
+<button class="btn-topbar tooltip-wide" id="btnResetAll" data-perm="project.config.edit" data-tooltip="全部重置默认&#10;取值逻辑：删除 pipeline_user_config 表中当前用户的所有覆盖记录（逐个 DELETE）&#10;默认值：无&#10;大小影响：所有配置恢复为 CONFIG_SCHEMA 默认值，操作不可撤销" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+  全部重置默认
+</button>
+<button class="btn-topbar tooltip-wide" id="btnRecommend" data-perm="project.config.view" data-tooltip="一键填入算法自调优推荐值&#10;取值逻辑：GET /api/pipeline-config/recommended（零用户输入）&#10;大小影响：推荐值来自 Step2+Step3 算法信号，填入后可再修改" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+  一键填入推荐值
+</button>
+<label class="pc-autoapply-toggle tooltip-wide" id="autoApplyWrap" data-tooltip="切项目自动套推荐值（开关）&#10;开启后：每次切换项目，自动按算法推荐值覆盖当前流水线配置（含新项目上下文）&#10;取值逻辑：用户偏好 user_preferences 表，默认关闭&#10;注意：开启后切换项目会覆盖手动配置，请谨慎；关闭则完全不受影响" data-tooltip-pos="bottom">
+  <input type="checkbox" id="chkAutoApply" />
+  <span>切项目自动套推荐值</span>
+</label>
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════ 信息栏 ════════════ -->
+<div class="pc-info-bar">
+  <div class="pc-info-item">
+    <span class="pc-info-label tooltip-wide" data-tooltip="当前用户&#10;取值逻辑：登录态从会话获取的 user_id&#10;默认值：未登录时显示 -&#10;大小影响：配置按用户隔离存储在 pipeline_user_config 表（UNIQUE KEY uk_user_key），不同用户互不影响" data-tooltip-pos="bottom">当前用户</span>
+    <span class="pc-info-value" id="curUser">-</span>
+  </div>
+  <div class="pc-info-item">
+    <span class="pc-info-label tooltip-wide" data-tooltip="配置分组&#10;取值逻辑：CONFIG_SCHEMA 中定义的分组数量（step2/step3/step4/confidence/ai/step_timeout/evidence/verification/rag）&#10;默认值：9 个分组&#10;大小影响：决定配置项的分类组织方式，分组数固定不可调整" data-tooltip-pos="bottom">配置分组</span>
+    <span class="pc-info-value" id="groupCount">0</span>
+  </div>
+  <div class="pc-info-item">
+    <span class="pc-info-label tooltip-wide" data-tooltip="已覆盖项&#10;取值逻辑：pipeline_user_config 表中当前用户的记录数（即 is_overridden=true 的字段数）&#10;默认值：0&#10;大小影响：覆盖数越多，与默认值的偏差越大；可逐项重置或全部重置" data-tooltip-pos="bottom">已覆盖项</span>
+    <span class="pc-info-value pc-info-warn" id="overrideCount">0</span>
+  </div>
+</div>
+
+<!-- ════════════ 配置容器 ════════════ -->
+<div class="pc-container" id="pcContainer">
+  <div class="pc-empty">加载配置中...</div>
+</div>
+
+<!-- ════════════ 操作栏 ════════════ -->
+<div class="pc-action-bar" id="actionBar" style="display:none;">
+  <span class="pc-action-hint tooltip-wide" id="dirtyHint" data-tooltip="未保存修改&#10;取值逻辑：界面 dirtyFields 对象中尚未提交后端的字段数&#10;默认值：0&#10;大小影响：刷新或离开页面会丢失这些修改；点击放弃修改可还原">有未保存的修改</span>
+  <button class="pc-btn-ghost tooltip-wide" id="btnDiscard" data-tooltip="放弃修改&#10;取值逻辑：清空 dirtyFields 并重新渲染，不写后端&#10;默认值：无&#10;大小影响：界面恢复到上次保存/加载的状态">放弃修改</button>
+  <button class="pc-btn-primary tooltip-wide" id="btnSave" data-tooltip="保存修改&#10;取值逻辑：将 dirtyFields PUT 到 /api/user-pipeline-config，写入 pipeline_user_config 表&#10;默认值：无&#10;大小影响：覆盖默认值，影响下次流水线执行">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    保存修改
+  </button>
+</div>
+
+{% endblock %}
+
+{% block head_extra %}
+<style>
+.pc-info-bar {
+  display: flex;
+  gap: 32px;
+  padding: 16px 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+.pc-info-item { display: flex; flex-direction: column; gap: 4px; }
+.pc-info-label { font-size: var(--fs-small); color: var(--text-secondary); }
+.pc-info-value {
+  font-size: var(--fs-h3); font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+.pc-info-warn { color: var(--state-warning-text); }
+
+.pc-container {
+  display: flex; flex-direction: column;
+  gap: 16px;
+  padding-bottom: 80px;
+}
+.pc-empty { padding: 48px; text-align: center; color: var(--text-tertiary); }
+
+/* ── 分组卡片 ── */
+.pc-group {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.pc-group-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 20px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-default);
+}
+.pc-group-icon {
+  width: 28px; height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--step2-soft);
+  color: var(--step2-color);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.pc-group-title {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.pc-group-body {
+  padding: 16px 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+}
+
+/* ── 字段 ── */
+.pc-field {
+  display: flex; flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+}
+.pc-field.dirty {
+  border-color: var(--state-warning);
+  background: var(--state-warning-soft);
+}
+.pc-field-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+}
+.pc-field-label {
+  font-size: var(--fs-small);
+  font-family: var(--font-mono);
+  font-weight: var(--fw-medium);
+  color: var(--text-primary);
+}
+.pc-field-override {
+  font-size: var(--fs-micro);
+  padding: 1px 6px;
+  background: var(--state-warning-soft);
+  color: var(--state-warning-text);
+  border: 1px solid var(--state-warning-border);
+  border-radius: var(--radius-xs);
+}
+.pc-field-input-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 4px;
+}
+.pc-field-input {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xs);
+  color: var(--text-primary);
+  font-size: var(--fs-small);
+  font-family: var(--font-mono);
+}
+.pc-field-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+.pc-field-input[type="number"] {
+  width: 120px;
+  flex: none;
+}
+.pc-field-input[type="checkbox"] {
+  width: 18px; height: 18px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+.pc-field-reset {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-xs);
+  display: flex; align-items: center; justify-content: center;
+}
+.pc-field-reset:hover { color: var(--state-warning-text); background: var(--bg-elevated); }
+.pc-field-reset:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* 推荐值 */
+.pc-field-recommend {
+  font-size: var(--fs-micro);
+  color: var(--state-info-text);
+  display: flex; align-items: center; gap: 4px;
+  margin-top: 4px;
+}
+.pc-field-recommend button {
+  background: none;
+  border: 1px solid var(--state-info-border);
+  color: var(--state-info-text);
+  font-size: var(--fs-micro);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+}
+.pc-field-recommend button:hover { background: var(--state-info-soft); }
+
+/* ── 操作栏 ── */
+.pc-action-bar {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--surface-shadow-float);
+  z-index: 100;
+}
+.pc-action-hint { font-size: var(--fs-small); color: var(--state-warning-text); }
+.pc-btn-ghost {
+  padding: 8px 16px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+.pc-btn-ghost:hover { background: var(--bg-base); color: var(--text-primary); }
+.pc-btn-primary {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px;
+  background: var(--color-primary);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+}
+.pc-btn-primary:hover { background: var(--color-primary-hover); }
+
+/* ★ 切项目自动套推荐值 开关 */
+.pc-autoapply-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 6px 10px;
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.pc-autoapply-toggle input[type="checkbox"] {
+  width: 15px; height: 15px; cursor: pointer; accent-color: var(--color-primary);
+}
+.pc-autoapply-toggle:hover { border-color: var(--color-primary); }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  'use strict';
+  var A = window._A;
+  if (!A) return;
+  var $ = A.$, esc = A.escHtml;
+
+  // ── 状态 ──
+  var schema = {};
+  var config = {};
+  var recommended = {};
+  var dirtyFields = {};  // {key: new_value}
+
+  // ── Tooltip 构造（仅用于 data-tooltip 属性，不改业务逻辑）──
+  // 把字符串 esc 转义后，再把 \n 转成 &#10; 供 HTML 属性换行
+  function tipEnc(s) {
+    return esc(String(s == null ? '' : s)).split('\n').join('&#10;');
+  }
+  // 分组级 tooltip：标题 + help（help 已是多行详细说明）
+  function buildGroupTip(g) {
+    if (!g) return '';
+    var lines = [];
+    lines.push(g.title || '');
+    lines.push('取值逻辑：CONFIG_SCHEMA 分组，items 为该分组下所有配置项');
+    if (g.help) lines.push(g.help);
+    return tipEnc(lines.join('\n'));
+  }
+  // 字段级 tooltip：字段名 + 取值逻辑 + 默认值 + 大小影响（从 help 提取）
+  function buildFieldTip(meta) {
+    if (!meta) return '';
+    var lines = [];
+    lines.push(meta.label || '');
+    lines.push('取值逻辑：从 pipeline_user_config 表读取用户覆盖值，无则使用默认值');
+    lines.push('默认值：' + (meta.default != null ? String(meta.default) : '-'));
+    // 从 help 中提取 影响/作用/意义 行作为大小影响，并把完整说明也带进 tooltip
+    // （说明仅在 hover 显示，不再内联铺在卡片里，故完整 help 一并放入，避免信息被截断）
+    if (meta.help) {
+      lines.push(meta.help);
+    }
+    return tipEnc(lines.join('\n'));
+  }
+
+  // ── 加载配置 ──
+  async function loadConfig() {
+    var container = $('pcContainer');
+    if (container) container.innerHTML = '<div class="pc-empty">加载配置中...</div>';
+    var r = await A.api('GET', '/api/user-pipeline-config');
+    if (!r || !r.success) {
+      if (container) container.innerHTML = '<div class="pc-empty">' + esc((r && r.error) || '加载失败') + '</div>';
+      return;
+    }
+    schema = r.schema || {};
+    config = r.config || {};
+    recommended = r.recommended || {};
+    dirtyFields = {};
+    updateInfoBar();
+    renderGroups();
+    updateActionBar();
+    loadAutoApplyPref();
+  }
+
+  // ── 切项目自动套推荐值：读取用户偏好回填开关 ──
+  async function loadAutoApplyPref() {
+    var chk = $('chkAutoApply');
+    if (!chk) return;
+    try {
+      var r = await A.api('GET', '/api/user-preference/pipeline_auto_apply_recommended_on_switch');
+      chk.checked = !!(r && r.ok && r.value === true);
+    } catch (e) {
+      chk.checked = false;
+    }
+  }
+
+  function updateInfoBar() {
+    if ($('curUser')) {
+      $('curUser').textContent = (A._currentUser && A._currentUser.id) || '-';
+    }
+    if ($('groupCount')) $('groupCount').textContent = Object.keys(schema).length;
+    var overrideCount = 0;
+    Object.keys(config).forEach(function(g) {
+      Object.keys(config[g] || {}).forEach(function(k) {
+        if (config[g][k] && config[g][k].is_overridden) overrideCount++;
+      });
+    });
+    if ($('overrideCount')) $('overrideCount').textContent = overrideCount;
+  }
+
+  // ── 渲染分组 ──
+  function renderGroups() {
+    var container = $('pcContainer');
+    if (!container) return;
+    var html = '';
+    Object.keys(schema).forEach(function(groupKey) {
+      var g = schema[groupKey];
+      var items = g.items || {};
+      var cfgGroup = config[groupKey] || {};
+      var recGroup = recommended[groupKey] || {};
+      var keys = Object.keys(items);
+      if (keys.length === 0) return;
+      html += '<div class="pc-group" data-group="' + esc(groupKey) + '">'
+        + '<div class="pc-group-header">'
+          + '<div class="pc-group-icon">'
+            + '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>'
+          + '</div>'
+          + '<div class="pc-group-title tooltip-wide" data-tooltip="' + buildGroupTip(g) + '" data-tooltip-pos="bottom">' + esc(g.title || groupKey) + '</div>'
+        + '</div>'
+        + '<div class="pc-group-body">'
+          + keys.map(function(k) { return renderField(groupKey, k, items[k], cfgGroup[k], recGroup[k]); }).join('')
+        + '</div>'
+      + '</div>';
+    });
+    if (!html) html = '<div class="pc-empty">无配置项</div>';
+    container.innerHTML = html;
+    bindFieldInputs();
+    bindResetButtons();
+    bindRecommendButtons();
+  }
+
+  // ── 渲染单个字段 ──
+  function renderField(groupKey, key, meta, cfgVal, recVal) {
+    var val = cfgVal ? cfgVal.value : meta.default;
+    var isOverridden = cfgVal ? cfgVal.is_overridden : false;
+    var type = meta.type || 'str';
+    var input;
+    if (type === 'bool') {
+      var checked = (val === true || val === 'true') ? 'checked' : '';
+      input = '<input type="checkbox" class="pc-field-input" data-key="' + esc(key) + '" ' + checked + ' />';
+    } else if (type === 'int' || type === 'float') {
+      var step = meta.step || (type === 'float' ? '0.01' : '1');
+      var min = meta.min != null ? 'min="' + meta.min + '"' : '';
+      var max = meta.max != null ? 'max="' + meta.max + '"' : '';
+      input = '<input type="number" class="pc-field-input" data-key="' + esc(key) + '" value="' + esc(val) + '" step="' + step + '" ' + min + ' ' + max + ' />';
+    } else {
+      input = '<input type="text" class="pc-field-input" data-key="' + esc(key) + '" value="' + esc(val) + '" />';
+    }
+
+    var overrideBadge = isOverridden ? '<span class="pc-field-override">已覆盖</span>' : '';
+    var resetBtn = isOverridden ? '<button class="pc-field-reset" data-key="' + esc(key) + '" title="恢复默认"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></button>' : '';
+
+    var recommendHtml = '';
+    if (recVal != null && recVal !== val) {
+      recommendHtml = '<div class="pc-field-recommend">'
+        + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+        + '推荐: ' + esc(String(recVal).substring(0, 40))
+        + '<button data-key="' + esc(key) + '" data-rec="' + esc(String(recVal)) + '">应用</button>'
+      + '</div>';
+    }
+
+    return '<div class="pc-field" data-field-key="' + esc(key) + '">'
+      + '<div class="pc-field-header">'
+        + '<span class="pc-field-label tooltip-wide" data-tooltip="' + buildFieldTip(meta) + '" data-tooltip-pos="right">' + esc(meta.label || key) + '</span>'
+        + overrideBadge
+      + '</div>'
+      + '<div class="pc-field-input-row">'
+        + input
+        + resetBtn
+      + '</div>'
+      + recommendHtml
+    + '</div>';
+  }
+
+  // ── 标记 dirty ──
+  function markDirty(inp) {
+    var key = inp.getAttribute('data-key');
+    if (!key) return;
+    var newVal = inp.type === 'checkbox' ? inp.checked : inp.value;
+    // 找到原始值
+    var origVal = findOriginalValue(key);
+    var fieldEl = document.querySelector('.pc-field[data-field-key="' + key + '"]');
+    // 比较
+    var changed = false;
+    if (typeof origVal === 'boolean') {
+      changed = (newVal !== origVal);
+    } else if (typeof newVal === 'string') {
+      changed = (String(newVal) !== String(origVal));
+    }
+    if (changed) {
+      dirtyFields[key] = newVal;
+      if (fieldEl) fieldEl.classList.add('dirty');
+    } else {
+      delete dirtyFields[key];
+      if (fieldEl) fieldEl.classList.remove('dirty');
+    }
+    updateActionBar();
+  }
+
+  function findOriginalValue(key) {
+    for (var g in config) {
+      if (config[g] && config[g][key]) {
+        return config[g][key].value;
+      }
+    }
+    for (var g2 in schema) {
+      if (schema[g2] && schema[g2].items && schema[g2].items[key]) {
+        return schema[g2].items[key].default;
+      }
+    }
+    return null;
+  }
+
+  function updateActionBar() {
+    var bar = $('actionBar');
+    var hint = $('dirtyHint');
+    if (!bar) return;
+    var count = Object.keys(dirtyFields).length;
+    if (count > 0) {
+      bar.style.display = 'flex';
+      if (hint) hint.textContent = '有 ' + count + ' 项未保存的修改';
+    } else {
+      bar.style.display = 'none';
+    }
+  }
+
+  // ── 绑定字段输入 ──
+  function bindFieldInputs() {
+    var inputs = document.querySelectorAll('.pc-field-input');
+    inputs.forEach(function(inp) {
+      inp.addEventListener('input', function() { markDirty(inp); });
+      inp.addEventListener('change', function() { markDirty(inp); });
+    });
+  }
+
+  // ── 绑定重置按钮（单字段） ──
+  function bindResetButtons() {
+    var btns = document.querySelectorAll('.pc-field-reset');
+    btns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var key = btn.getAttribute('data-key');
+        resetField(key);
+      });
+    });
+  }
+
+  // ── 绑定推荐值应用按钮 ──
+  function bindRecommendButtons() {
+    var btns = document.querySelectorAll('.pc-field-recommend button');
+    btns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var key = btn.getAttribute('data-key');
+        var recVal = btn.getAttribute('data-rec');
+        var inp = document.querySelector('.pc-field-input[data-key="' + key + '"]');
+        if (inp) {
+          if (inp.type === 'checkbox') {
+            inp.checked = (recVal === 'true');
+          } else {
+            inp.value = recVal;
+          }
+          markDirty(inp);
+        }
+      });
+    });
+  }
+
+  // ── 重置单个字段到默认值 ──
+  async function resetField(key) {
+    if (!key) return;
+    if (!(await A.confirm('确认重置配置「' + key + '」到默认值？', { danger: true }))) return;
+    var r = await A.api('DELETE', '/api/user-pipeline-config', { key: key });
+    if (r && r.success !== false) {
+      A.toast && A.toast('已重置: ' + key, 'success');
+      await loadConfig();
+    } else {
+      A.toast && A.toast((r && r.error) || '重置失败', 'error');
+    }
+  }
+
+  // ── 保存 ──
+  async function saveConfig() {
+    var keys = Object.keys(dirtyFields);
+    if (keys.length === 0) {
+      A.toast && A.toast('无修改需要保存', 'info');
+      return;
+    }
+    var btn = $('btnSave');
+    if (btn) btn.disabled = true;
+    var payload = {};
+    keys.forEach(function(k) { payload[k] = dirtyFields[k]; });
+    var r = await A.api('PUT', '/api/user-pipeline-config', payload);
+    if (btn) btn.disabled = false;
+    if (r && r.success) {
+      A.toast && A.toast('保存成功（' + (r.updated || keys.length) + ' 项）', 'success');
+      await loadConfig();
+    } else {
+      A.toast && A.toast((r && r.error) || '保存失败', 'error');
+    }
+  }
+
+  // ── 全部重置 ──
+  async function resetAll() {
+    if (!(await A.confirm('确认重置所有流水线参数到默认值？此操作不可撤销。', { danger: true }))) return;
+    // 逐个删除覆盖项
+    var overrideKeys = [];
+    Object.keys(config).forEach(function(g) {
+      Object.keys(config[g] || {}).forEach(function(k) {
+        if (config[g][k] && config[g][k].is_overridden) overrideKeys.push(k);
+      });
+    });
+    if (overrideKeys.length === 0) {
+      A.toast && A.toast('无覆盖项需要重置', 'info');
+      return;
+    }
+    var failed = 0;
+    for (var i = 0; i < overrideKeys.length; i++) {
+      var r = await A.api('DELETE', '/api/user-pipeline-config', { key: overrideKeys[i] });
+      if (!r || r.success === false) failed++;
+    }
+    if (failed === 0) {
+      A.toast && A.toast('全部重置成功（' + overrideKeys.length + ' 项）', 'success');
+    } else {
+      A.toast && A.toast('部分重置失败（' + failed + '/' + overrideKeys.length + '）', 'warning');
+    }
+    await loadConfig();
+  }
+
+  // ── 放弃修改 ──
+  function discardChanges() {
+    dirtyFields = {};
+    renderGroups();
+    updateActionBar();
+    A.toast && A.toast('已放弃修改', 'info');
+  }
+
+  // ── ★ P2-6 H41: 一键填入推荐值 — GET /api/pipeline-config/recommended ──
+  var btnRecommend = $('btnRecommend');
+  if (btnRecommend) {
+    btnRecommend.addEventListener('click', function() {
+      A.withBtnLoading(btnRecommend, '获取中...', function() {
+        return A.api('GET', '/api/pipeline-config/recommended').then(function(r) {
+          if (!r || !r.success) {
+            if (A.toast) A.toast((r && r.error) || '获取推荐值失败', 'error');
+            return null;
+          }
+          var rec = r.recommended || {};
+          var applied = 0;
+          Object.keys(rec).forEach(function(groupKey) {
+            var g = rec[groupKey] || {};
+            Object.keys(g).forEach(function(k) {
+              var v = g[k];
+              if (typeof v === 'object' && v !== null && 'value' in v) v = v.value;
+              if (v === undefined || v === null) return;
+              var inp = document.querySelector('.pc-field-input[data-key="' + k + '"]');
+              if (!inp) return;
+              if (inp.type === 'checkbox') inp.checked = !!v;
+              else inp.value = String(v);
+              markDirty(inp);
+              applied++;
+            });
+          });
+          if (A.toast) A.toast('已填入 ' + applied + ' 项推荐值（可再修改后保存）', 'success');
+          return null;
+        });
+      });
+    });
+  }
+
+  // ── ★ 切项目自动套推荐值：开关持久化 ──
+  var chkAutoApply = $('chkAutoApply');
+  if (chkAutoApply) {
+    chkAutoApply.addEventListener('change', function() {
+      A.api('PUT', '/api/user-preference/pipeline_auto_apply_recommended_on_switch', { value: chkAutoApply.checked }).then(function(r) {
+        if (r && r.ok) {
+          if (A.toast) A.toast(chkAutoApply.checked ? '已开启：切换项目自动套推荐值' : '已关闭：切换项目自动套推荐值', 'success');
+        } else {
+          if (A.toast) A.toast((r && r.error) || '保存失败', 'error');
+          chkAutoApply.checked = !chkAutoApply.checked; // 失败回退
+        }
+      });
+    });
+  }
+
+  // ── 绑定事件 ──
+  function bindEvents() {
+    var btnReload = $('btnReload');
+    if (btnReload) btnReload.addEventListener('click', loadConfig);
+    var btnSaveAll = $('btnSaveAll');
+    if (btnSaveAll) btnSaveAll.addEventListener('click', saveConfig);
+    var btnSave = $('btnSave');
+    if (btnSave) btnSave.addEventListener('click', saveConfig);
+    var btnDiscard = $('btnDiscard');
+    if (btnDiscard) btnDiscard.addEventListener('click', discardChanges);
+    var btnResetAll = $('btnResetAll');
+    if (btnResetAll) btnResetAll.addEventListener('click', resetAll);
+  }
+
+  // ── 登录态守卫 ──
+  A._onAuthOk = function() {
+    A._renderSidebarUser();
+    A.applyPermissions();
+    loadConfig();
+    A._startStepBadgePolling();
+  };
+  if (A._currentUser) {
+    loadConfig();
+  }
+
+  bindEvents();
+})();
+</script>
+{% endblock %}

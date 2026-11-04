@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- P0-9：原为 212KB 内联 base64 JPEG，改引 public/favicon.svg（构建后落到 /static/log-panel/favicon.svg） -->
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>日志面板 — E2E 智能测试引擎</title>
+    <!--
+      P0-5：已移除 Google Fonts 的 preconnect / stylesheet 三个 <link>。
+      站点 CSP 为 font-src 'self'，外部字体 100% 被拦截，属纯净负载；
+      字体族已在 src/index.css 与 tailwind.config.js 中声明为「Web 字体 → 系统字体」回退栈，
+      离线 / 内网环境下由系统字体正常渲染，无 pending 请求、无 CSP 报错。
+    -->
+    <script type="module" crossorigin src="/static/log-panel/assets/index-DIP7C_V5.js"></script>
+    <link rel="stylesheet" crossorigin href="/static/log-panel/assets/index-C08l3YDS.css">
+    <!-- ★ 冗余菜单去除(2026-08-30)：本页为构建产物(React SPA)，仅作内容区被 /realtime-logs
+         主壳页(继承 _layout_base)以 iframe 内嵌(/log-panel)。React bundle 内自带一套站点级
+         侧边栏(<aside class="sidebar">：logo/管理员/流水线步骤/一键执行/执行与报告/项目/
+         用户配置/系统管理等)与折叠浮动按钮，会与主壳侧边栏重复。此处纯 CSS 隐藏该内嵌菜单，
+         仅保留日志面板主体；主区为父级 .flex 容器的 flex-1，侧边栏 display:none 后自动占满全宽，
+         不改打包后的 JS、不动硬编码色值。若直接打开 /log-panel 仍为纯净内容区。 -->
+    <style>
+      aside.sidebar { display: none !important; }
+      button[title="展开侧边栏"], button[title="折叠侧边栏"] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

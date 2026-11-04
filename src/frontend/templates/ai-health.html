@@ -1,0 +1,1104 @@
+﻿{% extends "_layout_base.html" %}
+{% block title %}AI 健康度 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+AI 健康度仪表盘
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnRefresh" data-perm="health.view">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+  刷新数据
+</button>
+<!-- T03/P1-6③：系统依赖健康明细下钻 -->
+<button class="btn-topbar" id="btnHealthDetail" data-perm="health.view" data-tooltip="查看 AI/Confluence/Figma/YApi/MySQL/磁盘/内存 等外部依赖的实时探活明细" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+  健康明细
+</button>
+<!-- T03/P1-6③：历史运行健康快照下钻 -->
+<button class="btn-topbar" id="btnHealthRuns" data-perm="health.view" data-tooltip="按历史运行 run_id 查看各 Step 的健康指标快照" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+  运行快照
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════ KPI 摘要行 ════════════ -->
+<div class="ah-kpi-row" id="kpiRow">
+  <div class="ah-kpi-item tooltip-wide" data-tooltip="综合评分&#10;是什么：Step2-Step4 各项指标加权汇总的健康度总分（0-100）&#10;怎么算：overall_score 字段（scorecard_oracle 插件加权平均）&#10;大小意义：≥80 绿（系统整体健康），60-80 黄（部分指标需关注），&lt;60 红（多维度异常）" data-tooltip-pos="bottom">
+    <div class="ah-kpi-icon ah-icon-primary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    </div>
+    <div class="ah-kpi-content">
+      <div class="ah-kpi-value ah-text-primary" id="kpiScore">-</div>
+      <div class="ah-kpi-label">综合评分</div>
+    </div>
+    <div class="ah-kpi-trend" id="trendScore"></div>
+  </div>
+
+  <div class="ah-kpi-item tooltip-wide" data-tooltip="可疑幻觉&#10;是什么：Step3 用例建模阶段 cross_check 发现的 AI 输出与真实靶子不符的条目总数——分三类：接口不存在、页面元素找不到、枚举值无效&#10;怎么算：interface_mismatch + element_missing + enum_invalid 三类求和（数据源 ai_overall.hallucination.total）&#10;大小意义：0 绿（无幻觉），1~5 黄（少量可忽略），>5 红（需排查 Step2 页面扫描是否不全）" data-tooltip-pos="bottom">
+    <div class="ah-kpi-icon ah-icon-error">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </div>
+    <div class="ah-kpi-content">
+      <div class="ah-kpi-value ah-text-error" id="kpiHallucination">-</div>
+      <div class="ah-kpi-label">可疑幻觉</div>
+    </div>
+    <div class="ah-kpi-trend" id="trendHallucination"></div>
+  </div>
+
+  <div class="ah-kpi-item tooltip-wide" data-tooltip="守卫拦截率&#10;是什么：Step4 执行时 AI 动作被安全守卫层拦截的比例——衡量守卫有效性 + AI 动作合规性（不是靶子系统安全性）&#10;怎么算：guard_rejection 次数 / action_attempt 总次数 × 100%（数据源 ai_health_metrics）&#10;拦截原因：危险动作白名单外（delete/drop/truncate/exec）、ai_id 越界、元素类型与动作不匹配、必填参数缺失&#10;大小意义：5~30% 绿（守卫正常拦截到危险动作），<1% 需检查守卫是否未启用，>50% 红（AI 输出大量不合规）" data-tooltip-pos="bottom">
+    <div class="ah-kpi-icon ah-icon-warning">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    </div>
+    <div class="ah-kpi-content">
+      <div class="ah-kpi-value ah-text-warning" id="kpiGuard">-</div>
+      <div class="ah-kpi-label">守卫拦截</div>
+    </div>
+    <div class="ah-kpi-trend" id="trendGuard"></div>
+  </div>
+
+  <div class="ah-kpi-item tooltip-wide" data-tooltip="校验达成率&#10;是什么：Step4 执行阶段结束后通过用例占已执行用例的比例（同「用例通过率」，同口径不同名）&#10;怎么算：通过用例数 / 已执行用例总数 × 100%（数据源 run_summary.pass_rate）&#10;大小意义：≥90% 绿（校验可靠），70~90% 黄，&lt;70% 红（需排查失败根因：靶子缺陷 vs 引擎缺陷）" data-tooltip-pos="bottom">
+    <div class="ah-kpi-icon ah-icon-success">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+    </div>
+    <div class="ah-kpi-content">
+      <div class="ah-kpi-value ah-text-success" id="kpiVerifyRate">-</div>
+      <div class="ah-kpi-label">校验达成率</div>
+    </div>
+    <div class="ah-kpi-trend" id="trendVerifyRate"></div>
+  </div>
+
+  <div class="ah-kpi-item tooltip-wide" data-tooltip="需求覆盖率&#10;是什么：Step1 拉取的原始需求中有明确测试用例覆盖到的比例——反映需求拆解的完整性&#10;怎么算：已被用例引用的 req_id 数 / requirements 表总数 × 100%（数据源 step2_breakdown.coverage.forward_rate）&#10;大小意义：≥90% 绿（需求拆解充分），80~90% 黄（部分需求缺口），&lt;80% 红（需检查 Step1→Step2 拆解完整性）" data-tooltip-pos="bottom">
+    <div class="ah-kpi-icon ah-icon-success">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/></svg>
+    </div>
+    <div class="ah-kpi-content">
+      <div class="ah-kpi-value ah-text-success" id="kpiCoverage">-</div>
+      <div class="ah-kpi-label">需求覆盖率</div>
+    </div>
+    <div class="ah-kpi-trend" id="trendCoverage"></div>
+  </div>
+
+  <div class="ah-kpi-item tooltip-wide" data-tooltip="Flaky 率&#10;是什么：同一用例在相同条件下重复执行出现「有时通过有时失败」不稳定现象的比例——需至少 3 次运行记录才判定为 flaky&#10;怎么算：标记为 flaky 的用例数 / 总用例数 × 100%（数据源 ai_overall.flaky.rate）&#10;大小意义：&lt;5% 绿（环境稳定），5~15% 黄（部分用例受时序/资源影响），≥15% 红（环境或引擎不稳定）" data-tooltip-pos="bottom">
+    <div class="ah-kpi-icon ah-icon-warning">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </div>
+    <div class="ah-kpi-content">
+      <div class="ah-kpi-value ah-text-warning" id="kpiFlaky">-</div>
+      <div class="ah-kpi-label">Flaky 率</div>
+    </div>
+    <div class="ah-kpi-trend" id="trendFlaky"></div>
+  </div>
+
+  <div class="ah-kpi-item tooltip-wide" data-tooltip="缓存命中率&#10;是什么：Step4 执行时 Recipe 操作缓存命中的次数占比——命中意味着直接复用历史执行记录，跳过 AI 重新推理&#10;怎么算：recipe_hit 次数 / (recipe_hit + recipe_miss) × 100%（数据源 fusion.recipe_hit_rate）&#10;大小意义：≥80% 绿（缓存丰富，引擎效率高），&lt;60% 红（命中率低，需丰富操作指令库）" data-tooltip-pos="bottom">
+    <div class="ah-kpi-icon ah-icon-info">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><ellipse cx="12" cy="5" rx="9" ry="3"/></svg>
+    </div>
+    <div class="ah-kpi-content">
+      <div class="ah-kpi-value ah-text-info" id="kpiCache">-</div>
+      <div class="ah-kpi-label">缓存命中率</div>
+    </div>
+    <div class="ah-kpi-trend" id="trendCache"></div>
+  </div>
+</div>
+
+<!-- ════════════ 详情 Tab 区 ════════════ -->
+<div class="ah-panel">
+  <div class="ah-tab-nav" id="tabNav">
+    <div class="ah-tab-item active" data-tab="tab-step2">Step2 需求覆盖</div>
+    <div class="ah-tab-item" data-tab="tab-step3">Step3 用例校验</div>
+    <div class="ah-tab-item" data-tab="tab-step4-guard">Step4 指令守卫</div>
+    <div class="ah-tab-item" data-tab="tab-step4-triple">Step4 三轨校验</div>
+    <div class="ah-tab-item" data-tab="tab-dominance">用例主导度</div>
+  </div>
+
+  <div class="ah-tab-body" id="tabBody">
+    <div class="ah-tab-panel active" id="tab-step2">
+      <div class="ah-tab-content" id="step2Content">
+        <div class="ah-empty-state">点击 Tab 加载数据</div>
+      </div>
+    </div>
+    <div class="ah-tab-panel" id="tab-step3">
+      <div class="ah-tab-content" id="step3Content">
+        <div class="ah-empty-state">点击 Tab 加载数据</div>
+      </div>
+    </div>
+    <div class="ah-tab-panel" id="tab-step4-guard">
+      <div class="ah-tab-content" id="step4GuardContent">
+        <div class="ah-empty-state">点击 Tab 加载数据</div>
+      </div>
+    </div>
+    <div class="ah-tab-panel" id="tab-step4-triple">
+      <div class="ah-tab-content" id="step4TripleContent">
+        <div class="ah-empty-state">点击 Tab 加载数据</div>
+      </div>
+    </div>
+    <div class="ah-tab-panel" id="tab-dominance">
+      <div class="ah-tab-content" id="dominanceContent">
+        <div class="ah-empty-state">点击 Tab 加载数据</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ 趋势图 ════════════ -->
+<div class="ah-trend-area">
+  <div class="ah-trend-header">
+    <div>
+      <div class="ah-trend-title">健康评分趋势 (近 7 次运行)</div>
+      <div class="ah-trend-meta" id="trendMeta">暂无趋势数据</div>
+    </div>
+  </div>
+  <div class="ah-sparkline-container" id="sparklineContainer">
+    <div class="ah-empty-state">暂无趋势数据</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     T03 / P1-6③：健康明细下钻抽屉
+     —— 复用 app-design.css 中与 diagnostics 共用的 .drilldown-* 组件样式，
+        不新建配色体系，也不改动本页任何既有 .ah-* 规则。
+     ════════════════════════════════════════════════════════════════════ -->
+<div class="drilldown-backdrop" id="ahDrawerBackdrop"></div>
+<aside class="drilldown-drawer" id="ahDrawer" role="dialog" aria-modal="true" aria-labelledby="ahDrawerTitle">
+  <div class="drilldown-header">
+    <span class="drilldown-title" id="ahDrawerTitle">健康明细</span>
+    <button type="button" class="drilldown-close" id="ahDrawerClose" aria-label="关闭">✕</button>
+  </div>
+  <div class="drilldown-body" id="ahDrawerBody"></div>
+</aside>
+
+{% endblock %}
+
+{% block head_extra %}
+<style>
+.ah-kpi-row {
+  /* ★ 卡片式网格布局：每行数量由个性化配置 kpi_columns 决定（JS 写 --ah-kpi-cols，
+     auto-fit 折叠空轨道，不足配置列数自动拉伸占满一行），默认 6 列 */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(calc(100% / var(--ah-kpi-cols, 6)), 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.ah-kpi-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  transition: border-color 0.15s;
+}
+.ah-kpi-item:hover { border-color: var(--border-hover); }
+.ah-kpi-icon {
+  width: 32px; height: 32px;
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.ah-icon-primary { background: var(--color-primary-soft); color: var(--color-primary); }
+.ah-icon-success { background: var(--state-success-soft); color: var(--state-success-text); }
+.ah-icon-warning { background: var(--state-warning-soft); color: var(--state-warning-text); }
+.ah-icon-error { background: var(--state-error-soft); color: var(--state-error-text); }
+.ah-icon-info { background: var(--state-info-soft); color: var(--state-info-text); }
+.ah-kpi-content { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ah-kpi-value { font-size: var(--fs-h3); font-weight: var(--fw-bold); font-family: var(--font-mono); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ah-text-primary { color: var(--color-primary); }
+.ah-text-success { color: var(--state-success-text); }
+.ah-text-warning { color: var(--state-warning-text); }
+.ah-text-error { color: var(--state-error-text); }
+.ah-text-info { color: var(--state-info-text); }
+.ah-kpi-label { font-size: var(--fs-xs); color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ah-kpi-trend { font-size: var(--fs-xs); font-family: var(--font-mono); flex-shrink: 0; }
+.ah-kpi-trend.up { color: var(--state-success-text); }
+.ah-kpi-trend.down { color: var(--state-error-text); }
+.ah-kpi-trend.flat { color: var(--text-tertiary); }
+
+.ah-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.ah-tab-nav {
+  display: flex;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border-default);
+  overflow-x: auto;
+}
+.ah-tab-item {
+  padding: 12px 16px;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
+  user-select: none;
+}
+.ah-tab-item:hover { color: var(--text-secondary); }
+.ah-tab-item.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+.ah-tab-body { padding: 20px 24px; min-height: 300px; }
+.ah-tab-panel { display: none; }
+.ah-tab-panel.active { display: block; }
+.ah-tab-content { font-size: var(--fs-small); }
+.ah-empty-state { padding: 48px 16px; text-align: center; color: var(--text-tertiary); font-size: var(--fs-small); }
+
+.ah-health-table { width: 100%; border-collapse: collapse; border: 1px solid var(--text-tertiary); }
+.ah-health-table th { padding: 10px 12px; text-align: left; font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--text-tertiary); border-right: 1px solid var(--text-tertiary); }
+.ah-health-table th:last-child { border-right: none; }
+.ah-health-table td { padding: 10px 12px; font-size: var(--fs-small); color: var(--text-primary); border-bottom: 1px solid var(--text-tertiary); border-right: 1px solid var(--text-tertiary); }
+.ah-health-table td:last-child { border-right: none; }
+.ah-health-table tr:hover td { background: var(--border-subtle); }
+.ah-status-pill { display: inline-block; padding: 2px 8px; border-radius: var(--radius-full); font-size: var(--fs-xs); font-weight: var(--fw-medium); }
+.ah-status-pill.pass { background: var(--state-success-soft); color: var(--state-success-text); }
+.ah-status-pill.fail { background: var(--state-error-soft); color: var(--state-error-text); }
+.ah-status-pill.skip { background: var(--border-default); color: var(--text-secondary); }
+.ah-type-pill { display: inline-block; padding: 2px 8px; border-radius: var(--radius-sm); font-size: var(--fs-xs); font-family: var(--font-mono); background: var(--color-primary-soft); color: var(--color-primary); }
+.ah-metric-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.ah-metric-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--bg-elevated); border-radius: var(--radius-sm); }
+.ah-metric-item[data-tooltip]:hover { border-color: var(--color-primary); border-style: solid; }
+.ah-metric-label { flex: 1; font-size: var(--fs-small); color: var(--text-primary); }
+.ah-metric-value { font-size: var(--fs-small); font-family: var(--font-mono); font-weight: var(--fw-semibold); color: var(--text-primary); }
+.ah-metric-bar { width: 100px; height: 6px; background: var(--border-default); border-radius: var(--radius-full); overflow: hidden; }
+.ah-metric-bar-fill { height: 100%; background: var(--color-primary); border-radius: var(--radius-full); }
+
+/* ════ 批1：令牌化后下沉的 drilldown 布局类（token-only）════ */
+.ah-kpi-sub { margin-top: 6px; font-size: var(--fs-xs); opacity: 0.75; }
+.ah-th-narrow { width: 120px; }
+.ah-th-wide { width: 220px; }
+.ah-sec-title { margin: var(--space-4) 0 6px; }
+.ah-mb6 { margin-bottom: 6px; }
+.ah-mb4 { margin-bottom: var(--space-4); }
+.ah-sub2 { font-size: var(--fs-xs); color: var(--text-tertiary); margin-bottom: 6px; }
+.ah-title-accent { font-weight: var(--fw-regular); color: var(--text-tertiary); margin-left: 8px; }
+
+.ah-trend-area {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  padding: 20px 24px;
+}
+.ah-trend-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; }
+.ah-trend-title { font-size: var(--fs-body); font-weight: var(--fw-semibold); color: var(--text-primary); margin-bottom: 4px; }
+.ah-trend-meta { font-size: var(--fs-xs); color: var(--text-tertiary); }
+.ah-sparkline-container { min-height: 120px; }
+.ah-sparkline-svg { width: 100%; height: 100px; }
+
+/* ── v7(2026-09-21) 二维柱状趋势图样式 ── */
+/* 2D 图按宽高比自适应，覆盖 :has() 弹性布局里的 height:100%（避免 letterbox 拉伸） */
+.content-body:has(.ah-kpi-row) .ah-sparkline-svg[viewBox="0 0 800 260"],
+.ah-sparkline-svg[viewBox="0 0 800 260"] {
+  height: auto;
+  max-height: 100%;
+  aspect-ratio: 800 / 260;
+  display: block;
+  margin: 0 auto;
+}
+.ah-trend-grid { stroke: var(--border-default); stroke-width: 1; stroke-dasharray: 3 4; }
+.ah-trend-axis { stroke: var(--border-strong, var(--border-default)); stroke-width: 1.5; }
+.ah-trend-bar { fill: var(--color-primary); opacity: 0.85; transition: opacity 0.15s; }
+.ah-trend-bar:hover { opacity: 1; }
+.ah-trend-bar--last { opacity: 1; }
+.ah-trend-bar--out { fill: var(--state-error); }
+.ah-trend-val { fill: var(--text-secondary); font-weight: var(--fw-semibold); }
+
+/* ★ 页面级弹性布局：健康评分趋势自动占满剩余空间。
+   :has() 仅命中本页（.ah-kpi-row 只在 AI 健康度出现），不影响其他页面；
+   短内容时 trend 用 flex:1 撑满 content-body 底部，长内容时随面板自然增长滚动。 */
+.content-body:has(.ah-kpi-row) { display: flex; flex-direction: column; }
+.content-body:has(.ah-kpi-row) .ah-kpi-row,
+.content-body:has(.ah-kpi-row) .ah-panel { flex-shrink: 0; }
+.content-body:has(.ah-kpi-row) .ah-trend-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
+}
+.content-body:has(.ah-kpi-row) .ah-sparkline-container {
+  flex: 1;
+  min-height: 160px;
+}
+.content-body:has(.ah-kpi-row) .ah-sparkline-svg { height: 100%; }
+.ah-sparkline-path { fill: none; stroke: var(--color-primary); stroke-width: 2; }
+.ah-sparkline-fill { fill: url(#ahSparkGrad); }
+.ah-sparkline-dot { fill: var(--color-primary); }
+.ah-sparkline-label { fill: var(--text-tertiary); font-size: 10px; font-family: var(--font-mono); }
+
+/* ── T03/P1-6③ 新增（独立追加段，不修改上方任何既有 .ah-* 规则） ── */
+/* KPI 卡片可下钻：只加指针与轻微高亮，尺寸/间距/配色一律不动 */
+.ah-kpi-item[data-kpi] { cursor: pointer; }
+.ah-kpi-item[data-kpi]:hover { border-color: var(--color-primary); }
+.ah-kpi-item[data-kpi]:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+/* 抽屉内探活状态着色 */
+.ah-dd-up { color: var(--state-success-text); font-weight: var(--fw-semibold); }
+.ah-dd-down { color: var(--state-error-text); font-weight: var(--fw-semibold); }
+.ah-dd-run-btn { margin: 0; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+'use strict';
+
+const A = window._A;
+if (!A) { console.error('[ai-health] _A 未初始化'); return; }
+const $ = A.$, escHtml = A.escHtml, escAttr = A.escAttr, api = A.api, appendLog = A.appendLog;
+
+const els = {
+  kpiScore: $('kpiScore'),
+  trendScore: $('trendScore'),
+  kpiHallucination: $('kpiHallucination'),
+  trendHallucination: $('trendHallucination'),
+  kpiGuard: $('kpiGuard'),
+  trendGuard: $('trendGuard'),
+  kpiVerifyRate: $('kpiVerifyRate'),
+  trendVerifyRate: $('trendVerifyRate'),
+  kpiCoverage: $('kpiCoverage'),
+  trendCoverage: $('trendCoverage'),
+  kpiFlaky: $('kpiFlaky'),
+  trendFlaky: $('trendFlaky'),
+  kpiCache: $('kpiCache'),
+  trendCache: $('trendCache'),
+  tabNav: $('tabNav'),
+  tabBody: $('tabBody'),
+  step3Content: $('step3Content'),
+  step4GuardContent: $('step4GuardContent'),
+  step4TripleContent: $('step4TripleContent'),
+  dominanceContent: $('dominanceContent'),
+  step2Content: $('step2Content'),
+  trendMeta: $('trendMeta'),
+  sparklineContainer: $('sparklineContainer'),
+  btnRefresh: $('btnRefresh'),
+};
+
+const state = {
+  summary: null,
+  trends: null,
+  loadedTabs: new Set(),
+};
+
+// ════════════ 数据加载 ════════════
+
+async function loadAll() {
+  await Promise.all([loadSummary(), loadTrends()]);
+}
+
+function _setSummaryEmpty(msg) {
+  const emptyHtml = '<div class="ah-empty-state">' + escHtml(msg || '暂无数据') + '</div>';
+  if (els.step3Content) els.step3Content.innerHTML = emptyHtml;
+  if (els.step4GuardContent) els.step4GuardContent.innerHTML = emptyHtml;
+  if (els.step4TripleContent) els.step4TripleContent.innerHTML = emptyHtml;
+  if (els.dominanceContent) els.dominanceContent.innerHTML = emptyHtml;
+  if (els.step2Content) els.step2Content.innerHTML = emptyHtml;
+}
+
+async function loadSummary() {
+  try {
+    const d = await api('GET', '/api/health/summary');
+    if (!d || d.error) {
+      appendLog('⚠️ 加载 summary 失败: ' + (d && d.error));
+      _setSummaryEmpty(d && d.error ? '加载失败: ' + d.error : '暂无数据');
+      return;
+    }
+    state.summary = d;
+    renderKPIs(d);
+    renderStep3(d);
+    // 首次加载也填充其他 Tab（数据已在 summary 中）
+    renderStep4Guard(d);
+    renderStep4Triple(d);
+    renderDominance(d);
+    renderStep2(d);
+    state.loadedTabs.add('tab-step3');
+    state.loadedTabs.add('tab-step4-guard');
+    state.loadedTabs.add('tab-step4-triple');
+    state.loadedTabs.add('tab-dominance');
+    state.loadedTabs.add('tab-step2');
+  } catch (e) {
+    appendLog('⚠️ 加载 summary 异常: ' + String(e));
+    _setSummaryEmpty('加载异常: ' + String(e));
+  }
+}
+
+async function loadTrends() {
+  try {
+    const d = await api('GET', '/api/health/trends?days=30');
+    if (!d || d.error) {
+      els.sparklineContainer.innerHTML = '<div class="ah-empty-state">暂无趋势数据</div>';
+      els.trendMeta.textContent = '-';
+      return;
+    }
+    state.trends = d;
+    renderTrend(d);
+  } catch (e) {
+    els.sparklineContainer.innerHTML = '<div class="ah-empty-state">加载异常: ' + escHtml(String(e)) + '</div>';
+    els.trendMeta.textContent = '加载异常';
+  }
+}
+
+// ════════════ KPI 渲染 ════════════
+
+function renderKPIs(d) {
+  // 综合评分
+  const score = d.overall_score != null ? d.overall_score : (d.score != null ? d.score : null);
+  els.kpiScore.textContent = score != null ? (typeof score === 'number' ? score.toFixed(1) : score) : '-';
+  setTrend(els.trendScore, d.score_trend);
+
+  // 可疑幻觉（Step3 cross_check 失败总数）
+  // 可疑幻觉（Step3 交叉校验 + 幻觉计数）
+  // ★ 根因修复(2026-09-21)：未采集(collected=false)显示 — 而非伪装的 0
+  const s3 = d.step_3 || d.step3 || {};
+  if (s3.collected === false) {
+    els.kpiHallucination.textContent = '—';
+  } else {
+    const halluc = (s3.cross_check_api || 0) + (s3.cross_check_ui || 0) + (s3.cross_check_enum || 0) + (s3.hallucination_count || 0);
+    els.kpiHallucination.textContent = halluc;
+  }
+  setTrend(els.trendHallucination, s3.hallucination_trend);
+
+  // 守卫拦截（Step4 action guard_rejections）——未采集(None)显示 — 而非伪装的 0
+  const s4a = d.step_4_action || d.step4_action || {};
+  els.kpiGuard.textContent = s4a.guard_rejections != null
+    ? s4a.guard_rejections
+    : '—';
+  setTrend(els.trendGuard, s4a.guard_trend);
+
+  // 校验达成率（Step4 verify pass/total）
+  // ★ 根因修复(2026-09-21)：tooltip 承诺数据源为 run_summary.pass_rate（用例级，
+  //   与 charts 页同口径），但旧代码用第三套字段名(pass/fail/total)重算三轨数据，
+  //   字段名与后端(step_4_verify: rate/ui_pass/api_pass/db_pass)不匹配 → 恒 0。
+  //   现优先 run_summary.pass_rate；无 run_summary 时回落三轨聚合。
+  const rs = d.run_summary || {};
+  const s4v = d.step_4_verify || d.step4_verify || {};
+  let vRate = null;
+  if (rs.pass_rate != null && rs.executed > 0) {
+    vRate = Number(rs.pass_rate);
+  } else {
+    const vPass = s4v.ui_pass != null
+      ? (Number(s4v.ui_pass || 0) + Number(s4v.api_pass || 0) + Number(s4v.db_pass || 0))
+      : 0;
+    const vTotal = Number(s4v.verification_count || 0);
+    if (vTotal > 0) vRate = Math.round(vPass / vTotal * 100);
+  }
+  els.kpiVerifyRate.textContent = vRate != null ? vRate.toFixed(2) + '%' : '—';
+  if (rs.executed > 0) {
+    els.kpiVerifyRate.title = '已执行 ' + rs.executed + ' 例：通过 ' + rs.passed + ' / 失败 ' + rs.failed + ' / 跳过 ' + rs.skipped;
+  }
+  setTrend(els.trendVerifyRate, s4v.verify_trend);
+
+  // 需求覆盖率（Step2 coverage_forward）
+  const s2 = d.step_2 || d.step2 || {};
+  const cov = s2.coverage_forward != null ? s2.coverage_forward.toFixed(2) + '%' : (s2.coverage_rate != null ? s2.coverage_rate.toFixed(2) + '%' : '-');
+  els.kpiCoverage.textContent = cov;
+  setTrend(els.trendCoverage, s2.coverage_trend);
+
+  // Flaky 率
+  const flaky = d.flaky || {};
+  const flakyRate = flaky.rate != null ? (typeof flaky.rate === 'number' ? (flaky.rate > 1 ? flaky.rate.toFixed(2) : (flaky.rate * 100).toFixed(2)) + '%' : flaky.rate) : '-';
+  els.kpiFlaky.textContent = flakyRate;
+  setTrend(els.trendFlaky, flaky.flaky_trend);
+
+  // 缓存命中率（Step4 cache）
+  const s4c = d.step_4_cache || d.step4_cache || d.cache || {};
+  const cacheRate = s4c.rate != null ? (s4c.rate * 100).toFixed(2) + '%' : (s4c.hit_rate != null ? s4c.hit_rate.toFixed(2) + '%' : '-');
+  els.kpiCache.textContent = cacheRate;
+  setTrend(els.trendCache, s4c.cache_trend);
+}
+
+function setTrend(el, trend) {
+  if (trend == null) {
+    el.textContent = '';
+    el.className = 'ah-kpi-trend';
+    return;
+  }
+  const t = typeof trend === 'number' ? trend : 0;
+  if (t > 0) {
+    el.textContent = '+' + t;
+    el.className = 'ah-kpi-trend up';
+  } else if (t < 0) {
+    el.textContent = String(t);
+    el.className = 'ah-kpi-trend down';
+  } else {
+    el.textContent = '0';
+    el.className = 'ah-kpi-trend flat';
+  }
+}
+
+// ════════════ Tab 内容渲染 ════════════
+
+/**
+ * 构建带 hover 计算说明（data-tooltip）的统计项。
+ * @param {string} label
+ * @param {*} value
+ * @param {string} tip  悬停提示（含取值来源/计算逻辑，用 \n 换行）
+ * @param {number|undefined} barValue 传入则渲染进度条（百分比）
+ */
+function ahMetric(label, value, tip, barValue) {
+  var tipAttr = tip ? ' data-tooltip="' + escAttr(tip) + '" data-tooltip-pos="top"' : '';
+  var barHtml = '';
+  if (barValue !== undefined) {
+    barHtml = '<div class="ah-metric-bar"><div class="ah-metric-bar-fill" style="width:' + barValue + '%"></div></div>';
+  }
+  return '<div class="ah-metric-item"' + tipAttr + '>' +
+    '<span class="ah-metric-label">' + escHtml(label) + '</span>' +
+    barHtml +
+    '<span class="ah-metric-value">' + escHtml(String(value)) + '</span></div>';
+}
+
+function renderStep3(d) {
+  const s3 = d.step_3 || d.step3 || {};
+  const items = s3.items || s3.details || [];
+  if (items.length > 0) {
+    let html = '<table class="ah-health-table"><thead><tr>' +
+      '<th>用例ID</th><th>校验类型</th><th>结果</th><th>耗时</th><th>详情</th>' +
+      '</tr></thead><tbody>';
+    items.forEach(it => {
+      const cid = it.case_id || it.id || '-';
+      const type = it.check_type || it.type || '-';
+      const result = it.result || it.status || 'skip';
+      const duration = it.duration != null ? it.duration + 's' : '-';
+      const detail = it.detail || it.reason || '';
+      html += '<tr>' +
+        '<td>' + escHtml(cid) + '</td>' +
+        '<td><span class="ah-type-pill">' + escHtml(type) + '</span></td>' +
+        '<td><span class="ah-status-pill ' + result + '">' + (result === 'pass' ? '通过' : result === 'fail' ? '失败' : '跳过') + '</span></td>' +
+        '<td>' + escHtml(duration) + '</td>' +
+        '<td>' + escHtml(detail) + '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table>';
+    els.step3Content.innerHTML = html;
+    return;
+  }
+  // 后端返回的是聚合指标对象，展示为指标列表（每一项带 hover 计算说明）
+  const rate = s3.rate != null ? s3.rate.toFixed(2) + '%' : '-';
+  const metrics = [
+    { label: 'API 交叉校验不一致', value: s3.cross_check_api || 0, tip: '取值来源: ai_health_metrics step=3·cross_check·api_mismatch\n含义: API 三轨/实际响应不一致的用例数' },
+    { label: 'UI 元素缺失', value: s3.cross_check_ui || 0, tip: '取值来源: ai_health_metrics step=3·cross_check·ui_element_missing\n含义: 页面关键 UI 元素缺失的用例数' },
+    { label: '枚举值无效', value: s3.cross_check_enum || 0, tip: '取值来源: ai_health_metrics step=3·cross_check·enum_value_invalid\n含义: 枚举字段取值超出定义范围的用例数' },
+    { label: '深度检查问题', value: s3.deep_check || 0, tip: '取值来源: ai_health_metrics step=3·deep_check·ai_deep_issues\n含义: AI 深度检查发现的问题数' },
+    { label: '规则校验告警', value: s3.rule_check || 0, tip: '取值来源: ai_health_metrics step=3·rule_check·rule_warnings\n含义: 需求规则校验产生的告警数' },
+    { label: '问题用例总数', value: s3.total_cases || 0, tip: '取值来源: hallucination_errors 的 total 字段（本次参与校验的用例总数）\n注意: 仅取 cross_check 类型的 total，避免误取其他指标(如 quality_score)的 100' },
+    { label: '问题率', value: rate, tip: '计算逻辑: (API + UI + 枚举 三者不一致总数) ÷ 问题用例总数 × 100%\n当问题用例总数为 0 时显示 "-"（无有效分母）' },
+  ];
+  let html = '<div class="ah-metric-list">';
+  metrics.forEach(it => { html += ahMetric(it.label, it.value, it.tip); });
+  html += '</div>';
+  els.step3Content.innerHTML = html;
+}
+
+function renderStep4Guard(d) {
+  const s4a = d.step_4_action || d.step4_action || {};
+  let items = s4a.items || [];
+  const breakdown = s4a.breakdown || {};
+  if (items.length === 0 && breakdown && Object.keys(breakdown).length > 0) {
+    items = Object.keys(breakdown).map(k => ({ name: k, count: breakdown[k] }));
+  }
+  if (items.length === 0) {
+    els.step4GuardContent.innerHTML = '<div class="ah-empty-state">暂无守卫拦截数据</div>';
+    return;
+  }
+  let html = '<div class="ah-metric-list">';
+  items.forEach(it => {
+    const label = it.name || it.label || it.action || '-';
+    const value = it.count != null ? it.count : (it.value || 0);
+    const total = it.total || value;
+    const percent = total > 0 ? Math.round(value / total * 100) : 0;
+    html += ahMetric(label, value + ' / ' + total,
+      '取值来源: ai_health_metrics step=4·guard_reject/action_attempt（按动作类别聚合）\n计算逻辑: 该动作类型被守卫拦截次数 / 尝试总数 × 100%\n拦截原因: 危险动作白名单外、ai_id越界、元素类型不匹配、必填参数缺失\n含义: 衡量守卫有效性 + AI动作合规性（不是靶子系统安全性）', percent);
+  });
+  html += '</div>';
+  els.step4GuardContent.innerHTML = html;
+}
+
+function renderStep4Triple(d) {
+  const s4v = d.step_4_verify || d.step4_verify || {};
+  const uiPass = s4v.ui_pass || 0;
+  const apiPass = s4v.api_pass || 0;
+  const dbPass = s4v.db_pass || 0;
+  const disagreements = s4v.disagreements || 0;
+  const total = s4v.total || (uiPass + apiPass + dbPass + disagreements);
+  if (total === 0) {
+    els.step4TripleContent.innerHTML = '<div class="ah-empty-state">暂无三轨校验数据</div>';
+    return;
+  }
+  const items = [
+    { label: 'UI 轨通过', value: uiPass, total: total, tip: '取值来源: ai_health_metrics step=4·verification·ui_pass\n含义: 经 UI 轨校验通过的用例数' },
+    { label: 'API 轨通过', value: apiPass, total: total, tip: '取值来源: ai_health_metrics step=4·verification·api_pass\n含义: 经 API 轨校验通过的用例数' },
+    { label: 'DB 轨通过', value: dbPass, total: total, tip: '取值来源: ai_health_metrics step=4·verification·db_pass\n含义: 经 DB 轨校验通过的用例数' },
+    { label: '三轨不一致', value: disagreements, total: total, tip: '取值来源: ai_health_metrics step=4·verification·disagreement\n含义: 三轨校验结果相互冲突的用例数' },
+  ];
+  let html = '<div class="ah-metric-list">';
+  items.forEach(it => {
+    const percent = it.total > 0 ? Math.round(it.value / it.total * 100) : 0;
+    html += ahMetric(it.label, it.value + ' / ' + it.total,
+      '取值来源: ai_health_metrics step=4·verification\n计算逻辑: 该轨通过数 / 自测用例总数 × 100%\n分母 ' + it.total + ' = UI+API+DB 通过数之和，另计三轨不一致', percent);
+  });
+  html += '</div>';
+  els.step4TripleContent.innerHTML = html;
+}
+
+function renderDominance(d) {
+  const dom = d.step_4_case_dominance || d.case_dominance || d.dominance || {};
+  const score = dom.score != null ? dom.score : (dom.intent_dominance_score != null ? dom.intent_dominance_score : null);
+  // 后端 asset_rate / evidence_rate / verdict_rate / recipe_only_rate 已乘以 100，前端直接显示
+  const fmtPercent = (v) => {
+    if (v == null) return '-';
+    if (typeof v === 'number') return v.toFixed(2) + '%';
+    return String(v);
+  };
+  const items = [
+    { label: '主导度评分', value: score != null ? (typeof score === 'number' ? score.toFixed(1) : score) : '-', tip: '取值来源: ai_health_metrics step=4·case_dominance·dominance_score\n含义: 用例对意图的还原主导程度(0-100)，越高越贴近真实操作意图' },
+    { label: '资产用例率', value: fmtPercent(dom.asset_rate), tip: '计算逻辑: actions_present / case_total × 100%\n含义: 含可执行动作(资产)的用例占比' },
+    { label: '证据用例率', value: fmtPercent(dom.evidence_rate), tip: '计算逻辑: checks_present / case_total × 100%\n含义: 携带校验动作(证据)的用例占比' },
+    { label: '裁定用例率', value: fmtPercent(dom.verdict_rate), tip: '计算逻辑: verdict_recorded / case_total × 100%\n含义: 记录通过/失败裁定的用例占比' },
+    { label: '配方专用率', value: fmtPercent(dom.recipe_only_rate), tip: '计算逻辑: recipe_only_pass / case_total × 100%\n含义: 仅靠配方(不引用资产/证据)即通过的用例占比' },
+  ];
+  let html = '<div class="ah-metric-list">';
+  items.forEach(it => { html += ahMetric(it.label, it.value, it.tip); });
+  html += '</div>';
+  els.dominanceContent.innerHTML = html;
+}
+
+function renderStep2(d) {
+  const s2 = d.step_2 || d.step2 || {};
+  const items = [
+    { label: '正向覆盖率', value: s2.coverage_forward != null ? s2.coverage_forward.toFixed(2) + '%' : '-', tip: '取值来源: ai_health_metrics step=2·coverage·coverage_forward\n含义: 已生成用例的需求数 / 总需求数 × 100%；为空时按 executions 与需求库推算' },
+    { label: '孤立模块数', value: s2.orphan_modules != null ? s2.orphan_modules : '-', tip: '取值来源: ai_health_metrics step=2·coverage·orphan_modules\n含义: 未被任何用例覆盖到的模块数量' },
+    { label: '未覆盖章节', value: s2.uncovered_sections != null ? s2.uncovered_sections : '-', tip: '取值来源: ai_health_metrics step=2·coverage·uncovered_sections\n含义: 需求文档中尚未生成用例的章节数量' },
+  ];
+  let html = '<div class="ah-metric-list">';
+  items.forEach(it => { html += ahMetric(it.label, it.value, it.tip); });
+  html += '</div>';
+  els.step2Content.innerHTML = html;
+}
+
+// ════════════ 趋势图渲染 ════════════
+
+function renderTrend(d) {
+  const dates = d.dates || [];
+  const series = d.series || {};
+  // ★ v6.1(2026-08-12) 修复: 后端 series 字段是 {label, data, unit} 对象，不是数组
+  // 优先使用 overall_score，否则用 intent_dominance_score
+  let _raw = series.overall_score || series.intent_dominance_score || {};
+  let values = Array.isArray(_raw) ? _raw : (_raw.data || []);
+  if (dates.length === 0 || values.length === 0) {
+    els.sparklineContainer.innerHTML = '<div class="ah-empty-state">暂无趋势数据</div>';
+    els.trendMeta.textContent = '-';
+    return;
+  }
+
+  // 取最近 7 次
+  const recentDates = dates.slice(-7);
+  const recentValues = values.slice(-7);
+
+  // ★ v7(2026-09-21) 根因重写：原 800x100 无轴 sparkline 在评分平稳时退化为
+  //   一条贴边水平线（max/min 强夹 100/0，v=100 时 y 顶到绘图区上缘）。
+  //   现改为规范二维柱状图：Y 轴 0-100 固定域 + 网格刻度，X 轴运行日期；
+  //   柱体在槽位内居中且与轴留白，任何取值都不落在坐标轴/边缘上。
+  const W = 800, H = 260;
+  const PAD_L = 46, PAD_R = 18, PAD_T = 22, PAD_B = 30; // 左留白容纳Y刻度，下留白容纳X标签
+  const plotW = W - PAD_L - PAD_R;
+  const plotH = H - PAD_T - PAD_B;
+
+  const yOf = (v) => PAD_T + (1 - Math.min(Math.max(v, 0), 100) / 100) * plotH;
+
+  let svg = '<svg class="ah-sparkline-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">';
+  // Y 轴网格线 + 刻度（0/25/50/75/100）
+  [0, 25, 50, 75, 100].forEach(function(t) {
+    const y = yOf(t);
+    svg += '<line class="ah-trend-grid" x1="' + PAD_L + '" y1="' + y.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + y.toFixed(1) + '"/>';
+    svg += '<text class="ah-sparkline-label" x="' + (PAD_L - 8) + '" y="' + (y + 3.5).toFixed(1) + '" text-anchor="end">' + t + '</text>';
+  });
+  // 轴线（左 Y / 下 X）
+  svg += '<line class="ah-trend-axis" x1="' + PAD_L + '" y1="' + PAD_T + '" x2="' + PAD_L + '" y2="' + (PAD_T + plotH).toFixed(1) + '"/>';
+  svg += '<line class="ah-trend-axis" x1="' + PAD_L + '" y1="' + (PAD_T + plotH).toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + (PAD_T + plotH).toFixed(1) + '"/>';
+
+  // 柱体：槽位居中，与相邻柱/轴留白（barW ≤ 槽位55%，首末柱不贴边）
+  const n = recentValues.length;
+  const slot = plotW / n;
+  const barW = Math.min(slot * 0.55, 56);
+  recentValues.forEach(function(v, i) {
+    const cx = PAD_L + i * slot + slot / 2;
+    const x = cx - barW / 2;
+    const yBottom = PAD_T + plotH;
+    const yTop = yOf(v);
+    const inRange = v >= 0 && v <= 100;
+    svg += '<rect class="ah-trend-bar' + (i === n - 1 ? ' ah-trend-bar--last' : '') +
+           (inRange ? '' : ' ah-trend-bar--out') +
+           '" x="' + x.toFixed(1) + '" y="' + yTop.toFixed(1) +
+           '" width="' + barW.toFixed(1) + '" height="' + Math.max(yBottom - yTop, 1).toFixed(1) + '" rx="3"/>';
+    // 数值标签（柱顶上方，不越上缘）
+    const vLabel = (typeof v === 'number' ? v.toFixed(1) : v);
+    svg += '<text class="ah-sparkline-label ah-trend-val" x="' + cx.toFixed(1) + '" y="' + Math.max(yTop - 6, PAD_T + 9).toFixed(1) + '" text-anchor="middle">' + vLabel + '</text>';
+    // X 轴标签（日期，取末 5 位如 MM-DD）
+    const label = recentDates[i] || ('#' + (i + 1));
+    svg += '<text class="ah-sparkline-label" x="' + cx.toFixed(1) + '" y="' + (PAD_T + plotH + 18).toFixed(1) + '" text-anchor="middle">' + escHtml(String(label).slice(-5)) + '</text>';
+  });
+  svg += '</svg>';
+  els.sparklineContainer.innerHTML = svg;
+
+  const last = recentValues[recentValues.length - 1];
+  const lastDate = recentDates[recentDates.length - 1] || '-';
+  els.trendMeta.textContent = '最近运行: ' + lastDate + ' | 评分: ' + (typeof last === 'number' ? last.toFixed(1) : last);
+}
+
+// ════════════ Tab 切换 ════════════
+
+function bindTabs() {
+  els.tabNav.querySelectorAll('.ah-tab-item').forEach(tab => {
+    tab.addEventListener('click', function() {
+      els.tabNav.querySelectorAll('.ah-tab-item').forEach(t => t.classList.remove('active'));
+      if (els.tabBody) els.tabBody.querySelectorAll('.ah-tab-panel').forEach(p => p.classList.remove('active'));
+      this.classList.add('active');
+      const target = document.getElementById(this.dataset.tab);
+      if (target) target.classList.add('active');
+    });
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════
+// T03 / P1-6③：健康明细下钻
+// ════════════════════════════════════════════════════════════════════
+//
+// 三条下钻入口：
+//   ① 顶栏「健康明细」  → GET /api/health/detailed        （外部依赖实时探活）
+//   ② 顶栏「运行快照」  → GET /api/diagnostics/health/runs（历史 run 列表）
+//                        → GET /api/diagnostics/health?run_id=xxx（该 run 的 Step 指标）
+//   ③ 点击任意 KPI 卡片 → 展开该 KPI 在 /api/health/summary 中的原始字段，
+//                        并追加 /api/health/metrics 的同源指标做交叉印证。
+//
+// 返回格式差异（必须分开判定，不能混用）：
+//   health_bp        → {ok:true, ...} / {ok:false,error}
+//   diagnostics_bp   → {success:true, data:{...}} / {success:false,error}
+
+// step 字段用于在 /api/health/latest-run 的原始指标行里过滤出该 KPI 的来源行；
+// null 表示不过滤（综合评分本就是跨 Step 加权，要看全量）。
+const AH_KPI_MAP = {
+  kpiScore:         { key: 'score',    title: '综合评分',   step: null, fields: ['overall_score', 'score', 'score_trend'] },
+  kpiHallucination: { key: 'halluc',   title: '可疑幻觉',   step: '3',  sub: ['step_3', 'step3'] },
+  kpiGuard:         { key: 'guard',    title: '守卫拦截',   step: '4',  sub: ['step_4_action', 'step4_action'] },
+  kpiVerifyRate:    { key: 'verify',   title: '校验达成率', step: '4',  sub: ['step_4_verify', 'step4_verify'] },
+  kpiCoverage:      { key: 'coverage', title: '需求覆盖率', step: '2',  sub: ['step_2', 'step2'] },
+  kpiFlaky:         { key: 'flaky',    title: 'Flaky 率',   step: null, sub: ['flaky'] },
+  kpiCache:         { key: 'cache',    title: '缓存命中率', step: '4',  sub: ['step_4_cache', 'step4_cache', 'cache'] },
+};
+
+const AH_CHECK_LABELS = {
+  ai_api_deepseek: 'DeepSeek AI 接口',
+  ai_api_openai: 'OpenAI 接口',
+  ai_api_anthropic: 'Anthropic 接口',
+  confluence: 'Confluence 需求源',
+  figma: 'Figma 设计源',
+  yapi: 'YApi 接口源',
+  mysql: 'MySQL 数据库',
+  disk: '磁盘空间',
+  memory: '内存占用',
+};
+
+function ahEmpty(msg, sub) {
+  let h = '<div class="drilldown-empty">' + escHtml(msg || '暂无数据');
+  if (sub) h += '<div class="ah-kpi-sub">' + escHtml(sub) + '</div>';
+  return h + '</div>';
+}
+
+function ahCloseDrawer() {
+  const d = $('ahDrawer'), b = $('ahDrawerBackdrop');
+  if (d) d.classList.remove('open');
+  if (b) b.classList.remove('open');
+}
+
+/**
+ * 打开下钻抽屉。
+ * @param {string} title 标题（用 textContent 写入，天然免转义）
+ * @param {function(HTMLElement):void} filler 拿到 body 后自行渲染
+ */
+function ahOpenDrawer(title, filler) {
+  const d = $('ahDrawer'), b = $('ahDrawerBackdrop');
+  const t = $('ahDrawerTitle'), body = $('ahDrawerBody');
+  if (!d || !body) return;
+  if (t) t.textContent = String(title == null ? '' : title);
+  if (A.skeleton) { A.skeleton(body, 'list'); } else { body.innerHTML = ahEmpty('加载中...'); }
+  d.classList.add('open');
+  if (b) b.classList.add('open');
+  if (typeof filler === 'function') filler(body);
+}
+
+/** ① 外部依赖实时探活明细。 */
+function showHealthDetail() {
+  ahOpenDrawer('系统依赖健康明细', async (body) => {
+    const d = await api('GET', '/api/health/detailed');
+    if (!d || d.ok === false) {
+      body.innerHTML = ahEmpty('健康明细加载失败', (d && d.error) || '接口无响应');
+      return;
+    }
+    const checks = Array.isArray(d.checks) ? d.checks : [];
+    const overallCls = d.overall === 'healthy' ? 'ah-dd-up' : 'ah-dd-down';
+    let h = '<table class="drilldown-table"><tbody>' +
+      '<tr><th class="ah-th-narrow">总体状态</th><td class="' + overallCls + '">' +
+      escHtml(String(d.overall || '-')) + '</td></tr>' +
+      '<tr><th>探活通过</th><td>' + escHtml(String(d.up_count != null ? d.up_count : 0)) +
+      ' / ' + escHtml(String(d.total != null ? d.total : 0)) + '</td></tr>';
+    if (d.embedding) {
+      const emb = d.embedding;
+      h += '<tr><th>RAG 语义引擎</th><td>' +
+        escHtml(String(emb.status || emb.model || JSON.stringify(emb))) + '</td></tr>';
+    }
+    h += '</tbody></table>';
+
+    if (!checks.length) {
+      h += ahEmpty('暂无探活结果', '健康检查器可能尚未执行');
+    } else {
+      h += '<div class="drilldown-title ah-sec-title">依赖逐项明细</div>' +
+        '<table class="drilldown-table"><thead><tr><th>依赖</th><th>状态</th>' +
+        '<th>耗时</th><th>错误信息</th></tr></thead><tbody>';
+      checks.forEach((c) => {
+        const up = c && c.status === 'up';
+        const nm = (c && c.name) || '';
+        h += '<tr><td>' + escHtml(AH_CHECK_LABELS[nm] || nm || '-') + '</td>' +
+          '<td class="' + (up ? 'ah-dd-up' : 'ah-dd-down') + '">' + escHtml(up ? '正常' : '异常') + '</td>' +
+          '<td>' + escHtml(String((c && c.latency_ms) != null ? c.latency_ms : 0)) + ' ms</td>' +
+          '<td class="dd-reason">' + escHtml((c && c.error_msg) || '—') + '</td></tr>';
+      });
+      h += '</tbody></table>';
+    }
+    body.innerHTML = h;
+  });
+}
+
+/** ② 历史运行列表 → 选择 run 查看 Step 指标快照。 */
+function showHealthRuns() {
+  ahOpenDrawer('历史运行健康快照', async (body) => {
+    const d = await api('GET', '/api/diagnostics/health/runs?limit=20');
+    // diagnostics_bp 用 {success, data} 约定
+    if (!d || d.success === false) {
+      body.innerHTML = ahEmpty('运行列表加载失败', (d && d.error) || '接口无响应');
+      return;
+    }
+    const runs = Array.isArray(d.data) ? d.data : [];
+    if (!runs.length) {
+      body.innerHTML = ahEmpty('暂无运行记录', '执行一次流水线后即可看到健康快照');
+      return;
+    }
+    let h = '<table class="drilldown-table"><thead><tr><th>运行 ID</th><th>最近时间</th>' +
+      '<th>操作</th></tr></thead><tbody>';
+    runs.forEach((r) => {
+      const rid = (r && r.run_id) || '';
+      h += '<tr><td>' + escHtml(rid || '-') + '</td>' +
+        '<td>' + escHtml((r && r.latest) || '-') + '</td>' +
+        '<td>' + (rid
+          ? '<button type="button" class="btn btn-sm ah-dd-run-btn ah-run-btn" data-run="' +
+            escAttr(rid) + '">查看快照</button>'
+          : '—') + '</td></tr>';
+    });
+    h += '</tbody></table>';
+    body.innerHTML = h;
+  });
+}
+
+/** ②-b 指定 run 的各 Step 健康指标。 */
+function showRunSnapshot(runId) {
+  ahOpenDrawer('运行快照 · ' + runId, async (body) => {
+    const d = await api('GET', '/api/diagnostics/health?run_id=' + encodeURIComponent(runId));
+    if (!d || d.success === false) {
+      body.innerHTML = ahEmpty('快照加载失败', (d && d.error) || '接口无响应');
+      return;
+    }
+    const steps = (d.data && d.data.steps) || {};
+    const names = Object.keys(steps);
+    if (!names.length) {
+      body.innerHTML = ahEmpty('该运行无健康指标', 'ai_health_metrics 表中没有此 run_id 的 step_* 记录');
+      return;
+    }
+    let h = '';
+    names.sort().forEach((s) => {
+      const blk = steps[s] || {};
+      const metrics = blk.metrics || {};
+      const keys = Object.keys(metrics);
+      h += '<div class="ah-mb4">' +
+        '<div class="drilldown-title ah-mb6">' + escHtml(s) +
+        '<span class="ah-title-accent">' +
+        escHtml(String(blk.updated_at || '')) + '</span></div>';
+      if (!keys.length) {
+        h += ahEmpty('该 Step 无指标');
+      } else {
+        h += '<table class="drilldown-table"><tbody>';
+        keys.sort().forEach((k) => {
+          let v = metrics[k];
+          if (v && typeof v === 'object') v = JSON.stringify(v);
+          h += '<tr><th class="ah-th-wide">' + escHtml(k) + '</th><td>' +
+            escHtml(v == null ? '—' : String(v)) + '</td></tr>';
+        });
+        h += '</tbody></table>';
+      }
+      h += '</div>';
+    });
+    body.innerHTML = h;
+  });
+}
+
+/** ③ 单个 KPI 的原始字段下钻。 */
+function showKpiDetail(valueElId) {
+  const meta = AH_KPI_MAP[valueElId];
+  if (!meta) return;
+  ahOpenDrawer(meta.title + ' · 明细', async (body) => {
+    const summary = state.summary;
+    if (!summary) {
+      body.innerHTML = ahEmpty('摘要数据尚未加载', '请先点击「刷新数据」');
+      return;
+    }
+    // 定位该 KPI 对应的原始子对象（兼容 step_3 / step3 两种命名）
+    let obj = null;
+    if (meta.sub) {
+      for (let i = 0; i < meta.sub.length; i += 1) {
+        if (summary[meta.sub[i]] && typeof summary[meta.sub[i]] === 'object') {
+          obj = summary[meta.sub[i]];
+          break;
+        }
+      }
+    } else if (meta.fields) {
+      obj = {};
+      meta.fields.forEach((f) => { if (summary[f] !== undefined) obj[f] = summary[f]; });
+      if (!Object.keys(obj).length) obj = null;
+    }
+
+    let h = '';
+    if (!obj) {
+      h += ahEmpty('该指标暂无明细字段', '后端 /api/health/summary 未返回对应子对象');
+    } else {
+      h += '<div class="drilldown-title ah-mb6">原始指标字段</div>' +
+        '<table class="drilldown-table"><tbody>';
+      Object.keys(obj).sort().forEach((k) => {
+        let v = obj[k];
+        if (v && typeof v === 'object') v = JSON.stringify(v);
+        h += '<tr><th class="ah-th-wide">' + escHtml(k) + '</th><td>' +
+          escHtml(v == null ? '—' : String(v)) + '</td></tr>';
+      });
+      h += '</tbody></table>';
+    }
+
+    // 交叉印证：/api/health/latest-run 的**落库原始指标行**
+    // ⚠️ 不能用 /api/health/metrics —— 那个端点返回 Prometheus text/plain，
+    //    A.api 会走 r.json() 解析失败，永远显示「不可用」。
+    const lr = await api('GET', '/api/health/latest-run');
+    h += '<div class="drilldown-title ah-sec-title">' +
+      '落库原始指标（ai_health_metrics）</div>';
+    if (!lr || lr.ok === false) {
+      h += ahEmpty('原始指标不可用', (lr && lr.error) || '接口无响应');
+    } else if (!lr.has_data) {
+      h += ahEmpty('尚无运行记录', '执行一次流水线后即可看到落库指标');
+    } else {
+      const all = Array.isArray(lr.items) ? lr.items : [];
+      const rows = meta.step
+        ? all.filter((it) => String(it && it.step) === meta.step)
+        : all;
+      if (!rows.length) {
+        h += ahEmpty('本次运行没有该 Step 的指标行',
+          '最近运行 run_id=' + String(lr.run_id || '-'));
+      } else {
+        h += '<div class="ah-sub2">' +
+          'run_id=' + escHtml(String(lr.run_id || '-')) + '，共 ' +
+          escHtml(String(rows.length)) + ' 行</div>' +
+          '<table class="drilldown-table"><thead><tr><th>Step</th><th>指标</th>' +
+          '<th>分类</th><th>数值</th><th>置信</th></tr></thead><tbody>';
+        rows.slice(0, 80).forEach((it) => {
+          const val = (it.total != null && it.total !== 0)
+            ? (String(it.value) + ' / ' + String(it.total))
+            : String(it.value != null ? it.value : '—');
+          const conf = (it.confidence && it.confidence.text) || '—';
+          h += '<tr><td>' + escHtml(String(it.step != null ? it.step : '—')) + '</td>' +
+            '<td>' + escHtml(String(it.metric_name || it.metric_type || '—')) + '</td>' +
+            '<td>' + escHtml(String(it.category || '—')) + '</td>' +
+            '<td>' + escHtml(val) + '</td>' +
+            '<td>' + escHtml(String(conf)) + '</td></tr>';
+        });
+        h += '</tbody></table>';
+      }
+    }
+    body.innerHTML = h;
+  });
+}
+
+/** 把 KPI 卡片变成可下钻按钮（不改 HTML 结构，只加属性与监听）。 */
+function bindKpiDrilldown() {
+  Object.keys(AH_KPI_MAP).forEach((elId) => {
+    const valueEl = els[elId];
+    if (!valueEl || !valueEl.closest) return;
+    const card = valueEl.closest('.ah-kpi-item');
+    if (!card) return;
+    card.setAttribute('data-kpi', AH_KPI_MAP[elId].key);
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('role', 'button');
+    card.addEventListener('click', function() { showKpiDetail(elId); });
+    card.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); showKpiDetail(elId); }
+    });
+  });
+}
+
+function bindHealthDrilldown() {
+  const btnDetail = $('btnHealthDetail');
+  if (btnDetail) btnDetail.addEventListener('click', showHealthDetail);
+  const btnRuns = $('btnHealthRuns');
+  if (btnRuns) btnRuns.addEventListener('click', showHealthRuns);
+  const btnClose = $('ahDrawerClose');
+  if (btnClose) btnClose.addEventListener('click', ahCloseDrawer);
+  const backdrop = $('ahDrawerBackdrop');
+  if (backdrop) backdrop.addEventListener('click', ahCloseDrawer);
+  // 抽屉内动态生成的「查看快照」按钮 —— 事件委托
+  const body = $('ahDrawerBody');
+  if (body) {
+    body.addEventListener('click', function(ev) {
+      const btn = ev.target && ev.target.closest ? ev.target.closest('.ah-run-btn') : null;
+      if (btn) showRunSnapshot(btn.getAttribute('data-run') || '');
+    });
+  }
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape') ahCloseDrawer();
+  });
+  bindKpiDrilldown();
+}
+
+function bindEvents() {
+  els.btnRefresh.addEventListener('click', loadAll);
+  bindTabs();
+  bindHealthDrilldown();
+}
+
+// ★ AI 健康度 KPI 摘要行网格：每行列数读取个性化配置 kpi_columns
+// （复用 dashboard/metrics.html 对 /api/bg-config 的读取方式，通过 CSS 变量控制列数）
+function applyKpiColumns(cols) {
+  var row = document.getElementById('kpiRow');
+  if (row) row.style.setProperty('--ah-kpi-cols', String(cols || 6));
+}
+function loadKpiColumnsConfig() {
+  A.api('GET', '/api/bg-config').then(function(r) {
+    if (r && r.ok && r.kpi_columns) applyKpiColumns(r.kpi_columns);
+  });
+}
+
+A._onAuthOk = function() {
+  if (A._renderSidebarUser) A._renderSidebarUser();
+  if (A.applyPermissions) A.applyPermissions();
+  loadAll();
+  A._startStepBadgePolling();
+};
+
+bindEvents();
+// ★ 应用个性化 KPI 每行数量到卡片网格
+loadKpiColumnsConfig();
+
+if (A._currentUser) {
+  loadAll();
+}
+
+})();
+</script>
+{% endblock %}

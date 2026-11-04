@@ -1,0 +1,195 @@
+{% extends "_layout_base.html" %}
+{% block title %}算法规则清单 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+算法规则清单
+{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ════════════ 算法规则清单（Skill 库） ════════════ */
+.pc-rules-header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.pc-rules-hint {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  font-weight: normal;
+}
+/* ★ 铺满内容区（2026-10-28）：content-body 是 flex column（app-design.css .content-body），
+   页面根节点与网格各占 flex:1，卡片高度随视口拉伸、规则列表在卡内滚动，
+   消除卡片下方成片留白，同时让每条规则有更多可见高度。 */
+.pc-rules-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.pc-rules-grid {
+  /* ★ 自适应铺满（2026-10-28）：卡片数少（如 5 个）时，CSS 多列/等宽网格会在
+       末行留出成片空格子（实测 1440px：3 列 2/2/1，右下整块空白，填充率 0.809）。
+       改为 flex 行内等分：每行按 min 300px 自动决定列数，行内剩余宽度由卡片拉伸补齐，
+       最后一行也不会留下空隙；窄屏自动降到 2 列，宽屏（≥1560）可一行 5 列。
+     flex:1 0 auto —— grow 保证大屏纵向填满（消除卡片下方留白），
+     shrink:0 + basis:auto 保证窄屏多行时网格不被压扁成小窗，改为整页滚动。 */
+  flex: 1 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  align-content: stretch;
+  gap: var(--space-3);
+}
+.pc-rules-card {
+  flex: 1 1 300px;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  background: var(--bg-elevated);
+  /* ★ 纵向铺满的关键（2026-10-28）：contain:size 让卡片的固有尺寸视为 0，
+     内容（Step4 有 4575px 的规则列表）不再参与 flex 行高计算 →
+     行高由 .pc-rules-grid 的 align-content:stretch 按行等分视口剩余高度。
+     若不隔离，align-content 只会「补足」空余、不会「压缩」超高内容，
+     整行卡片会被内容撑到 4000+px（实测 1440：卡高 4624px）。
+     卡片高度确定后，内部 .pc-rule-list 用 flex:1 撑满并在卡内滚动。 */
+  contain: size;
+  overflow: hidden;
+}
+/* 规则承载层：在卡片内纵向撑满，列表超出则卡内滚动（不撑破行高） */
+.pc-rules-card > div[id^="pcRulesStep"] {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.pc-rules-title {
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pc-rules-count {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  font-weight: normal;
+}
+.pc-rule-list {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  /* ★ 纵向铺满（2026-10-28）：原 max-height:360px 把规则列表钉成固定小窗
+     （Step4 内容 4575px 只露出约 8 条），卡片下方留大片空白。
+     关键：flex-basis 必须为 0（1 1 0），列表的内容高度才不会撑高所在 flex 行
+     —— 否则 align-content:stretch 只"补足"不会"压缩"，Step4 的 4575px 会把整行
+     连卡片一起撑到 4000+px。basis=0 后行高由容器等分决定，列表在卡内滚动。 */
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+}
+.pc-rule-list li { margin-bottom: 6px; }
+.pc-rule-name { font-weight: var(--fw-medium); color: var(--text-primary); }
+.pc-rule-desc { margin-left: 8px; color: var(--text-tertiary); font-size: var(--fs-micro); }
+.pc-rules-actions { margin-top: var(--space-3); }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnReloadRules" type="button" data-tooltip="重新加载全部规则清单" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  刷新
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="pc-rules-page">
+  <div class="pc-rules-header">
+    <span>算法规则清单</span>
+    <span class="pc-rules-hint">Step1 文档采集与RAG索引 / Step2 需求拆解 / Step3 用例生成 / Step4 检查执行 / Step5 报告生成 · 规则元信息（只读，自动发现 + 注册表式）</span>
+  </div>
+
+  <div class="pc-rules-grid">
+    <div class="pc-rules-card">
+      <div class="pc-rules-title">Step1 文档采集与RAG规则<span class="pc-rules-count" id="cntStep1"></span></div>
+      <div id="pcRulesStep1"><div class="pc-empty">加载中...</div></div>
+    </div>
+    <div class="pc-rules-card">
+      <div class="pc-rules-title">Step2 需求拆解规则<span class="pc-rules-count" id="cntStep2"></span></div>
+      <div id="pcRulesStep2"><div class="pc-empty">加载中...</div></div>
+    </div>
+    <div class="pc-rules-card">
+      <div class="pc-rules-title">Step3 用例生成规则<span class="pc-rules-count" id="cntStep3"></span></div>
+      <div id="pcRulesStep3"><div class="pc-empty">加载中...</div></div>
+    </div>
+    <div class="pc-rules-card">
+      <div class="pc-rules-title">Step4 检查执行规则<span class="pc-rules-count" id="cntStep4"></span></div>
+      <div id="pcRulesStep4"><div class="pc-empty">加载中...</div></div>
+    </div>
+    <div class="pc-rules-card">
+      <div class="pc-rules-title">Step5 报告生成规则<span class="pc-rules-count" id="cntStep5"></span></div>
+      <div id="pcRulesStep5"><div class="pc-empty">加载中...</div></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  var A = window._A || {};
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function loadRuleList(endpoint, boxId, cntId) {
+    var box = $(boxId);
+    if (!box) return;
+    box.innerHTML = '<div class="pc-empty">加载中...</div>';
+    A.api('GET', endpoint).then(function(r) {
+      if (!r || !r.ok) {
+        box.innerHTML = '<div class="pc-empty">' + esc((r && r.error) || '加载失败') + '</div>';
+        return;
+      }
+      var rules = r.rules || [];
+      if (cntId) $(cntId).textContent = rules.length + ' 条';
+      if (rules.length === 0) { box.innerHTML = '<div class="pc-empty">暂无规则</div>'; return; }
+      box.innerHTML = '<ul class="pc-rule-list">' + rules.map(function(rule) {
+        var name = rule.name || rule.id || rule.rule_id || '';
+        var desc = rule.description || rule.desc || '';
+        return '<li><span class="pc-rule-name">' + esc(name) + '</span>' +
+          (desc ? '<span class="pc-rule-desc">' + esc(desc) + '</span>' : '') + '</li>';
+      }).join('') + '</ul>';
+    });
+  }
+
+  function loadAll() {
+    loadRuleList('/api/step1-rag-rules', 'pcRulesStep1', 'cntStep1');
+    loadRuleList('/api/step2-breakdown-rules', 'pcRulesStep2', 'cntStep2');
+    loadRuleList('/api/case-generation-rules', 'pcRulesStep3', 'cntStep3');
+    loadRuleList('/api/step4-verification-rules', 'pcRulesStep4', 'cntStep4');
+    loadRuleList('/api/step5-report-rules', 'pcRulesStep5', 'cntStep5');
+  }
+
+  var btn = $('btnReloadRules');
+  if (btn) btn.addEventListener('click', loadAll);
+  // 登录就绪或已有用户即加载
+  var doLoad = function() { loadAll(); };
+  if (A._currentUser) { doLoad(); }
+  else { document.addEventListener('app:auth-ok', doLoad); A._onAuthOk = doLoad; }
+})();
+</script>
+{% endblock %}

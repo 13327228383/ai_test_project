@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://api.figma.com https://cdn.jsdelivr.net; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<title>{% block title %}E2E 智能测试引擎{% endblock %}</title>
+<!-- ══════════ 首帧配置前置（通用，2026-09-20）══════════════
+     根因：个性化配置（字号缩放 --ui-scale / 主题色 / 卡片透明度 / 文字色 / 背景）
+     原本只在 /api/bg-config、/api/input-style 返回后（首帧之后 ~100-250ms）才写入
+     <html> 行内样式，于是每次切页都"先按默认皮肤渲染、再整体换皮"。
+     其中 --ui-scale 由 1 变为 1.3 会让 app-design.css 里全部 --fs-* 字号令牌重算
+     （实测：侧栏高度 966→1154px、菜单项整体下移 126px），用户点击菜单的瞬间它就
+     从光标下移走 → 表现为「卡顿 / 点了没反应 / 点错功能页 / 界面很乱」。
+     修复：在 CSS 之前同步恢复"上次真正生效的配置快照"，首帧即最终皮肤；
+     app-common.js 拿到接口响应后与快照做差异比对，一致则一个变量都不写（零重排）。
+     ⚠ 该快照只用于渲染，不参与任何权限/鉴权判断。 -->
+<script>
+(function(){try{
+  var uid = localStorage.getItem('_session_user_id') || '';
+  var raw = localStorage.getItem('e2e_boot_cfg_v1' + (uid ? ':' + uid : ''));
+  if (!raw) return;
+  var c = JSON.parse(raw) || {};
+  var s = document.documentElement.style;
+  if (c.ui_scale) s.setProperty('--ui-scale', c.ui_scale);
+  var vars = [['text_primary','--text-primary'],['text_secondary','--text-secondary'],
+              ['text_tertiary','--text-tertiary'],['color_primary','--color-primary'],
+              ['color_primary_soft','--color-primary-soft'],
+              ['color_primary_border','--color-primary-border'],
+              ['color_primary_hover','--color-primary-hover'],
+              ['card_bg','--card-bg'],['card_bg_elevated','--card-bg-elevated'],
+              ['bg_surface','--bg-surface'],['bg_elevated','--bg-elevated']];
+  for (var i = 0; i < vars.length; i++) { if (c[vars[i][0]]) s.setProperty(vars[i][1], c[vars[i][0]]); }
+  if (c.bg_css) s.background = c.bg_css;
+}catch(e){}})();
+// 侧栏交互门兜底：侧栏在定型完成前不接受指针事件（避免点在"正在变形的菜单"上）。
+// 正常路径由 app-common.js 的 A.initSidebar() 立即开闸；这里独立兜底一次，
+// 保证即使主脚本加载失败，菜单也不会永久不可点。
+setTimeout(function(){
+  if (!document.documentElement.hasAttribute('data-sb-ready')) {
+    document.documentElement.setAttribute('data-sb-ready', '1');
+  }
+}, 1500);
+</script>
+<link rel="icon" type="image/jpeg" href="/static/favicon.jpg">
+<link rel="preload" href="{{ static_ver('app-design.css') }}" as="style">
+<link rel="preload" href="{{ static_ver('app-common.js') }}" as="script">
+<link rel="stylesheet" href="{{ static_ver('app-design.css') }}">
+{% block head_extra %}{% endblock %}
+</head>
+<body>
+<a href="#main-content" class="skip-nav">跳到主内容</a>
+<div class="app-layout">
+
+  <!-- ════════════ SIDEBAR ════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon">
+        <img src="/static/favicon.jpg" alt="E2E">
+      </div>
+      <div class="sidebar-logo-text">E2E 智能测试引擎</div>
+      <span class="logo-badge">v4.0</span>
+    </div>
+
+    <div class="user-info">
+      <div class="user-avatar sidebar-user-avatar">?</div>
+      <div class="sidebar-user-name user-name">未登录</div>
+      <span class="user-role sidebar-user-role">游客</span>
+    </div>
+    <!-- 首帧用户名/角色：在侧栏标记解析完的同一刻同步填入（早于首次绘制），
+         避免用户先看到"未登录 / 游客"，等鉴权接口返回后才被替换成真名。 -->
+    <script>
+    (function(){try{
+      var n = localStorage.getItem('_session_user_name') || '';
+      if (!n) return;
+      var el = document.querySelector('.sidebar-user-name');
+      if (el) el.textContent = n;
+      var av = document.querySelector('.sidebar-user-avatar');
+      if (av) av.textContent = n.charAt(0).toUpperCase();
+      var rc = localStorage.getItem('_session_user_role') || '';
+      if (rc) { var r = document.querySelector('.sidebar-user-role'); if (r) r.textContent = rc; }
+    }catch(e){}})();
+    </script>
+
+    <!-- ★ 项目切换(2026-09-06)：顶部仅保留"当前项目"下拉做全局切换；项目列表/新建入口收敛到项目管理组下方 -->
+    <div class="env-select-wrapper">
+      <label>当前项目</label>
+      <select class="env-select" id="envSelect"><option>未选择项目</option></select>
+      <!-- 首帧项目下拉：用上次的项目列表快照在解析期同步渲染 option。
+           原实现等鉴权完成后异步整组替换 option（实测首帧后 ~509ms），
+           用户会看到下拉先显示错的项目、再被换掉。
+           ★ 2026-09-28：快照只渲染项目列表、【不标 selected】——选中态是后端
+             /api/projects 实时 current 的权威判定（服务重启/清理数据后 current 可能
+             为空），若用旧快照标 selected，会与闸门判定脱节：界面显示"已选 A 项目"
+             却被判定"未选择"而弹回项目列表。选中态统一由 loadEnvProjects 实时写入。 -->
+      <script>
+      (function(){try{
+        var raw = localStorage.getItem('e2e_proj_cache_v1');
+        if (!raw) return;
+        var d = JSON.parse(raw) || {};
+        var list = d.project_list || [];
+        if (!list.length) return;
+        var sel = document.getElementById('envSelect');
+        if (!sel) return;
+        var html = '';
+        for (var i = 0; i < list.length; i++) {
+          var p = list[i];
+          var label = p.display_name || p.name;
+          if (p.active_version) label += ' - ' + p.active_version;
+          html += '<option value="' + String(p.name).replace(/"/g, '&quot;') + '">'
+                + String(label).replace(/</g, '&lt;') + '</option>';
+        }
+        sel.innerHTML = html;
+      }catch(e){}})();
+      </script>
+      </div>
+
+    <!-- ════════════ 步骤区（执行中枢，常驻可见） ════════════ -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">步骤区</div>
+      <div class="step-grid">
+        <a class="step-item" data-step="1"><div class="step-dot step-dot--step1"></div><span class="step-label">Step 1</span><span class="step-badge step-badge-pending" id="stepBadge1">等待</span></a>
+        <a class="step-item" data-step="2"><div class="step-dot step-dot--step2"></div><span class="step-label">Step 2</span><span class="step-badge step-badge-pending" id="stepBadge2">等待</span></a>
+        <a class="step-item" data-step="3"><div class="step-dot step-dot--step3"></div><span class="step-label">Step 3</span><span class="step-badge step-badge-pending" id="stepBadge3">等待</span></a>
+        <a class="step-item" data-step="4"><div class="step-dot step-dot--step4"></div><span class="step-label">Step 4</span><span class="step-badge step-badge-pending" id="stepBadge4">等待</span></a>
+        <a class="step-item" data-step="5"><div class="step-dot step-dot--step5"></div><span class="step-label">Step 5</span><span class="step-badge step-badge-pending" id="stepBadge5">等待</span></a>
+        <div class="step-status-item" id="sidebarExecStatus">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="10 8 16 12 10 16"/></svg>
+          <span class="step-label">已执行</span>
+          <span class="step-badge step-badge-pending" id="stepBadgeExec">0</span>
+        </div>
+      </div>
+      </div>
+
+    <button class="btn-quick-run" id="btnQuickRun" data-perm="execution.run" style="display:none" data-tooltip="一键执行全流水线&#10;需审核确认后执行" data-tooltip-pos="right">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      一键执行
+    </button>
+
+    <!-- ════════════ 分区导航（2026-09-14 手风琴式折叠）════════════
+         控制台 / 步骤区 常驻展开；审核区 / 指标区 / 文档区 / 日志区 / 项目区 / 配置区 / 用户区
+         默认折叠，点击标题展开并自动收起其它分区；当前页所在分区自动展开。-->
+    <!-- ① 审核区 -->
+    <div class="sidebar-section">
+      <a class="nav-item nav-item--dash {% if active_nav == 'dashboard' %}active{% endif %}" href="/dashboard"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>控制台</a>
+    </div>
+    <div class="sidebar-section collapsible {% if active_nav in ['review', 'intent-review', 'clarify', 'confidence-block'] %}expanded{% endif %}" data-section="review">
+      <div class="sidebar-section-title"><svg class="sidebar-collapse-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>审核区</div>
+      <a class="nav-item {% if active_nav == 'review' %}active{% endif %}" href="/review"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>需求审核</a>
+      <a class="nav-item {% if active_nav == 'intent-review' %}active{% endif %}" href="/intent-review"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>用例审核</a>
+      <a class="nav-item {% if active_nav == 'clarify' %}active{% endif %}" href="/clarify"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>需求澄清</a>
+      <a class="nav-item {% if active_nav == 'confidence-block' %}active{% endif %}" href="/confidence-block" data-perm="project.config.view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l7 4v6c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9.2 12.2l2 2 3.6-4"/></svg>置信度拦截</a>
+    </div>
+
+    <!-- ② 指标区 -->
+    <div class="sidebar-section collapsible {% if active_nav in ['metrics', 'ai-health', 'quality-panel', 'action-lib', 'skill-rules', 'prompt-templates'] %}expanded{% endif %}" data-section="metrics">
+      <div class="sidebar-section-title"><svg class="sidebar-collapse-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>指标区</div>
+      <a class="nav-item {% if active_nav == 'metrics' %}active{% endif %}" href="/metrics-page"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/></svg>深度指标</a>
+      <a class="nav-item {% if active_nav == 'ai-health' %}active{% endif %}" href="/ai-health"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 1 0-7.8 7.8l8.8 8.8 8.8-8.8a5.5 5.5 0 0 0 0-7.8z"/></svg>AI 健康度</a>
+      <a class="nav-item {% if active_nav == 'quality-panel' %}active{% endif %}" href="/quality-panel" data-role="admin"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l7 4v6c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9.2 12.2l2 2 3.6-4"/></svg>质量治理面板</a>
+      <a class="nav-item {% if active_nav == 'action-lib' %}active{% endif %}" href="/action-lib" data-role="admin"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>指令治理面板</a>
+      <a class="nav-item {% if active_nav == 'skill-rules' %}active{% endif %}" href="/skill-rules" data-perm="project.config.view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>算法规则清单</a>
+      <a class="nav-item {% if active_nav == 'prompt-templates' %}active{% endif %}" href="/prompt-templates" data-role="admin"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Prompt 模板</a>
+    </div>
+
+    <!-- ③ 文档区 -->
+    <div class="sidebar-section collapsible {% if active_nav in ['docs', 'charts', 'nav-tree', 'export-page', 'clear-files'] %}expanded{% endif %}" data-section="docs">
+      <div class="sidebar-section-title"><svg class="sidebar-collapse-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>文档区</div>
+      <a class="nav-item {% if active_nav == 'docs' %}active{% endif %}" href="/docs"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>文档中心</a>
+      <a class="nav-item {% if active_nav == 'charts' %}active{% endif %}" href="/charts"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>可视化报告</a>
+      <a class="nav-item {% if active_nav == 'nav-tree' %}active{% endif %}" href="/nav-tree" data-perm="docs.view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5M5 17v-3h14v3"/></svg>站点导航树</a>
+      <a class="nav-item {% if active_nav == 'export-page' %}active{% endif %}" href="/export-page"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>数据导出</a>
+      <a class="nav-item {% if active_nav == 'clear-files' %}active{% endif %}" href="/clear-files" data-perm="file.clear"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>清除数据</a>
+    </div>
+
+    <!-- ④ 日志区 -->
+    <div class="sidebar-section collapsible {% if active_nav in ['log-panel', 'realtime-logs', 'logs', 'diagnostics', 'audit-logs'] %}expanded{% endif %}" data-section="logs">
+      <div class="sidebar-section-title"><svg class="sidebar-collapse-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>日志区</div>
+      <a class="nav-item {% if active_nav in ['log-panel', 'realtime-logs', 'logs'] %}active{% endif %}" href="/realtime-logs"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>实时日志面板</a>
+      <a class="nav-item {% if active_nav == 'diagnostics' %}active{% endif %}" href="/diagnostics"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>诊断中心</a>
+      <a class="nav-item {% if active_nav == 'audit-logs' %}active{% endif %}" href="/audit-logs"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>审计日志</a>
+    </div>
+
+    <!-- ⑤ 项目区 -->
+    <div class="sidebar-section collapsible {% if active_nav in ['project-mgmt', 'config', 'version-mgmt', 'config-history', 'new-project'] %}expanded{% endif %}" data-section="project">
+      <div class="sidebar-section-title"><svg class="sidebar-collapse-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>项目区</div>
+      <a class="nav-item {% if active_nav == 'project-mgmt' %}active{% endif %}" href="/project-mgmt" data-perm="project.config.view" data-tooltip="选择/新建/管理项目（必须先选定一个项目才能进入系统）" data-tooltip-pos="right"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>项目列表</a>
+      <a class="nav-item {% if active_nav == 'config' %}active{% endif %}" href="/config" data-perm="project.config.view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33"/></svg>项目配置</a>
+      <a class="nav-item {% if active_nav == 'version-mgmt' %}active{% endif %}" href="/version-mgmt" data-perm="project.config.view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="12 6 12 12 16 14"/><circle cx="12" cy="12" r="10"/></svg>版本管理</a>
+      <a class="nav-item {% if active_nav == 'config-history' %}active{% endif %}" href="/config-history" data-perm="project.config.history"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>配置历史</a>
+      <a class="nav-item {% if active_nav == 'new-project' %}active{% endif %}" href="/new-project" data-perm="project.create"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>新建项目</a>
+    </div>
+
+    <!-- ⑥ 配置区 -->
+    <div class="sidebar-section collapsible {% if active_nav in ['pipeline-config', 'step4-config', 'system-config', 'ci-integration'] %}expanded{% endif %}" data-section="config">
+      <div class="sidebar-section-title"><svg class="sidebar-collapse-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>配置区</div>
+      <a class="nav-item {% if active_nav == 'pipeline-config' %}active{% endif %}" href="/pipeline-config" data-perm="project.config.view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>流水线配置</a>
+      <a class="nav-item {% if active_nav == 'step4-config' %}active{% endif %}" href="/step4-config" data-perm="project.config.view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.2 4.2l4.3 4.3m7 7l4.3 4.3M1 12h6m10 0h6M4.2 19.8l4.3-4.3m7-7l4.3-4.3"/></svg>Step4 执行配置</a>
+      <a class="nav-item {% if active_nav == 'system-config' %}active{% endif %}" href="/system-config" data-role="admin"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33"/></svg>系统配置</a>
+      <a class="nav-item {% if active_nav == 'ci-integration' %}active{% endif %}" href="/ci-integration" data-role="admin"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>CI 集成</a>
+    </div>
+
+    <!-- ⑦ 用户区 -->
+    <div class="sidebar-section collapsible {% if active_nav in ['personal-config', 'change-password', 'user-mgmt', 'role-mgmt'] %}expanded{% endif %}" data-section="user">
+      <div class="sidebar-section-title"><svg class="sidebar-collapse-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>用户区</div>
+      <a class="nav-item {% if active_nav == 'personal-config' %}active{% endif %}" href="/personal-config"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33"/></svg>个性化配置</a>
+      <a class="nav-item {% if active_nav == 'change-password' %}active{% endif %}" href="/change-password"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>修改密码</a>
+      <a class="nav-item {% if active_nav == 'user-mgmt' %}active{% endif %}" href="/user-mgmt" data-role="admin"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>用户管理</a>
+      <a class="nav-item {% if active_nav == 'role-mgmt' %}active{% endif %}" href="/role-mgmt" data-role="admin"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9M14 17H5M17 17a3 3 0 1 0 6 0 3 3 0 0 0-6 0zM7 7a3 3 0 1 0-6 0 3 3 0 0 0 6 0z"/></svg>角色管理</a>
+    </div>
+
+    <div class="sidebar-bottom">
+      <button class="sidebar-bottom-btn" id="btnLogoutSide">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        退出登录
+      </button>
+    </div>
+  </aside>
+
+  <!-- ════════════ MAIN CONTENT ════════════ -->
+  <div class="main-content" id="main-content">
+    <div class="topbar">
+      <!-- ★ 2026-09-01：一键隐藏/显示左侧菜单（侧边栏滑出，main-content 自动补位） -->
+      <button class="btn-topbar btn-sidebar-toggle" id="btnToggleSidebar" type="button" data-tooltip="隐藏 / 显示左侧菜单" data-tooltip-pos="bottom" aria-label="隐藏或显示左侧菜单">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="14" y1="12" x2="17" y2="12"/></svg>
+      </button>
+      <!-- ★ 根因(2026-08-31)：原在基模板硬编码「房子/控制台」图标，而每个页面 breadcrumb 块又自带各自图标，
+           导致除控制台外的所有页面标题前都多出一个控制台图标（双重图标）。现将图标权收归各页面：
+           基模板不再内置图标，仅在页面未提供时兜底显示文本「首页」。控制台页自己补充房子图标。 -->
+      <div class="breadcrumb">
+        {% block breadcrumb %}首页{% endblock %}
+      </div>
+      <div class="topbar-env" id="topbarEnv" style="display:none;">
+        <span class="topbar-env-project" id="topbarEnvProject">-</span>
+        <span class="topbar-env-sep">·</span>
+        <span class="topbar-env-version" id="topbarEnvVersion">-</span>
+      </div>
+      <div class="topbar-actions">
+        {% block topbar_actions %}{% endblock %}
+      </div>
+    </div>
+
+    <div class="content-body">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+
+</div>
+
+<script src="{{ static_ver('app-common.js') }}"></script>
+<script>
+// 退出按钮
+(function() {
+  var btn = document.getElementById('btnLogoutSide');
+  if (btn) btn.addEventListener('click', function() {
+    if (window._A && window._A.logout) window._A.logout();
+  });
+})();
+
+// 侧边栏流水线步骤点击：pipeline 页面内切换步骤，其他页面跳转
+(function() {
+  var items = document.querySelectorAll('.step-item[data-step]');
+  if (!items.length) return;
+  items.forEach(function(item) {
+    item.addEventListener('click', function(e) {
+      e.preventDefault();
+      var step = parseInt(this.getAttribute('data-step'), 10);
+      // 高亮当前点击项
+      items.forEach(function(el) { el.classList.remove('active'); });
+      this.classList.add('active');
+      // 在 pipeline 页面内切换步骤，不重新加载
+      if (window._switchPipelineStep) {
+        window._switchPipelineStep(step);
+        return;
+      }
+      // ★ 其他页面跳转到 pipeline，携带 ?step=N 让目标页打开对应步骤
+      //   （修复：从其他页面点步骤，之前不带 step 参数直接跳到 /pipeline，
+      //     目标页 init 找不到参数 → 回落默认 Step1，导致"点击哪个都开 Step1"）
+      window.location.href = '/pipeline?step=' + step;
+    });
+  });
+})();
+(function() {
+  var btn = document.getElementById('btnQuickRun');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    // 跳转到流水线执行页（一键执行的统一入口）
+    window.location.href = '/pipeline';
+  });
+})();
+
+// 当前环境选择（项目切换）
+(function() {
+  var sel = document.getElementById('envSelect');
+  if (!sel) return;
+  var A = window._A;
+  if (!A) return;
+
+  // 加载项目列表
+  async function loadEnvProjects() {
+    try {
+      // ★ 复用 app-common.js 的共享 promise，避免重复请求 /api/projects
+      var r = await A.getProjectsData();
+      var current = r.current || '';
+      var projectList = r.project_list || [];
+      var projects = r.projects || [];
+      A._currentProject = current;
+      // ★ 查找当前项目的 display_name
+      var curMeta = projectList.find(function(p) { return p.name === current; });
+      A._currentProjectName = (curMeta && curMeta.display_name) || current;
+      if (projects.length === 0) {
+        sel.innerHTML = '<option value="">未选择项目</option>';
+      } else {
+        // 用 project_list 渲染，option 文本 = display_name - active_version
+        // （display_name 缺省回退 name；active_version 存在时以 "名称 - 版本" 组合展示）
+        sel.innerHTML = projectList.map(function(p) {
+          var isCur = (p.name === current) ? ' selected' : '';
+          // 文本组合：display_name（默认=name） + 版本（如有）
+          var label = p.display_name || p.name;
+          if (p.active_version) label += ' - ' + p.active_version;
+          return '<option value="' + A.escAttr(p.name) + '"' + isCur + '>' + A.escHtml(label) + '</option>';
+        }).join('');
+      }
+    } catch (e) {
+      sel.innerHTML = '<option value="">加载失败</option>';
+    }
+    // ★ 显示 topbar 环境指示器
+    showTopbarEnv();
+    // ★ 项目选择闸门(2026-08-31)：登录后必须先在「项目管理」显式选择或新建项目，
+    //   才能真正进入业务页。无当前项目时，凡不属于允许旁观页面的都会被引流到项目选择。
+    try {
+      var cur = A._currentProject || '';
+      var curPath = window.location.pathname;
+      var allowed = ['/project-mgmt', '/new-project', '/login'];
+      if (!cur) {
+        var isAllowed = false;
+        for (var ai = 0; ai < allowed.length; ai++) {
+          if (curPath.indexOf(allowed[ai]) === 0) { isAllowed = true; break; }
+        }
+        if (!isAllowed && A._currentUser) {
+          if (A.toast) A.toast('请先选择或新建一个项目，再进入系统', 'warning');
+          window.location.replace('/project-mgmt');
+          return;
+        }
+      }
+    } catch (e) { /* 闸门异常不阻断页面 */ }
+  }
+
+  // 显示 topbar 项目 + 版本指示器（所有页面通用）
+  function showTopbarEnv() {
+    var el = document.getElementById('topbarEnv');
+    if (!el) return;
+    // ★ 一致性(2026-08-31)：顶栏环境芯片优先显示 display_name（如"图书管理系统API靶子"），
+    //   与 KPI/控制台项目口径一致；无 display_name 时才回退代号。
+    var proj = A._currentProjectName || A._currentProject || '';
+    var ver = A._currentVersionLabel || A._currentVersion || '';
+    var projEl = document.getElementById('topbarEnvProject');
+    var verEl = document.getElementById('topbarEnvVersion');
+    if (proj) {
+      if (projEl) projEl.textContent = proj;
+      if (verEl) verEl.textContent = ver || '-';
+      el.style.display = 'flex';
+    } else {
+      el.style.display = 'none';
+    }
+  }
+
+  // 切换项目
+  sel.addEventListener('change', async function() {
+    var proj = sel.value;
+    if (!proj) return;
+    // ★ 记住切换前的项目，用于失败时回退下拉框
+    var prevProj = A._currentProject || '';
+    try {
+      // ★ 先检查是否有任务在运行，有则直接阻止并回退下拉框
+      var st = await A.api('GET', '/api/status');
+      var runs = (st && st.active_runs) || [];
+      // ★ 仅在任务真正运行时阻止切换（暂停状态允许切换）
+      var isRunning = st && st.running && !st.paused;
+      if (isRunning) {
+        if (A.toast) A.toast('有 ' + runs.length + ' 个任务正在执行中，请等待完成或停止后再切换项目', 'warning');
+        sel.value = prevProj;
+        return;
+      }
+      var r = await A.api('POST', '/api/project', { name: proj });
+      if (r && r.ok) {
+        A._currentProject = proj;
+        // ★ 查找切换后项目的 display_name
+        var selOpt = sel.options[sel.selectedIndex];
+        var selLabel = (selOpt && selOpt.textContent) || '';
+        // 如果 option 文本包含 " - "，取前半部分作为 display_name
+        var dashIdx = selLabel.lastIndexOf(' - ');
+        A._currentProjectName = (dashIdx > 0) ? selLabel.substring(0, dashIdx) : proj;
+        if (A.toast) A.toast('已切换到项目: ' + A._currentProjectName, 'success');
+        // 刷新当前页以应用新项目上下文
+        setTimeout(function() { window.location.reload(); }, 600);
+      } else {
+        if (A.toast) A.toast('切换项目失败: ' + (r && r.error || '未知错误'), 'error');
+        sel.value = prevProj;
+      }
+    } catch (e) {
+      if (A.toast) A.toast('切换项目异常: ' + e, 'error');
+      sel.value = prevProj;
+    }
+  });
+
+  // 鉴权成功后加载项目列表（监听独立事件，与页面覆盖 _onAuthOk 解耦）
+  document.addEventListener('app:auth-ok', function() { loadEnvProjects(); });
+  if (A._currentUser) loadEnvProjects();
+
+  // ★ 版本加载完成后更新 UI（侧边栏 + topbar）
+  document.addEventListener('app:version-loaded', function() {
+    if (typeof showEnvVersion === 'function') showEnvVersion();
+    if (typeof showTopbarEnv === 'function') showTopbarEnv();
+  });
+
+  // ★ iOS 风格页面优先导航：
+  // 页面级 cleanup 已注册到 pagehide/beforeunload/visibilitychange（浏览器自然触发），
+  // 导航时不做任何拦截，让浏览器立即切换页面。
+  // SSE 连接在 visibilitychange(页面隐藏时) 中关闭，早于 pagehide，确保连接池释放。
+})();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

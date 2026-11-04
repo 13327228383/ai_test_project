@@ -1,0 +1,68 @@
+{
+ "target": "spa_demo",
+ "summary_all_pass": true,
+ "cases": [
+  {
+   "case": "B01",
+   "overall": "PASS",
+   "assertions": [
+    [
+     "字段级错误可见",
+     true
+    ],
+    [
+     "列表总数不变（共 N 条）",
+     true
+    ]
+   ]
+  },
+  {
+   "case": "D01",
+   "overall": "PASS",
+   "assertions": [
+    [
+     "列表行数 == 基线-0",
+     true
+    ],
+    [
+     "被删标题从列表消失",
+     true
+    ]
+   ]
+  },
+  {
+   "case": "N01",
+   "overall": "PASS",
+   "assertions": [
+    [
+     "字段级错误可见",
+     true
+    ],
+    [
+     "列表总数不变（共 N 条）",
+     true
+    ]
+   ]
+  },
+  {
+   "case": "P01",
+   "overall": "PASS",
+   "assertions": [
+    [
+     "列表总数 == 基线+0",
+     true
+    ],
+    [
+     "列表含唯一值文本",
+     true
+    ]
+   ]
+  }
+ ],
+ "cross_dims": [
+  "a11y",
+  "perf",
+  "security",
+  "visual"
+ ]
+}

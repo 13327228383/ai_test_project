@@ -1,0 +1,49 @@
+# E2E 智能测试引擎 — pre-commit 三道防线
+# 安装: pre-commit install
+# 手动全量: pre-commit run --all-files
+
+repos:
+  # ── 防线 1：禁止 except Exception: pass ──
+  - repo: local
+    hooks:
+      - id: forbid-except-pass
+        name: "🔴 禁止 except Exception: pass"
+        entry: python scripts/pre-commit/check_except_pass.py
+        language: system
+        files: \.py$
+        stages: [pre-commit]
+
+      # ── 防线 2：SQL 注入风险扫描 ──
+      - id: forbid-sql-injection
+        name: "🟠 SQL 注入风险"
+        entry: python scripts/pre-commit/check_sql_injection.py
+        language: system
+        files: \.py$
+        stages: [pre-commit]
+
+      # ── 防线 3：XSS (innerHTML) 检查 ──
+      - id: forbid-innerHTML
+        name: "🟡 innerHTML XSS 风险"
+        entry: python scripts/pre-commit/check_innerHTML.py
+        language: system
+        files: \.(js|html)$
+        stages: [pre-commit]
+
+      # ── 防线 4：bandit 安全扫描 ──
+      - id: bandit
+        name: "🛡️ bandit 安全扫描"
+        entry: bandit
+        args: ["-c", "pyproject.toml", "-ll", "-q"]
+        language: system
+        files: \.py$
+        stages: [pre-commit]
+        pass_filenames: true
+
+      # ── 防线 5：禁止重复造轮子（同一常量/词表被重复定义）──
+      - id: forbid-duplicate-definition
+        name: "🔁 禁止重复定义常量/词表"
+        entry: python -m pytest tests/test_core/test_duplicate_definition_gate.py -q
+        language: system
+        files: \.py$
+        stages: [pre-commit]
+        pass_filenames: false

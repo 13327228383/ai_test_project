@@ -1,0 +1,71 @@
+{% extends "_layout_base.html" %}
+{% block title %}需求澄清 — 交互式问答 · Step2 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+需求澄清 · Step2
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnRefreshClarify" data-perm="execution.run">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  刷新
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="cu-info-bar">
+  <div class="cu-info-item">
+    <span class="cu-info-label">闸门状态</span>
+    <span class="cu-info-value cu-info-primary" id="gateStatus">查询中…</span>
+  </div>
+  <div class="cu-info-item">
+    <span class="cu-info-label">高危歧义</span>
+    <span class="cu-info-value" id="blockingTotal">-</span>
+  </div>
+  <div class="cu-info-item">
+    <span class="cu-info-label">已解除</span>
+    <span class="cu-info-value" id="releasedTotal">-</span>
+  </div>
+</div>
+
+<div id="clarifyBanner" class="state-banner state-banner-warning" style="display:none;">
+  ⚠ 检测到高危歧义（用例生成已暂停）。请逐条回答澄清问题，回答后点击「解除闸门」即可继续生成。
+</div>
+
+<div class="cu-panel" id="sessionList">
+  <div class="cu-empty-state" id="sessionEmpty">暂无待澄清会话（未检出高危歧义，或全部已解除）</div>
+</div>
+
+{% endblock %}
+
+{% block head_extra %}
+<style>
+/* 状态胶囊 .clr-tag / .clr-tag-{high,open,released,answered} 已提升为
+   app-design.css 全局共享类（与 .state-tag-* 同一份定义），本页不再重复声明颜色。 */
+.clr-session {
+  background: var(--bg-surface); border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl); box-shadow: var(--surface-shadow-float);
+  margin-bottom: var(--space-4); overflow: hidden;
+}
+.clr-session-head {
+  display: flex; align-items: center; gap: var(--space-2); padding: var(--space-4) var(--space-5);
+  background: var(--bg-tint-soft); border-bottom: 1px solid var(--border-default); flex-wrap: wrap;
+}
+.clr-session-title { font-size: var(--fs-small); font-weight: var(--fw-semibold); color: var(--text-secondary); }
+.clr-body { padding: var(--space-4) var(--space-5); display: flex; flex-direction: column; gap: var(--space-3); }
+.clr-point { font-size: var(--fs-body); color: var(--text-primary); font-weight: var(--fw-medium); }
+.clr-evidence { font-size: var(--fs-small); color: var(--text-tertiary); background: var(--bg-elevated); border-left: 3px solid var(--border-default); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); font-style: italic; }
+.clr-question { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-elevated); }
+.clr-question-text { font-size: var(--fs-small); color: var(--text-secondary); font-weight: var(--fw-medium); }
+.clr-question-input { width: 100%; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); border: 1px solid var(--border-default); background: var(--bg-surface); color: var(--text-primary); font-size: var(--fs-small); }
+.clr-question-input:focus { outline: none; border-color: var(--color-primary); }
+.clr-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+.clr-answer-ok { display: flex; flex-wrap: wrap; gap: var(--space-2); font-size: var(--fs-small); color: var(--state-success); }
+.clr-answer-ok .clr-backfill { font-family: var(--font-mono); color: var(--text-secondary); }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ static_ver('clarify.js') }}"></script>
+{% endblock %}

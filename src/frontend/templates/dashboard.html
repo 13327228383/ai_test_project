@@ -1,0 +1,1944 @@
+{% extends "_layout_base.html" %}
+{% block title %}控制台 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<!-- ★ 基模板已不再内置控制台图标（见 _layout_base.html），控制台页在此自行补充房子图标，保持与侧边「控制台」入口一致。 -->
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>控制台
+{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ── Dashboard Full-Height Layout ── */
+.dash-wrapper {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.kpi-row { flex-shrink: 0; margin-bottom: 0; }
+.quality-section { flex-shrink: 0; margin-top: 0; }
+.pipeline-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-top: 0;
+}
+.pipeline-title { flex-shrink: 0; }
+.pipeline-cards {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-rows: 1fr;
+}
+.pipeline-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.pipeline-card-header { flex-shrink: 0; }
+.pipeline-card-body {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+.datasource-section { flex-shrink: 0; margin-top: 0; }
+
+/* ── KPI Cards with Icons ── */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+}
+/* ★ 2026-09-16 测试用例卡片：内部紧凑两行计数条，卡片大小不变 */
+.kpi-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  min-height: 0;
+}
+.kpi-card-left { flex: 0 0 auto; min-width: 0; }
+.kpi-card-right { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+.kpi-stat-strip {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.kpi-stat-strip .strip-label {
+  color: var(--text-tertiary);
+  font-size: 9px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding-right: 4px;
+  border-right: 1px solid var(--border-default);
+}
+.kpi-stat-strip .strip-item {
+  display: inline-flex;
+  gap: 2px;
+  white-space: nowrap;
+}
+.kpi-stat-strip .item-name { color: var(--text-secondary); }
+.kpi-stat-strip .item-num { font-family: var(--font-mono); color: var(--step2-color); font-weight: 600; }
+.track-badge.ui { background: var(--track-ui-soft); color: var(--track-ui); border: 1px solid var(--track-ui-border); }
+.track-badge.api { background: var(--track-api-soft); color: var(--track-api); border: 1px solid var(--track-api-border); }
+.track-badge.db { background: var(--track-db-soft); color: var(--track-db); border: 1px solid var(--track-db-border); }
+.kpi-row .kpi-card {
+  width: auto;
+  min-width: 0;
+  flex: none;
+  padding: var(--space-2) var(--space-3);
+}
+.kpi-card-icon {
+  position: relative;
+}
+.kpi-card-icon .icon-circle {
+  position: absolute;
+  right: -4px;
+  top: -4px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.icon-circle.green { background: var(--state-success-soft); border: 1px solid var(--state-success-border); color: var(--state-success-text); }
+.icon-circle.purple { background: var(--step2-soft); border: 1px solid var(--step2-border); color: var(--step2-color); }
+.icon-circle.gray { background: var(--bg-hover); border: 1px solid var(--border-default); color: var(--text-tertiary); }
+.icon-circle.orange { background: var(--state-warning-soft); border: 1px solid var(--state-warning-border); color: var(--state-warning-text); }
+.kpi-card-label { font-size: var(--fs-small); color: var(--text-secondary); margin-bottom: var(--space-2); }
+.kpi-card-value { font-family: var(--font-mono); font-size: var(--fs-h1); font-weight: var(--fw-bold); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi-card-sub { margin-top: var(--space-1); font-size: var(--fs-xs); color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Color helpers for KPI values */
+.val-green { color: var(--state-success-text); }
+.val-purple { color: var(--step2-color); }
+.val-gray { color: var(--text-tertiary); }
+.val-orange { color: var(--state-warning-text); }
+
+/*  Quality Metrics Cards ── */
+.quality-section { margin-bottom: var(--space-5); }
+.quality-title { font-size: var(--fs-body); font-weight: var(--fw-semibold); color: var(--text-primary); margin-bottom: var(--space-3); }
+.quality-group { margin-bottom: var(--space-3); }
+.quality-group-title { font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-secondary); margin-bottom: var(--space-2); padding-left: var(--space-2); border-left: 3px solid var(--text-tertiary); }
+.quality-group-title.step1 { border-left-color: var(--step1-color); color: var(--step1-color); }
+.quality-group-title.step2 { border-left-color: var(--step2-color); color: var(--step2-color); }
+.quality-group-title.step3 { border-left-color: var(--step3-color); color: var(--step3-color); }
+.quality-group-title.step4 { border-left-color: var(--step4-color); color: var(--step4-color); }
+.quality-group-title.step5 { border-left-color: var(--step5-color); color: var(--step5-color); }
+.quality-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-3); }
+.quality-card { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-md); padding: var(--space-3); border-left: 3px solid var(--text-tertiary); min-height: 72px; display: flex; flex-direction: column; justify-content: center; }
+.quality-card.step1 { border-left-color: var(--step1-color); }
+.quality-card.step2 { border-left-color: var(--step2-color); }
+.quality-card.step3 { border-left-color: var(--step3-color); }
+.quality-card.step4 { border-left-color: var(--step4-color); }
+.quality-card.step5 { border-left-color: var(--step5-color); }
+.quality-card-label { font-size: var(--fs-xs); color: var(--text-tertiary); margin-bottom: var(--space-1); }
+.quality-card-value { font-family: var(--font-mono); font-size: var(--fs-h2); font-weight: var(--fw-bold); color: var(--text-primary); }
+.quality-card.step1 .quality-card-value { color: var(--step1-color); }
+.quality-card.step2 .quality-card-value { color: var(--step2-color); }
+.quality-card.step3 .quality-card-value { color: var(--step3-color); }
+.quality-card.step4 .quality-card-value { color: var(--step4-color); }
+.quality-card.step5 .quality-card-value { color: var(--step5-color); }
+
+/* ── Pipeline Progress Cards ── */
+.pipeline-section { margin-bottom: var(--space-5); }
+.pipeline-title { font-size: var(--fs-body); font-weight: var(--fw-semibold); color: var(--text-primary); margin-bottom: var(--space-3); }
+.pipeline-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--space-3); }
+.pipeline-card { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-lg); overflow: hidden; border-top: 3px solid var(--border-default); }
+.pipeline-card.step1 { border-top-color: var(--step1-color); }
+.pipeline-card.step2 { border-top-color: var(--step2-color); }
+.pipeline-card.step3 { border-top-color: var(--step3-color); }
+.pipeline-card.step4 { border-top-color: var(--step4-color); }
+.pipeline-card.step5 { border-top-color: var(--step5-color); }
+.pipeline-card-header { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-default); }
+.pipeline-card-title { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-small); font-weight: var(--fw-semibold); color: var(--text-primary); min-width: 0; white-space: normal; }
+.pipeline-card-header-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); width: 100%; }
+.pipeline-card.step1 .pipeline-card-title svg { color: var(--step1-color); }
+.pipeline-card.step2 .pipeline-card-title svg { color: var(--step2-color); }
+.pipeline-card.step3 .pipeline-card-title svg { color: var(--step3-color); }
+.pipeline-card.step4 .pipeline-card-title svg { color: var(--step4-color); }
+.pipeline-card.step5 .pipeline-card-title svg { color: var(--step5-color); }
+.pipeline-badge { padding: 2px var(--space-2); border-radius: var(--radius-full); font-size: var(--fs-xs); font-weight: var(--fw-medium); background: var(--color-primary-soft); color: var(--color-primary); border: 1px solid var(--color-primary-border); }
+.pipeline-badge.badge-success { color: var(--state-success-text); background: var(--state-success-soft); border: 1px solid var(--state-success-border); }
+.pipeline-badge.badge-active { color: var(--state-warning-text); background: var(--state-warning-soft); border: 1px solid var(--state-warning-border); }
+.pipeline-badge.badge-pending { color: var(--text-tertiary); background: var(--state-neutral-soft); border: 1px solid var(--state-neutral-border); }
+.pipeline-badge.badge-error { color: var(--state-error-text); background: var(--state-error-soft); border: 1px solid var(--state-error-border); }
+/* ── 步骤产物计数 chip（原始文件数 / 过程文件数） ── */
+.pipeline-count-chip { display: inline-flex; align-items: center; gap: 3px; padding: 2px var(--space-2); border-radius: var(--radius-full); font-size: var(--fs-xs); font-family: var(--font-mono); font-weight: var(--fw-semibold); background: var(--bg-elevated); color: var(--text-secondary); border: 1px solid var(--border-default); white-space: nowrap; }
+.pipeline-count-chip .pipeline-count-num { color: var(--text-primary); }
+.pipeline-count-chip .pipeline-count-unit { color: var(--text-tertiary); font-weight: var(--fw-medium); font-family: var(--font-base); font-size: var(--fs-micro); }
+.pipeline-count-chip.zero .pipeline-count-num { color: var(--text-tertiary); }
+.pipeline-card.step1 .pipeline-count-chip .pipeline-count-num { color: var(--step1-color); }
+.pipeline-card.step2 .pipeline-count-chip .pipeline-count-num { color: var(--step2-color); }
+.pipeline-card.step3 .pipeline-count-chip .pipeline-count-num { color: var(--step3-color); }
+.pipeline-card.step4 .pipeline-count-chip .pipeline-count-num { color: var(--step4-color); }
+.pipeline-card.step5 .pipeline-count-chip .pipeline-count-num { color: var(--step5-color); }
+.pipeline-card-body { padding: 0; overflow-y: auto; }
+.pipeline-card-body-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; min-height: 0; align-content: space-between; }
+.pipeline-card-col { min-width: 0; overflow: hidden; }
+.pipeline-card-col:first-child { border-right: 1px solid var(--border-default); }
+.pipeline-card-table { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); table-layout: auto; }
+.pipeline-card-table td { padding: 1px var(--space-2); vertical-align: middle; white-space: nowrap; }
+.pipeline-card-table tr { border-bottom: 1px solid var(--border-default); }
+.pipeline-card-table tr:last-child { border-bottom: none; }
+.pipeline-card-group-row td { padding-top: var(--space-1); padding-bottom: 0; border-bottom: none; }
+.pipeline-card-group-label { font-size: var(--fs-micro); font-weight: var(--fw-semibold); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; }
+.pipeline-sub-row { transition: background 0.15s; }
+.pipeline-sub-row:hover { background: var(--bg-tint-soft); }
+.pipeline-sub-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; vertical-align: middle; margin-right: 5px; }
+.pipeline-sub-dot.completed { background: var(--state-success); }
+.pipeline-sub-dot.active { background: var(--state-warning); animation: pulse 1.5s infinite; }
+.pipeline-sub-dot.error { background: var(--state-error); }
+.pipeline-sub-dot.pending { background: var(--text-tertiary); opacity: 0.4; }
+.pipeline-sub-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pipeline-sub-label.completed { color: var(--text-primary); }
+.pipeline-sub-label.error { color: var(--state-error-text); }
+.pipeline-item { display: none; }
+.btn-run-step { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-3); font-size: var(--fs-xs); color: var(--text-secondary); background: transparent; border: 1px solid var(--border-default); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s ease; }
+.btn-run-step:hover { color: var(--color-primary); border-color: var(--color-primary-border); background: var(--color-primary-soft); }
+.btn-run-step svg { width: 12px; height: 12px; }
+.btn-run-step:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── 执行配置弹窗 ── */
+.exec-modal-overlay { position: fixed; inset: 0; background: var(--bg-overlay); z-index: 999; display: flex; align-items: center; justify-content: center; }
+.exec-modal { background: var(--bg-elevated); border: 1px solid var(--border-default); border-radius: var(--radius-lg); width: 520px; max-width: 95vw; max-height: 80vh; display: flex; flex-direction: column; box-shadow: var(--surface-shadow-float); }
+.exec-modal-header { padding: var(--space-4); border-bottom: 1px solid var(--border-default); display: flex; align-items: center; justify-content: space-between; }
+.exec-modal-title { font-size: var(--fs-body); font-weight: var(--fw-semibold); color: var(--text-primary); }
+.exec-modal-close { background: none; border: none; color: var(--text-tertiary); cursor: pointer; padding: 4px; border-radius: var(--radius-sm); }
+.exec-modal-close:hover { color: var(--text-primary); background: var(--bg-hover); }
+.exec-modal-body { padding: var(--space-4); overflow-y: auto; flex: 1; }
+.exec-modal-section { margin-bottom: var(--space-4); }
+.exec-modal-section:last-child { margin-bottom: 0; }
+.exec-modal-label { font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-secondary); margin-bottom: var(--space-2); text-transform: uppercase; letter-spacing: 0.5px; }
+.exec-modal-footer { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border-default); display: flex; justify-content: flex-end; gap: var(--space-2); }
+/* 预检行 */
+.preflight-row { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) 0; font-size: var(--fs-xs); }
+.preflight-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.preflight-dot.ok { background: var(--state-success); }
+.preflight-dot.warn { background: var(--state-warning); }
+.preflight-dot.err { background: var(--state-error); }
+.preflight-name { flex: 1; color: var(--text-primary); }
+.preflight-detail { color: var(--text-tertiary); font-size: var(--fs-micro); }
+/* 选择控件 */
+.exec-select { width: 100%; padding: var(--space-2) var(--space-3); font-size: var(--fs-small); color: var(--text-primary); background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-sm); }
+.exec-select:focus { outline: none; border-color: var(--color-primary); }
+.exec-check-group { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.exec-check-item { display: flex; align-items: center; gap: var(--space-1); font-size: var(--fs-xs); color: var(--text-secondary); cursor: pointer; }
+.exec-check-item input { accent-color: var(--color-primary); }
+.btn-primary { padding: var(--space-2) var(--space-4); font-size: var(--fs-small); color: var(--text-on-color); background: var(--color-primary); border: none; border-radius: var(--radius-sm); cursor: pointer; }
+.btn-primary:hover { opacity: 0.9; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-secondary { padding: var(--space-2) var(--space-4); font-size: var(--fs-small); color: var(--text-secondary); background: transparent; border: 1px solid var(--border-default); border-radius: var(--radius-sm); cursor: pointer; }
+.btn-secondary:hover { color: var(--text-primary); border-color: var(--text-tertiary); }
+
+/* ── RAG 明细弹窗 ── */
+.rag-modal { width: 640px; max-width: 95vw; }
+.rag-summary { display: flex; gap: var(--space-4); padding: var(--space-3) var(--space-4); background: var(--bg-hover); border-radius: var(--radius-md); margin-bottom: var(--space-3); }
+.rag-summary-item { flex: 1; text-align: center; }
+.rag-summary-label { font-size: var(--fs-xs); color: var(--text-tertiary); margin-bottom: var(--space-1); }
+.rag-summary-value { font-size: var(--fs-h3); font-weight: var(--fw-bold); color: var(--text-primary); font-family: var(--font-mono); }
+.rag-table { width: 100%; border-collapse: collapse; border: 1px solid var(--text-tertiary); }
+.rag-table th { text-align: center; padding: var(--space-2) var(--space-3); font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-secondary); border-bottom: 1px solid var(--text-tertiary); border-right: 1px solid var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; }
+.rag-table th:last-child { border-right: none; }
+.rag-table td { text-align: center; padding: var(--space-2) var(--space-3); font-size: var(--fs-small); color: var(--text-primary); border-bottom: 1px solid var(--text-tertiary); border-right: 1px solid var(--text-tertiary); }
+.rag-table td:last-child { border-right: none; }
+.rag-table tr:last-child td { border-bottom: none; }
+.rag-table .col-num { font-family: var(--font-mono); text-align: center; }
+.rag-type-tag { display: inline-block; padding: 1px var(--space-2); border-radius: var(--radius-full); font-size: var(--fs-xs); background: var(--color-primary-soft); color: var(--color-primary); }
+
+/* ── Data Source Status ── */
+/* ★ 单独收紧数据源上方的间距：用负 margin 抵消部分 .dash-wrapper 的 gap，
+     使数据源紧贴上方质量指标区，其余区块仍保持 space-4 统一间距 */
+.datasource-section { flex-shrink: 0; margin-top: calc(-1 * var(--space-3)); }
+.datasource-title { font-size: var(--fs-body); font-weight: var(--fw-semibold); color: var(--text-primary); margin-bottom: var(--space-3); }
+.datasource-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3); }
+.datasource-item { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); }
+.datasource-label { font-size: var(--fs-xs); color: var(--text-tertiary); margin-bottom: var(--space-1); }
+.datasource-value { font-size: var(--fs-body); color: var(--text-primary); }
+.status-dot { display: inline-flex; align-items: center; gap: var(--space-1); }
+.status-dot::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--state-success); box-shadow: 0 0 4px var(--state-success); }
+
+@media (max-width: 1600px) and (min-width: 1201px) {
+  .pipeline-cards { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 1200px) {
+  .kpi-row { grid-template-columns: repeat(3, 1fr); }
+  .quality-grid, .pipeline-cards { grid-template-columns: repeat(2, 1fr); }
+  .datasource-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .quality-grid, .pipeline-cards, .datasource-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .kpi-row { grid-template-columns: 1fr; }
+}
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnRefreshDash" data-tooltip="刷新控制台数据" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  刷新
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="dash-wrapper">
+
+<!-- ════════════ LAYER 1: KPI CARDS (6 cards with icons) ════════════ -->
+<div class="kpi-row">
+  <!-- Card 1: 需求总数 -->
+  <div class="kpi-card kpi-card-icon">
+    <div class="icon-circle green">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    </div>
+    <div class="kpi-card-label">需求总数</div>
+    <div class="kpi-card-value val-green" id="kpiReqs"><div class="skeleton skeleton-value"></div></div>
+    <div class="kpi-card-sub" id="kpiReqsSub"><div class="skeleton skeleton-text narrow"></div></div>
+  </div>
+  <!-- Card 2: 测试用例（★ 2026-09-16 上下布局：数值 + 紧凑类型×轨道表） -->
+  <div class="kpi-card kpi-card-icon">
+    <div class="icon-circle purple">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    </div>
+    <div class="kpi-card-body">
+      <div class="kpi-card-left">
+        <div class="kpi-card-label">测试用例</div>
+        <div class="kpi-card-value val-purple" id="kpiIntents"><div class="skeleton skeleton-value"></div></div>
+      </div>
+      <div class="kpi-card-right" id="kpiCaseStatsTable">
+        <div class="skeleton skeleton-text wide"></div>
+      </div>
+    </div>
+  </div>
+  <!-- Card 3: 达成·失败 -->
+  <div class="kpi-card kpi-card-icon">
+    <div class="icon-circle gray">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+    </div>
+    <div class="kpi-card-label">通过 / 失败</div>
+    <div class="kpi-card-value val-gray" id="kpiPF"><div class="skeleton skeleton-value"></div></div>
+    <div class="kpi-card-sub" id="kpiPFSub"><div class="skeleton skeleton-text narrow"></div></div>
+  </div>
+  <!-- Card 4: 达成率 -->
+  <div class="kpi-card kpi-card-icon">
+    <div class="icon-circle gray">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    </div>
+    <div class="kpi-card-label">达成率</div>
+    <div class="kpi-card-value val-gray" id="kpiRate"><div class="skeleton skeleton-value"></div></div>
+    <div class="kpi-card-sub" id="kpiRateSub"><div class="skeleton skeleton-text narrow"></div></div>
+  </div>
+  <!-- Card 5: 待验证 -->
+  <div class="kpi-card kpi-card-icon">
+    <div class="icon-circle gray">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </div>
+    <div class="kpi-card-label">待验证</div>
+    <div class="kpi-card-value val-gray" id="kpiUnexec"><div class="skeleton skeleton-value"></div></div>
+    <div class="kpi-card-sub" id="kpiUnexecSub"><div class="skeleton skeleton-text narrow"></div></div>
+  </div>
+  <!-- Card 6: RAG索引 -->
+  <div class="kpi-card kpi-card-icon ud-cursor" id="kpiRagCard" data-tooltip="点击查看分类明细" data-tooltip-pos="bottom">
+    <div class="icon-circle orange">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+    </div>
+    <div class="kpi-card-label">RAG索引</div>
+    <div class="kpi-card-value val-orange" id="kpiRag"><div class="skeleton skeleton-value"></div></div>
+    <div class="kpi-card-sub" id="kpiRagSub"><div class="skeleton skeleton-text narrow"></div></div>
+  </div>
+</div>
+
+<!-- ════════════ LAYER 2: Quality Metrics Cards (按步骤排序，统一网格) ════════════ -->
+<div class="quality-section">
+  <div class="quality-title">质量指标</div>
+  <div class="quality-grid">
+    <!-- Step 1 · 数据拉取 -->
+    <div class="quality-card step1 tooltip-wide" data-tooltip="证据覆盖率&#10;是什么：Step4 每个检查点（pass/fail 判定）有佐证支撑的比例——佐证包括截图、断言文字匹配、原始 API/DB 数据&#10;怎么算：有证据支撑的检查点数 ÷ 全部检查点数 × 100%&#10;大小意义：≥80% 绿（判定有实证支撑），<60% 红（大量判定没有证据支撑，「假通过」风险高）" data-tooltip-pos="bottom"><div class="quality-card-label">证据覆盖率</div><div class="quality-card-value" id="qmEvidenceCoverage"><div class="skeleton ud-sk-card"></div></div></div>
+    <div class="quality-card step1 tooltip-wide" data-tooltip="需求覆盖率&#10;是什么：Step1 拉取的原始需求中，有明确测试用例覆盖到的需求条目比例&#10;怎么算：有用例引用的需求条目数 ÷ 需求总数 × 100%&#10;大小意义：≥90% 绿（需求拆解充分），80~90% 黄（部分需求缺口），<80% 红（需检查 Step1→Step2 需求拆解完整性）" data-tooltip-pos="bottom"><div class="quality-card-label">需求覆盖率</div><div class="quality-card-value" id="qmReqCoverage"><div class="skeleton ud-sk-card"></div></div></div>
+    <!-- Step 2 · 需求拆解 -->
+    <div class="quality-card step2 tooltip-wide" data-tooltip="AI 置信度&#10;是什么：Step2 需求拆解阶段 AI 对每条拆解结果自评的置信度均值（0-100）&#10;怎么算：全部拆解结果自评置信度的算术平均&#10;大小意义：≥70 绿（AI 输出稳定可靠），50~70 黄（部分拆解存疑），<50 红（需人工复核需求拆解结果）" data-tooltip-pos="bottom"><div class="quality-card-label">AI置信度</div><div class="quality-card-value" id="qmAiConfidence"><div class="skeleton ud-sk-card"></div></div></div>
+    <div class="quality-card step2 tooltip-wide" data-tooltip="证据置信度&#10;是什么：Step4 证据引擎对各检查点的置信度做贝叶斯校准后的整体均值（0-100）&#10;怎么算：各检查点校准后置信度的平均值&#10;大小意义：≥70 绿（证据链可靠，可直接采信），<50 红（证据质量差，建议人工复核）" data-tooltip-pos="bottom"><div class="quality-card-label">证据置信度</div><div class="quality-card-value" id="qmEvidenceConfidence"><div class="skeleton ud-sk-card"></div></div></div>
+    <div class="quality-card step2 tooltip-wide" data-tooltip="幻觉行数&#10;是什么：AI 输出的与真实靶子不符的「幻觉」内容总数——分三类：①接口不存在/参数无效；②页面上找不到的元素选择器；③不合法的枚举值&#10;怎么算：三类幻觉内容数量之和（接口不匹配 + 页面元素缺失 + 枚举值无效）&#10;大小意义：0 绿（AI 完全无幻觉），1~5 黄（少量可忽略），>5 红（需排查 Step2 页面扫描是否不全）" data-tooltip-pos="bottom"><div class="quality-card-label">幻觉行数</div><div class="quality-card-value" id="qmSuspiciousLines"><div class="skeleton ud-sk-card"></div></div></div>
+    <!-- Step 3 · 用例建模 -->
+    <div class="quality-card step3 tooltip-wide" data-tooltip="用例完整度&#10;是什么：Step3 建模产出的每条测试用例，六个关键字段（标题/类型/风险等级/操作步骤/检查点/预期结果）的平均填充率&#10;怎么算：每条用例六个字段非空的个数 ÷ 6 得出单条得分，再对全部用例取平均&#10;大小意义：≥80% 绿（用例可直接执行），<60% 红（大量字段缺失，可能导致执行器跳过或 AI 补造）" data-tooltip-pos="bottom"><div class="quality-card-label">用例完整度</div><div class="quality-card-value" id="qmCaseCompleteness"><div class="skeleton ud-sk-card"></div></div></div>
+    <div class="quality-card step3 tooltip-wide" data-tooltip="三轨不一致率&#10;是什么：Step4 同时走 UI（页面观察）、API（接口返回）、DB（数据库直接查询）三条校验轨道，任意两条结论不一致的比例&#10;怎么算：结论不一致的校验次数 ÷ 总校验次数 × 100%&#10;大小意义：<10% 绿（数据一致性良好），10~20% 黄（需排查哪一轨有延迟），≥20% 红（靶子存在严重数据不一致）" data-tooltip-pos="bottom"><div class="quality-card-label">三轨不一致率</div><div class="quality-card-value" id="qmThreeTrackInconsistency"><div class="skeleton ud-sk-card"></div></div></div>
+    <!-- Step 4 · 执行验证 -->
+    <div class="quality-card step4 tooltip-wide" data-tooltip="校验达成率&#10;是什么：Step4 执行阶段结束后，通过用例占全部已执行用例的比例（即「用例通过率」，两个不同名但同口径的指标）&#10;怎么算：通过用例数 ÷ 已执行用例总数 × 100%（第5步汇总时写入）&#10;大小意义：≥90% 绿（校验可靠），70~90% 黄，<70% 红（需排查失败根因：靶子缺陷 vs 引擎缺陷）" data-tooltip-pos="bottom"><div class="quality-card-label">校验达成率</div><div class="quality-card-value" id="qmValidationRate"><div class="skeleton ud-sk-card"></div></div></div>
+    <div class="quality-card step4 tooltip-wide" data-tooltip="守卫拦截率&#10;是什么：Step4 执行时 AI 发起的动作被安全守卫层拦截的比例——衡量守卫有效性 + AI 动作合规性（不是靶子系统安全性）&#10;怎么算：被守卫拦下的危险动作次数 ÷ AI 尝试执行的动作总次数 × 100%&#10;拦截原因：危险动作白名单外（delete/drop/truncate/exec）、AI 元素标记越界、元素类型与动作不匹配、必填参数缺失&#10;大小意义：5~30% 绿（守卫正常拦截到危险动作），<1% 需检查守卫是否未启用，>50% 红（AI 输出大量不合规）" data-tooltip-pos="bottom"><div class="quality-card-label">守卫拦截率</div><div class="quality-card-value" id="qmGuardInterceptRate"><div class="skeleton ud-sk-card"></div></div></div>
+    <div class="quality-card step4 tooltip-wide" data-tooltip="Flaky 率&#10;是什么：同一用例在相同条件下重复执行，出现「有时通过有时失败」不稳定现象的比例——需至少 3 次运行记录才可判定为 flaky&#10;怎么算：标记为不稳定的用例数 ÷ 总用例数 × 100%&#10;大小意义：<5% 绿（环境稳定），5~15% 黄（部分用例受时序/资源影响），≥15% 红（环境或引擎不稳定）" data-tooltip-pos="bottom"><div class="quality-card-label">Flaky率</div><div class="quality-card-value" id="qmFlakyRate"><div class="skeleton ud-sk-card"></div></div></div>
+    <!-- Step 5 · 报告生成 -->
+    <div class="quality-card step5 tooltip-wide" data-tooltip="Recipe 命中率&#10;是什么：引擎操作缓存（Recipe）命中的执行次数占比——命中意味着「这个动作组合以前做过，直接复用结果」，跳过 AI 重新推理&#10;怎么算：缓存命中的动作次数 ÷ （命中次数 + 未命中次数）× 100%&#10;大小意义：≥80% 绿（操作缓存丰富，引擎效率高），<60% 红（缓存命中率低，需丰富操作指令库）" data-tooltip-pos="bottom"><div class="quality-card-label">Recipe命中率</div><div class="quality-card-value" id="qmRecipeHitRate"><div class="skeleton ud-sk-card"></div></div></div>
+    <div class="quality-card step5 tooltip-wide" data-tooltip="Tool-mode 率&#10;是什么：AI 执行时选择「直接调用工具函数」而非「智能决策兜底」的次数占比——工具模式更稳定，智能模式更灵活但风险高&#10;怎么算：直接调用工具函数的次数 ÷ 全部调用次数 × 100%&#10;大小意义：≥60% 绿（工具模式为主，执行稳定），<30% 红（智能兜底占比过高，需关注兜底质量）" data-tooltip-pos="bottom"><div class="quality-card-label">Tool-mode率</div><div class="quality-card-value" id="qmToolModeRate"><div class="skeleton ud-sk-card"></div></div></div>
+    <div class="quality-card step5 tooltip-wide" data-tooltip="用例驱动率&#10;是什么：用例建模综合质量分——把用例完整度、证据覆盖、置信度等多维指标加权合成一个 0-100 分的「建模质量总分」&#10;怎么算：完整度×30% + 证据覆盖×30% + 置信度×15% + 严格性×10% + 可操作性×15% 加权合成&#10;大小意义：≥70% 绿（建模质量良好），<50% 红（用例质量差，可能导致 Step4 执行失败率高）" data-tooltip-pos="bottom"><div class="quality-card-label">用例驱动率</div><div class="quality-card-value" id="qmCaseDrivenRate"><div class="skeleton ud-sk-card"></div></div></div>
+  </div>
+</div>
+
+<!-- ═══════════ LAYER 4: Data Source Status ════════════ -->
+<div class="datasource-section">
+  <div class="datasource-title">数据源状态</div>
+  <div class="datasource-grid">
+    <div class="datasource-item">
+      <div class="datasource-label">被测系统数据库</div>
+      <div class="datasource-value" id="dsMysql"><span class="inline-loading">加载中</span></div>
+    </div>
+    <div class="datasource-item">
+      <div class="datasource-label">目标系统</div>
+      <div class="datasource-value" id="dsTarget"><span class="inline-loading">加载中</span></div>
+    </div>
+    <div class="datasource-item">
+      <div class="datasource-label">Figma</div>
+      <div class="datasource-value" id="dsFigma"><span class="inline-loading">加载中</span></div>
+    </div>
+    <div class="datasource-item">
+      <div class="datasource-label">YApi</div>
+      <div class="datasource-value" id="dsYapi"><span class="inline-loading">加载中</span></div>
+    </div>
+    <div class="datasource-item">
+      <div class="datasource-label">Confluence</div>
+      <div class="datasource-value" id="dsConfluence"><span class="inline-loading">加载中</span></div>
+    </div>
+    
+  </div>
+</div>
+
+<!-- ════════════ LAYER 3: Pipeline Progress Cards ════════════ -->
+<div class="pipeline-section">
+  <div class="pipeline-title">流水线进度</div>
+  <div class="pipeline-cards">
+    <!-- Card: Step 1 数据提取 -->
+    <div class="pipeline-card step1">
+      <div class="pipeline-card-header">
+        <div class="pipeline-card-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Step 1: 数据提取
+        </div>
+        <div class="pipeline-card-header-actions">
+          <span class="pipeline-count-chip zero" id="step1Count" data-tooltip="原始文件数（数据源文档）" data-tooltip-pos="bottom"><span class="pipeline-count-num">0</span><span class="pipeline-count-unit">原始文件</span></span>
+          <span class="pipeline-badge badge-pending" id="step1Badge">等待中</span>
+          <button class="btn-run-step" data-step="1">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            单步执行
+          </button>
+        </div>
+      </div>
+      <div class="pipeline-card-body" id="step1CardBody"></div>
+    </div>
+    <!-- Card: Step 2 需求拆解 -->
+    <div class="pipeline-card step2">
+      <div class="pipeline-card-header">
+        <div class="pipeline-card-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Step 2: 需求拆解
+        </div>
+        <div class="pipeline-card-header-actions">
+          <span class="pipeline-count-chip zero" id="step2Count" data-tooltip="过程文件数（需求条目）" data-tooltip-pos="bottom"><span class="pipeline-count-num">0</span><span class="pipeline-count-unit">需求</span></span>
+          <span class="pipeline-badge badge-pending" id="step2Badge">等待中</span>
+          <button class="btn-run-step" data-step="2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            单步执行
+          </button>
+        </div>
+      </div>
+      <div class="pipeline-card-body" id="step2CardBody"></div>
+    </div>
+    <!-- Card: Step 3 用例建模 -->
+    <div class="pipeline-card step3">
+      <div class="pipeline-card-header">
+        <div class="pipeline-card-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Step 3: 用例建模
+        </div>
+        <div class="pipeline-card-header-actions">
+          <span class="pipeline-count-chip zero" id="step3Count" data-tooltip="过程文件数（测试用例）" data-tooltip-pos="bottom"><span class="pipeline-count-num">0</span><span class="pipeline-count-unit">用例</span></span>
+          <span class="pipeline-badge badge-pending" id="step3Badge">等待中</span>
+          <button class="btn-run-step" data-step="3">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            单步执行
+          </button>
+        </div>
+      </div>
+      <div class="pipeline-card-body" id="step3CardBody"></div>
+    </div>
+    <!-- Card: Step 4 检查执行 -->
+    <div class="pipeline-card step4">
+      <div class="pipeline-card-header">
+        <div class="pipeline-card-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Step 4: 检查执行
+        </div>
+        <div class="pipeline-card-header-actions">
+          <span class="pipeline-count-chip zero" id="step4Count" data-tooltip="过程文件数（执行记录）" data-tooltip-pos="bottom"><span class="pipeline-count-num">0</span><span class="pipeline-count-unit">执行</span></span>
+          <span class="pipeline-badge badge-pending" id="step4Badge">等待中</span>
+          <button class="btn-run-step" data-step="4">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            单步执行
+          </button>
+        </div>
+      </div>
+      <div class="pipeline-card-body" id="step4CardBody"></div>
+    </div>
+    <!-- Card: Step 5 报告生成 -->
+    <div class="pipeline-card step5">
+      <div class="pipeline-card-header">
+        <div class="pipeline-card-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          Step 5: 报告生成
+        </div>
+        <div class="pipeline-card-header-actions">
+          <span class="pipeline-count-chip zero" id="step5Count" data-tooltip="过程文件数（生成报告）" data-tooltip-pos="bottom"><span class="pipeline-count-num">0</span><span class="pipeline-count-unit">报告</span></span>
+          <span class="pipeline-badge badge-pending" id="step5Badge">等待中</span>
+          <button class="btn-run-step" data-step="5">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            单步执行
+          </button>
+        </div>
+      </div>
+      <div class="pipeline-card-body" id="step5CardBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ 执行配置弹窗 ════════════ -->
+<div class="exec-modal-overlay ud-hidden" id="execModal">
+  <div class="exec-modal">
+    <div class="exec-modal-header">
+      <span class="exec-modal-title" id="execModalTitle">Step 1: 执行配置</span>
+      <button class="exec-modal-close" id="execModalClose">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="exec-modal-body">
+      <!-- 预检区 -->
+      <div class="exec-modal-section" id="preflightSection">
+        <div class="exec-modal-label" id="preflightSectionLabel">预检 — 数据源状态</div>
+        <div id="preflightContent" class="ud-muted ud-fs-xs">加载中...</div>
+        <!-- ★ P2-6 H27: 覆盖缺口智能补生 -->
+        <div class="ud-mt-2">
+          <button class="btn-secondary ud-fs-xs ud-btn-xs ud-hidden" id="btnAutoFillGaps">✨ 智能生成补全缺口</button>
+          <span id="autoFillResult" class="ud-fs-xs ud-muted ud-ml-2"></span>
+        </div>
+      </div>
+      <!-- ★ P2-6 H28/H29/H30: 转测文档（deployment） -->
+      <div class="exec-modal-section ud-hidden" id="deploymentSection">
+        <div class="exec-modal-label">转测文档</div>
+        <div class="ud-flex ud-gap-2 ud-aic ud-flex-wrap ud-mb-2">
+          <input type="file" id="deploymentFileInput" accept=".md,.txt" class="ud-fs-xs" />
+          <button class="btn-secondary ud-fs-xs ud-btn-xs" id="btnParseDeployment">解析版本</button>
+          <select id="deploymentVersionSelect" class="exec-select ud-fs-xs ud-minw-140"><option value="">选择版本...</option></select>
+          <button class="btn-secondary ud-fs-xs ud-btn-xs" id="btnPreviewDeployment">预览影响面</button>
+        </div>
+        <div id="deploymentDocList" class="ud-fs-xs ud-muted">加载中...</div>
+        <div id="deploymentResult" class="ud-fs-xs ud-muted ud-mt-2"></div>
+      </div>
+      <!-- 审核门禁区 -->
+      <div class="exec-modal-section ud-hidden" id="reviewGateSection">
+        <div class="exec-modal-label">审核门禁</div>
+        <div id="reviewGateContent" class="ud-fs-xs ud-muted">加载中...</div>
+      </div>
+      <!-- Step 4 专属配置区 -->
+      <div class="exec-modal-section ud-hidden" id="step4ConfigSection">
+        <div class="exec-modal-label">执行配置</div>
+        <div class="ud-mb-3">
+          <div class="ud-fs-xs ud-muted ud-mb-1">浏览器</div>
+          <select class="exec-select" id="execBrowserSelect"></select>
+        </div>
+        <!-- ★ 客户端浏览器模式（CDP 远程连接） -->
+        <div class="ud-mb-3 ud-box-sm">
+          <label class="ud-flex ud-aic ud-cursor">
+            <input type="checkbox" id="execClientBrowserCheck" class="ud-mr-2">
+            <span class="ud-fs-sm">使用我的浏览器（客户端模式）</span>
+          </label>
+          <div id="clientBrowserPanel" class="ud-hidden ud-mt-2">
+            <div class="ud-fs-xs ud-muted ud-mb-1">
+              1. 下载启动脚本并运行 2. 点击"检测连接"
+            </div>
+            <div class="ud-flex ud-gap-2 ud-aic ud-flex-wrap">
+              <button class="btn-secondary ud-fs-xs ud-btn-xs" id="clientBrowserDownloadBtn">下载启动脚本</button>
+              <button class="btn-secondary ud-fs-xs ud-btn-xs" id="clientBrowserCheckBtn">检测连接</button>
+              <span id="clientBrowserStatus" class="ud-fs-xs ud-muted ud-f1 ud-wordbrk"></span>
+            </div>
+            <div class="ud-mt-2">
+              <input type="text" id="clientBrowserEndpoint" class="exec-input ud-fs-xs ud-input-lg" placeholder="http://你的IP:9222">
+            </div>
+          </div>
+        </div>
+        <div class="ud-mb-3">
+          <div class="ud-fs-xs ud-muted ud-mb-1">优先级筛选</div>
+          <div class="exec-check-group" id="execPriorityGroup"></div>
+        </div>
+        <div>
+          <div class="ud-fs-xs ud-muted ud-mb-1">用例选择 (<span id="execCaseCount">0</span> 条可选)</div>
+          <div class="ud-fields ud-box-sm">
+            <div id="execCaseList" class="ud-fs-xs ud-muted">加载中...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="exec-modal-footer">
+      <button class="btn-secondary" id="execModalCancel">取消</button>
+      <button class="btn-primary" id="execModalConfirm">确认执行</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ RAG 索引明细弹窗 ════════════ -->
+<div class="exec-modal-overlay ud-hidden" id="ragModal">
+  <div class="exec-modal rag-modal">
+    <div class="exec-modal-header">
+      <span class="exec-modal-title">RAG 索引明细</span>
+      <button class="exec-modal-close" id="ragModalClose">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="exec-modal-body">
+      <!-- 汇总区 -->
+      <div class="rag-summary">
+        <div class="rag-summary-item">
+          <div class="rag-summary-label">总 chunks</div>
+          <div class="rag-summary-value" id="ragStatTotal">—</div>
+        </div>
+        <div class="rag-summary-item">
+          <div class="rag-summary-label">总字符数</div>
+          <div class="rag-summary-value" id="ragStatChars">—</div>
+        </div>
+        <div class="rag-summary-item">
+          <div class="rag-summary-label">总大小</div>
+          <div class="rag-summary-value" id="ragStatBytes">—</div>
+        </div>
+        <div class="rag-summary-item">
+          <div class="rag-summary-label">向量嵌入</div>
+          <div class="rag-summary-value ud-fs-body" id="ragStatEmbed">—</div>
+        </div>
+      </div>
+      <!-- 分类明细表 -->
+      <div class="exec-modal-section">
+        <div class="exec-modal-label">分类明细</div>
+        <table class="rag-table">
+          <thead>
+            <tr>
+              <th>类型</th>
+              <th class="col-num">数量</th>
+              <th class="col-num">字符数</th>
+              <th class="col-num">大小</th>
+              <th class="col-num">权重</th>
+            </tr>
+          </thead>
+          <tbody id="ragTableBody">
+            <tr><td colspan="4" class="ud-muted ud-center">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="exec-modal-footer">
+      <span id="ragBuildHint" class="ud-modal-footer-left ud-muted-m ud-fs-sm" style="display:none">RAG 索引尚未构建，请先执行 Step 1</span>
+      <a class="btn-primary ud-fs-sm" id="ragBuildBtn" href="/pipeline" style="display:none">前往构建索引</a>
+      <button class="btn-secondary" id="ragModalCloseBtn">关闭</button>
+    </div>
+  </div>
+</div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- T05/P2-1：KPI 单一定义源（阈值、单位、取值路径集中在 metrics-def.js） -->
+<script src="{{ static_ver('metrics-def.js') }}"></script>
+<script>
+(function() {
+  'use strict';
+  var A = window._A;
+  if (!A) return;
+  var $ = A.$, api = A.api, escHtml = A.escHtml;
+  var dedupedApi = A.dedupedApi || api;
+  var MD = window.MetricsDef || null;
+
+  // 登录态守卫
+  A._onAuthOk = function() {
+    A._renderSidebarUser();
+    A.applyPermissions();
+    loadDashboard();
+    A._startStepBadgePolling();
+  };
+
+  function _fmtUptime(sec) {
+    if (sec == null || isNaN(sec)) return '—';
+    var d = Math.floor(sec / 86400);
+    var h = Math.floor((sec % 86400) / 3600);
+    var m = Math.floor((sec % 3600) / 60);
+    if (d > 0) return d + '天' + h + '时';
+    if (h > 0) return h + '时' + m + '分';
+    return m + '分';
+  }
+
+  async function loadKpiCards() {
+    try {
+      var d = await dedupedApi('GET', '/api/stats');
+      if (d.error) return;
+
+      var vTag = A._currentVersion ? ' ' + A._currentVersion : '';
+
+      // Card 1: 需求总数
+      var reqsEl = $('kpiReqs');
+      if (reqsEl) {
+        reqsEl.textContent = d.requirements > 0 ? d.requirements : '0';
+        reqsEl.className = 'kpi-card-value val-green';
+        $('kpiReqsSub').textContent = d.requirements > 0 ? '已拆解完成' + vTag : '尚未拆解';
+      }
+
+      // Card 2: 测试用例（★ 2026-09-16 极简两行计数条：类型 + 轨道，独立不重复）
+      var intEl = $('kpiIntents');
+      var rightEl = $('kpiCaseStatsTable');
+      if (intEl) {
+        var ty = d.types || {};
+        var tc = d.track_counts || {};
+        if (d.intents > 0) {
+          intEl.textContent = d.intents;
+          intEl.className = 'kpi-card-value val-purple';
+          if (rightEl) {
+            var _tO = ['功能','UI','安全','性能','易用','兼容'];
+            var _tkL = {ui:'UI', api:'API', db:'DB'};
+            var _tkO = ['ui','api','db'];
+            // 类型条
+            var _row1 = [];
+            _tO.forEach(function(t) { if (ty[t]) _row1.push('<span class="strip-item"><span class="item-name">'+t+'</span><span class="item-num">'+ty[t]+'</span></span>'); });
+            Object.keys(ty).forEach(function(t) { if (_tO.indexOf(t)<0 && ty[t]) _row1.push('<span class="strip-item"><span class="item-name">'+t+'</span><span class="item-num">'+ty[t]+'</span></span>'); });
+            // 轨道条
+            var _row2 = [];
+            _tkO.forEach(function(tk) { if (tc[tk]) _row2.push('<span class="strip-item"><span class="item-name">'+_tkL[tk]+'</span><span class="item-num">'+tc[tk]+'</span></span>'); });
+            rightEl.innerHTML =
+              '<div class="kpi-stat-strip"><span class="strip-label">类型</span>' + _row1.join('') + '</div>' +
+              '<div class="kpi-stat-strip"><span class="strip-label">轨道</span>' + _row2.join('') + '</div>';
+          }
+        } else {
+          intEl.textContent = '0';
+          intEl.className = 'kpi-card-value val-purple';
+          if (rightEl) rightEl.innerHTML = '<span style="color:var(--text-tertiary);font-size:10px;">等待 Step 3</span>';
+        }
+      }
+
+      // Card 3: 达成·失败
+      var pfEl = $('kpiPF');
+      if (pfEl) {
+        var executed = d.passed + d.failed;
+        if (executed > 0) {
+          pfEl.innerHTML = '<span class="val-green">' + escHtml(String(d.passed)) + '</span> / <span class="val-error">' + escHtml(String(d.failed)) + '</span>';
+          pfEl.className = 'kpi-card-value';
+          $('kpiPFSub').textContent = executed + ' 条已执行' + vTag;
+        } else {
+          pfEl.textContent = '—';
+          pfEl.className = 'kpi-card-value val-gray';
+          // ★ 根因(2026-08-31)：未执行时给出明确中性结论，避免「达成失败」歧义
+          $('kpiPFSub').textContent = '尚未执行 · 无达成结论（等待 Step 4）';
+        }
+      }
+
+      // Card 4: 达成率
+      var rateEl = $('kpiRate');
+      if (rateEl) {
+        var executed = d.passed + d.failed;
+        if (executed > 0) {
+          rateEl.textContent = d.rate.toFixed(2) + '%';
+          rateEl.className = 'kpi-card-value ' + (d.rate >= 90 ? 'val-green' : d.rate >= 70 ? 'val-orange' : 'val-gray');
+          $('kpiRateSub').textContent = executed + ' 条已执行' + vTag;
+        } else {
+          rateEl.textContent = '—';
+          rateEl.className = 'kpi-card-value val-gray';
+          $('kpiRateSub').textContent = '尚未执行 · 暂无达成率';
+        }
+      }
+
+      // Card 5: 待验证
+      var unexecEl = $('kpiUnexec');
+      if (unexecEl) {
+        if (d.intents > 0) {
+          unexecEl.textContent = d.unexecuted;
+          unexecEl.className = 'kpi-card-value val-gray';
+          $('kpiUnexecSub').textContent = '待验证用例' + vTag;
+        } else {
+          unexecEl.textContent = '—';
+          unexecEl.className = 'kpi-card-value val-gray';
+          $('kpiUnexecSub').textContent = '暂无数据';
+        }
+      }
+
+      // Card 6: RAG索引
+      var ragEl = $('kpiRag');
+      if (ragEl) {
+        if (d.rag_chunks > 0) {
+          ragEl.textContent = d.rag_chunks;
+          ragEl.className = 'kpi-card-value val-green';
+          // ★ 显示"当前版本/总计"格式
+          var ragSubText = '总计 ' + d.rag_chunks + ' chunks' + vTag;
+          if (d.rag_current_version_chunks != null && d.rag_current_version_chunks > 0) {
+            ragSubText = '当前版本 ' + d.rag_current_version_chunks + ' / 总计 ' + d.rag_chunks + vTag;
+          }
+          $('kpiRagSub').textContent = ragSubText;
+        } else {
+          ragEl.textContent = '0';
+          ragEl.className = 'kpi-card-value val-orange';
+          // ★ RAG 未构建：卡片仍统一打开「分类明细」弹窗（弹窗内提供「前往构建索引」引导），
+          //   不再在卡片上额外挂跳转监听 + 原生 title，避免双气泡与监听器随轮询无限累积
+          var ragSubEl = $('kpiRagSub');
+          ragSubEl.innerHTML = '未构建 — <a href="/pipeline" class="ud-accent ud-underline">执行 Step 1 构建索引</a>';
+          var ragCard = $('kpiRagCard');
+          if (ragCard) {
+            // 同步 tooltip 与点开弹窗的行为一致，避免 data-tooltip 与 title 同时出现（双 hover 提示）
+            ragCard.setAttribute('data-tooltip', 'RAG 索引未构建 · 点击查看分类明细');
+          }
+        }
+      }
+
+      
+    } catch (e) {
+      console.warn('[dashboard] loadKpiCards 失败:', e);
+      if (A.toast) A.toast('KPI 数据加载失败', 'error');
+    }
+  }
+
+  async function loadStatus() {
+    try {
+      // 并行加载 pipeline-progress（含 DB 产物推断）和 status（运行态）
+      var results = await Promise.all([
+        dedupedApi('GET', '/api/pipeline-progress'),
+        dedupedApi('GET', '/api/status')
+      ]);
+      var pp = results[0];
+      var s = results[1];
+      if (!s || !s.ok) return;
+
+      // 从 pipeline-progress 提取每个 step 的 status
+      var stepStatus = { 1: 'pending', 2: 'pending', 3: 'pending', 4: 'pending', 5: 'pending' };
+      if (pp && pp.ok && pp.steps) {
+        pp.steps.forEach(function(st) {
+          stepStatus[st.step] = st.status || 'pending';
+        });
+      }
+      // 叠加运行态：当前运行 step 标记为 active（暂停时不标记）
+      if (s.running && !s.paused && s.active_runs) {
+        s.active_runs.forEach(function(r) {
+          if (r.step) stepStatus[r.step] = 'active';
+        });
+      }
+
+      // 渲染 5 个 badge：completed→已完成 / active→进行中 / error→失败 / pending→等待中
+      // ★ 统一状态映射（与 pipeline.html 保持完全一致）
+      var textMap = { completed: '已完成', active: '进行中', error: '失败', pending: '等待中' };
+      var classMap = { completed: 'badge-success', active: 'badge-active', error: 'badge-error', pending: 'badge-pending' };
+      for (var i = 1; i <= 5; i++) {
+        var badge = $('step' + i + 'Badge');
+        if (!badge) continue;
+        var st = stepStatus[i] || 'pending';
+        badge.textContent = textMap[st];
+        badge.className = 'pipeline-badge ' + classMap[st];
+      }
+
+      // 渲染子项状态（两列表格 + 业务分组 + 状态圆点）
+      if (pp && pp.ok && pp.steps) {
+        pp.steps.forEach(function(st) {
+          var body = document.getElementById('step' + st.step + 'CardBody');
+          if (!body) return;
+          // ★ 渲染步骤产物计数（原始文件数 / 过程文件数）—— 与 Pipeline 页面同源（pp.steps[i].count）
+          // active 状态显示 done/total（与 Pipeline 进度条文案一致），其他状态显示 count
+          var countChip = $('step' + st.step + 'Count');
+          if (countChip) {
+            var cnt = st.count || 0;
+            var displayText = '' + cnt;
+            if (st.status === 'active' && st.total > 0) {
+              displayText = st.done + '/' + st.total;
+              cnt = st.done || 0;
+            }
+            var numEl = countChip.querySelector('.pipeline-count-num');
+            if (numEl) numEl.textContent = displayText;
+            countChip.classList.toggle('zero', cnt === 0);
+          }
+          var subs = st.sub_items || [];
+          // 按 category 分左右列
+          var leftItems = [], rightItems = [];
+          for (var k = 0; k < subs.length; k++) {
+            if (subs[k].category === 'right') {
+              rightItems.push(subs[k]);
+            } else {
+              leftItems.push(subs[k]);
+            }
+          }
+          function _renderCol(items) {
+            var groups = [], groupMap = {};
+            for (var i = 0; i < items.length; i++) {
+              var g = items[i].group || '';
+              if (!groupMap[g]) { groupMap[g] = { name: g, items: [] }; groups.push(groupMap[g]); }
+              groupMap[g].items.push(items[i]);
+            }
+            var rows = '';
+            for (var gi = 0; gi < groups.length; gi++) {
+              var grp = groups[gi];
+              rows += '<tr class="pipeline-card-group-row"><td><span class="pipeline-card-group-label">' + A.escHtml(grp.name) + '</span></td></tr>';
+              for (var gj = 0; gj < grp.items.length; gj++) {
+                var it = grp.items[gj];
+                var dotCls = 'pipeline-sub-dot ' + it.status;
+                var lblCls = 'pipeline-sub-label ' + (it.status === 'error' ? 'error' : it.status === 'completed' ? 'completed' : '');
+                rows += '<tr class="pipeline-sub-row"><td><span class="' + dotCls + '"></span><span class="' + lblCls + '">' + A.escHtml(it.label) + '</span></td></tr>';
+              }
+            }
+            return '<div class="pipeline-card-col"><table class="pipeline-card-table"><tbody>' + rows + '</tbody></table></div>';
+          }
+          body.innerHTML = '<div class="pipeline-card-body-grid">' + _renderCol(leftItems) + _renderCol(rightItems) + '</div>';
+        });
+      }
+    } catch (e) {
+      console.warn('[dashboard] loadStatus 失败:', e);
+    }
+  }
+
+  /**
+   * T05/P2-1：按 KPI 单一定义源填一个指标位。
+   * 取值路径、单位、小数位、健康度阈值全部来自 metrics-def.js，本模板不再自带任何阈值数字。
+   * @param {string} elId  DOM 元素 id
+   * @param {string} key   metrics-def.js 中登记的 KPI key
+   * @param {object} m     /api/metrics-summary 响应体
+   */
+  function paintQm(elId, key, m) {
+    var el = $(elId);
+    if (!el) return;
+    if (!MD) { el.textContent = '—'; return; }
+    var r = MD.render(key, m, null);
+    el.textContent = r.text;
+    if (r.desc) el.title = r.desc;
+  }
+
+  async function loadMetricsSummary() {
+    try {
+      // T05/P2-1：统一优先走 /api/metrics-summary（13 域一次性返回）
+      var m = await api('GET', MD ? MD.ENDPOINT_SUMMARY : '/api/metrics-summary');
+      if (!m || !m.ok) return;
+      // ai_overall 域
+      paintQm('qmFlakyRate', 'flaky_rate', m);
+      paintQm('qmSuspiciousLines', 'hallucination_total', m);
+      // step2_breakdown 域
+      paintQm('qmReqCoverage', 'req_coverage', m);
+      paintQm('qmAiConfidence', 'ai_confidence', m);
+      // step4_plugins 域（语义对齐：守卫拦截率/三轨不一致率来自 step4_plugins，不再误用 hallucination）
+      paintQm('qmGuardInterceptRate', 'guard_reject_rate', m);
+      paintQm('qmThreeTrackInconsistency', 'three_track_inconsistency', m);
+      // fusion 域：Recipe 命中率 / Tool-mode 率为 dashboard 独有展示位，未纳入跨页同名 KPI 定义表
+      var f = m.fusion || {};
+      if ($('qmRecipeHitRate')) $('qmRecipeHitRate').textContent = (f.recipe_hit_rate != null ? f.recipe_hit_rate.toFixed(2) : '—') + '%';
+      if ($('qmToolModeRate')) $('qmToolModeRate').textContent = (f.tool_mode_rate != null ? f.tool_mode_rate.toFixed(2) : '—') + '%';
+      // ★ 校验达成率：由 loadRunSummary 从 run_summary.pass_rate 填充，此处不覆盖（避免竞态覆盖正确值）
+      if ($('qmValidationRate') && $('qmValidationRate').querySelector('.skeleton')) {
+        $('qmValidationRate').textContent = '—';
+      }
+    } catch (e) {
+      console.warn('[dashboard] loadMetricsSummary 失败:', e);
+    }
+  }
+
+  // ★ 新增：从 run_summary 读取证据覆盖率、校验达成率、证据置信度
+  async function loadRunSummary() {
+    try {
+      var r = await api('GET', '/api/run-summary-latest');
+      // ★ 修复：未执行 Step5 时 run_summary 表为空，API 返回 data: null
+      //   早退时必须清除 skeleton 显示明确空态（未执行），否则一直显示"加载中"
+      if (!r || !r.ok || !r.data) {
+        // ★ 根因(2026-08-31)：空态改为「未执行」并加 tooltip 说明来源，避免「—」被误解为无功能
+        ['qmEvidenceCoverage', 'qmEvidenceConfidence', 'qmValidationRate'].forEach(function (id) {
+          var elx = document.getElementById(id);
+          if (elx && elx.querySelector('.skeleton')) {
+            elx.textContent = '未执行';
+            elx.title = '尚未执行 Step 5，暂无此指标；执行 Step 1-5 并生成报告后自动填充';
+          }
+        });
+        return;
+      }
+      var d = r.data;
+      // 证据覆盖率
+      if ($('qmEvidenceCoverage')) $('qmEvidenceCoverage').textContent = (d.evidence_coverage != null ? (d.evidence_coverage > 1 ? d.evidence_coverage.toFixed(2) : (d.evidence_coverage * 100).toFixed(2)) + '%' : '—');
+      // 校验达成率 = pass_rate
+      if ($('qmValidationRate')) $('qmValidationRate').textContent = (d.pass_rate != null ? (d.pass_rate > 1 ? d.pass_rate.toFixed(2) : (d.pass_rate * 100).toFixed(2)) + '%' : '—');
+      // 证据置信度 = evidence_calibrated_confidence
+      if ($('qmEvidenceConfidence')) $('qmEvidenceConfidence').textContent = (d.evidence_calibrated_confidence != null ? (d.evidence_calibrated_confidence > 1 ? d.evidence_calibrated_confidence.toFixed(2) : (d.evidence_calibrated_confidence * 100).toFixed(2)) + '%' : '—');
+    } catch (e) {
+      console.warn('[dashboard] loadRunSummary 失败:', e);
+    }
+  }
+
+  // ★ 新增：从 intent-metrics 读取用例完整度、用例驱动率
+  async function loadIntentMetrics() {
+    try {
+      var r = await api('GET', '/api/intent-metrics');
+      if (!r || !r.ok) return;
+      if ($('qmCaseCompleteness')) $('qmCaseCompleteness').textContent = (r.case_completeness != null ? (r.case_completeness > 1 ? r.case_completeness.toFixed(2) : (r.case_completeness * 100).toFixed(2)) + '%' : '—');
+      if ($('qmCaseDrivenRate')) $('qmCaseDrivenRate').textContent = (r.case_driven_rate != null ? (r.case_driven_rate > 1 ? r.case_driven_rate.toFixed(2) : (r.case_driven_rate * 100).toFixed(2)) + '%' : '—');
+    } catch (e) {
+      console.warn('[dashboard] loadIntentMetrics 失败:', e);
+    }
+  }
+
+  async function loadFigma() {
+    try {
+      var f = await api('GET', '/api/figma');
+      var el = $('dsFigma');
+      if (!el) return;
+      if (f.ok === false || f.not_configured) {
+        el.textContent = '未配置';
+        el.style.color = 'var(--text-tertiary)';
+      } else if (f.need_auth) {
+        el.textContent = '需授权';
+        el.style.color = 'var(--state-warning-text)';
+      } else if (f.has_cache) {
+        el.textContent = '已连接';
+        el.className = 'datasource-value status-dot';
+      } else {
+        el.textContent = '未拉取';
+        el.style.color = 'var(--text-tertiary)';
+      }
+    } catch (e) {
+      var el2 = $('dsFigma');
+      if (el2) { el2.textContent = '—'; el2.style.color = 'var(--text-tertiary)'; }
+    }
+  }
+
+  async function loadYapi() {
+    try {
+      var y = await api('GET', '/api/yapi-stats');
+      var el = $('dsYapi');
+      if (!el) return;
+      if (y.not_configured) {
+        el.textContent = '未配置';
+        el.style.color = 'var(--text-tertiary)';
+      } else if (y.need_credentials) {
+        el.textContent = '需授权';
+        el.style.color = 'var(--state-warning-text)';
+      } else if (y.has_data) {
+        el.textContent = '已连接';
+        el.className = 'datasource-value status-dot';
+      } else {
+        el.textContent = '—';
+        el.style.color = 'var(--text-tertiary)';
+      }
+    } catch (e) {
+      var el2 = $('dsYapi');
+      if (el2) { el2.textContent = '—'; el2.style.color = 'var(--text-tertiary)'; }
+    }
+  }
+
+  async function loadConfluence() {
+    try {
+      var c = await api('GET', '/api/confluence-stats');
+      var el = $('dsConfluence');
+      if (!el) return;
+      if (c.not_configured) {
+        el.textContent = '未配置';
+        el.style.color = 'var(--text-tertiary)';
+      } else if (c.need_credentials) {
+        el.textContent = '需授权';
+        el.style.color = 'var(--state-warning-text)';
+      } else if (c.has_data) {
+        el.textContent = '已连接';
+        el.className = 'datasource-value status-dot';
+      } else {
+        el.textContent = '—';
+        el.style.color = 'var(--text-tertiary)';
+      }
+    } catch (e) {
+      var el2 = $('dsConfluence');
+      if (el2) { el2.textContent = '—'; el2.style.color = 'var(--text-tertiary)'; }
+    }
+  }
+
+  async function loadDbStats() {
+    try {
+      var d = await api('GET', '/api/db-stats');
+      var el = $('dsMysql');
+      if (!el) return;
+      if (d.not_configured) {
+        el.textContent = '未配置';
+        el.className = 'datasource-value';
+        el.style.color = 'var(--text-tertiary)';
+      } else if (d.need_config) {
+        el.textContent = '需配置';
+        el.className = 'datasource-value';
+        el.style.color = 'var(--state-warning-text)';
+      } else if (d.connected) {
+        el.textContent = '已连接';
+        el.className = 'datasource-value status-dot';
+      } else {
+        el.textContent = '断开';
+        el.className = 'datasource-value';
+        el.style.color = 'var(--state-error-text)';
+      }
+    } catch (e) {
+      var el2 = $('dsMysql');
+      if (el2) { el2.textContent = '—'; el2.style.color = 'var(--text-tertiary)'; }
+    }
+  }
+
+  async function loadTargetSystem() {
+    try {
+      var t = await api('GET', '/api/target-system-status');
+      var el = $('dsTarget');
+      if (!el) return;
+      if (!t.configured) {
+        el.textContent = '未配置';
+        el.className = 'datasource-value';
+        el.style.color = 'var(--text-tertiary)';
+      } else if (t.status === 'ok') {
+        el.textContent = '已连接';
+        el.className = 'datasource-value status-dot';
+      } else if (t.status === 'unreachable') {
+        el.textContent = '不可达';
+        el.className = 'datasource-value';
+        el.style.color = 'var(--state-error-text)';
+      } else if (t.status === 'login_failed') {
+        el.textContent = '登录失败';
+        el.className = 'datasource-value';
+        el.style.color = 'var(--state-warning-text)';
+      } else {
+        el.textContent = '可达';
+        el.className = 'datasource-value status-dot';
+        el.style.color = 'var(--state-warning-text)';
+      }
+    } catch (e) {
+      var el2 = $('dsTarget');
+      if (el2) { el2.textContent = '—'; el2.style.color = 'var(--text-tertiary)'; }
+    }
+  }
+
+  function applyKpiColumnsToDashboard() {
+    A.api('GET', '/api/bg-config').then(function(r) {
+      if (r && r.ok) {
+        var cols = r.kpi_columns || 6;
+        // LAYER 1: 核心 KPI 卡片
+        var kpiRow = document.querySelector('.kpi-row');
+        if (kpiRow) {
+          var cardCount = kpiRow.querySelectorAll('.kpi-card').length;
+          var actualCols = Math.min(cols, cardCount || cols);
+          kpiRow.style.gridTemplateColumns = 'repeat(' + actualCols + ', 1fr)';
+        }
+        // LAYER 2: 质量指标网格 — 按步骤分组，auto-fit 自适应，不强制列数
+        // LAYER 3: 流水线进度卡片
+        var pipelineCards = document.querySelector('.pipeline-cards');
+        if (pipelineCards) {
+          var cardCount = pipelineCards.querySelectorAll('.pipeline-card').length;
+          var actualCols = Math.min(cols, cardCount || cols);
+          pipelineCards.style.gridTemplateColumns = 'repeat(' + actualCols + ', 1fr)';
+        }
+        // LAYER 4: 数据源状态
+        var dsGrid = document.querySelector('.datasource-grid');
+        if (dsGrid) {
+          var itemCount = dsGrid.querySelectorAll('.datasource-item').length;
+          var actualCols = Math.min(cols, itemCount || cols);
+          dsGrid.style.gridTemplateColumns = 'repeat(' + actualCols + ', 1fr)';
+        }
+      }
+    });
+  }
+
+  async function loadDashboard() {
+    // ★ 修复：分批加载避免 11 个并发请求瞬时打满 waitress 线程
+    // 第一批：关键数据（状态 + KPI）
+    await Promise.allSettled([loadKpiCards(), loadStatus()]);
+    // 第二批：指标数据
+    await Promise.allSettled([loadMetricsSummary(), loadRunSummary(), loadIntentMetrics()]);
+    // 第三批：辅助数据
+    await Promise.allSettled([loadFigma(), loadYapi(), loadConfluence(), loadDbStats(), loadTargetSystem()]);
+
+    // 应用 KPI 列数配置到所有卡片行
+    applyKpiColumnsToDashboard();
+  }
+
+  // 刷新按钮
+  var btnRefresh = $('btnRefreshDash');
+  if (btnRefresh) {
+    btnRefresh.addEventListener('click', function() {
+      A.withBtnLoading(btnRefresh, '刷新中...', loadDashboard);
+    });
+  }
+
+  // ★ v6.2 无刷新切换项目：切换后直接重新加载 Dashboard 数据，避免整页刷新带来的卡顿
+  window.onProjectSwitched = function(project, projectName) {
+    // 更新侧边栏和顶部栏的项目显示
+    if (typeof showTopbarEnv === 'function') showTopbarEnv();
+    if (typeof showEnvVersion === 'function') showEnvVersion();
+    // 重新加载所有 Dashboard 数据
+    var refreshBtn = $('btnRefreshDash');
+    if (refreshBtn) {
+      A.withBtnLoading(refreshBtn, '切换中...', loadDashboard);
+    } else {
+      loadDashboard();
+    }
+    // 重新加载版本列表
+    if (typeof loadVersions === 'function') loadVersions();
+  };
+
+  // ── 执行配置弹窗逻辑 ──
+  var execState = { step: 0, browsers: [], priorities: [], cases: [], selectedCases: [] };
+  var execModal = $('execModal');
+  var execModalTitle = $('execModalTitle');
+  var preflightContent = $('preflightContent');  var preflightSection = $('preflightSection');
+  var preflightSectionLabel = $('preflightSectionLabel');
+  var step4Section = $('step4ConfigSection');
+  var reviewGateSection = $('reviewGateSection');
+  var reviewGateContent = $('reviewGateContent');
+  var execBrowserSelect = $('execBrowserSelect');
+  var execPriorityGroup = $('execPriorityGroup');
+  var execCaseList = $('execCaseList');
+  var execCaseCount = $('execCaseCount');
+  // ★ P2-6 H27-H30
+  var deploymentSection = $('deploymentSection');
+
+  function openExecModal(step) {
+    execState.step = step;
+    execState.selectedCases = [];
+    execModalTitle.textContent = 'Step ' + step + ': 执行配置';
+    execModal.style.display = 'flex';
+
+    // 重置所有区域
+    preflightSection.style.display = 'block';
+    preflightContent.innerHTML = '';
+    reviewGateSection.style.display = 'none';
+    reviewGateContent.innerHTML = '';
+    step4Section.style.display = 'none';
+    var btn = $('execModalConfirm');
+    if (btn) { btn.disabled = false; btn.textContent = '确认执行'; btn.title = ''; btn.style.display = ''; }
+
+    // 按步骤定制内容
+    if (step === 1) {
+      // Step 1: 数据源状态
+      preflightSectionLabel.textContent = '数据源状态';
+      preflightContent.innerHTML = '加载中...';
+      api('GET', '/api/preflight').then(function(r) {
+        renderPreflight(r);
+      }).catch(function() {
+        preflightContent.innerHTML = '<span class="ud-err-t">预检加载失败</span>';
+      });
+    } else if (step === 2) {
+      // Step 2: 前置检查（Step1 产出）
+      preflightSection.style.display = 'none';
+      reviewGateSection.style.display = 'block';
+      reviewGateContent.innerHTML = '<div class="exec-modal-label">前置检查</div><div id="pfStep1Check">加载中...</div>';
+      loadStep1Check();
+    } else if (step === 3) {
+      // Step 3: 需求审核闸门 + 覆盖缺口智能补生
+      preflightSection.style.display = 'none';
+      reviewGateSection.style.display = 'block';
+      loadReviewGates(step);
+      if (btnAutoFillGaps) btnAutoFillGaps.style.display = 'inline-block';
+      if (autoFillResultEl) autoFillResultEl.textContent = '';
+    } else if (step === 4) {
+      // Step 4: 用例审核闸门 + 执行配置
+      preflightSection.style.display = 'none';
+      reviewGateSection.style.display = 'block';
+      loadReviewGates(step);
+      step4Section.style.display = 'block';
+      loadStep4Config();
+    } else if (step === 5) {
+      // Step 5: 前置检查（Step4 结果）+ 转测文档
+      preflightSection.style.display = 'none';
+      reviewGateSection.style.display = 'block';
+      reviewGateContent.innerHTML = '<div class="exec-modal-label">前置检查</div><div id="pfStep4Check">加载中...</div>';
+      loadStep4Check();
+      deploymentSection.style.display = 'block';
+      loadDeploymentDocs();
+    }
+  }
+
+  function closeExecModal() {
+    execModal.style.display = 'none';
+  }
+
+  // ★ P2-6 H27: 覆盖缺口智能补生 — POST /api/coverage/auto-fill
+  var btnAutoFillGaps = $('btnAutoFillGaps');
+  var autoFillResultEl = $('autoFillResult');
+  if (btnAutoFillGaps) {
+    btnAutoFillGaps.addEventListener('click', function() {
+      A.withBtnLoading(btnAutoFillGaps, '生成中...', function() {
+        return api('POST', '/api/coverage/auto-fill', {}).then(function(r) {
+          if (r && r.ok) {
+            if (autoFillResultEl) autoFillResultEl.textContent = '已补生 ' + (r.filled || 0) + ' 条缺口意图';
+            if (A.toast) A.toast('已补生 ' + (r.filled || 0) + ' 条缺口意图', 'success');
+          } else if (r && r.success) {
+            if (autoFillResultEl) autoFillResultEl.textContent = r.message || '完成';
+            if (A.toast) A.toast(r.message || '完成', 'success');
+          } else {
+            if (A.toast) A.toast((r && r.error) || '补生失败', 'error');
+          }
+          return null;
+        });
+      });
+    });
+  }
+
+  // ★ P2-6 H28: GET /api/deployment/docs — 转测文档列表
+  function loadDeploymentDocs() {
+    var listEl = $('deploymentDocList');
+    if (!listEl) return;
+    listEl.textContent = '加载中...';
+    api('GET', '/api/deployment/docs').then(function(r) {
+      if (!r || r.error) {
+        listEl.textContent = (r && r.error) || '加载失败';
+        return;
+      }
+      var docs = r.docs || [];
+      if (docs.length === 0) {
+        listEl.textContent = '暂无转测文档（上传 Markdown 解析版本后生成）';
+        return;
+      }
+      listEl.textContent = '已有 ' + docs.length + ' 份转测文档: ' + docs.map(function(d) {
+        return d.name + '(' + (d.size || 0) + 'B)';
+      }).join(', ');
+    });
+  }
+
+  // ★ P2-6 H30: POST /api/deployment/versions — 解析转测文档版本
+  var deploymentFileInput = $('deploymentFileInput');
+  var deploymentVersionSelect = $('deploymentVersionSelect');
+  var btnParseDeployment = $('btnParseDeployment');
+  var btnPreviewDeployment = $('btnPreviewDeployment');
+  var deploymentResultEl = $('deploymentResult');
+  var _deploymentContent = '';
+  if (btnParseDeployment) {
+    btnParseDeployment.addEventListener('click', function() {
+      var file = deploymentFileInput && deploymentFileInput.files && deploymentFileInput.files[0];
+      if (!file) {
+        if (A.toast) A.toast('请先选择转测文档文件', 'warning');
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function() {
+        _deploymentContent = String(reader.result || '');
+        A.withBtnLoading(btnParseDeployment, '解析中...', function() {
+          return api('POST', '/api/deployment/versions', { content: _deploymentContent }).then(function(r) {
+            if (r && r.ok) {
+              var versions = r.versions || [];
+              deploymentVersionSelect.innerHTML = '<option value="">选择版本...</option>';
+              versions.forEach(function(v) {
+                var opt = document.createElement('option');
+                opt.value = String(v);
+                opt.textContent = String(v);
+                deploymentVersionSelect.appendChild(opt);
+              });
+              if (deploymentResultEl) deploymentResultEl.textContent = '解析到 ' + versions.length + ' 个版本';
+            } else {
+              if (A.toast) A.toast((r && r.error) || '解析失败', 'error');
+            }
+            return null;
+          });
+        });
+      };
+      reader.readAsText(file, 'utf-8');
+    });
+  }
+
+  // ★ P2-6 H29: POST /api/deployment/preview — 预览影响面（不执行）
+  if (btnPreviewDeployment) {
+    btnPreviewDeployment.addEventListener('click', function() {
+      var version = deploymentVersionSelect ? deploymentVersionSelect.value : '';
+      A.withBtnLoading(btnPreviewDeployment, '预览中...', function() {
+        return api('POST', '/api/deployment/preview', {
+          content: _deploymentContent,
+          version: version
+        }).then(function(r) {
+          if (r && r.ok) {
+            if (deploymentResultEl) {
+              deploymentResultEl.textContent = '匹配 ' + (r.matched_count || 0) + ' 条用例 / ' + (r.total_features || 0) + ' 个特性（仅预览，不执行）';
+            }
+            if (A.toast) A.toast('匹配 ' + (r.matched_count || 0) + ' 条用例', 'success');
+          } else {
+            if (A.toast) A.toast((r && r.error) || '预览失败', 'error');
+          }
+          return null;
+        });
+      });
+    });
+  }
+
+  // ── Step 2: 检查 Step1 产出 ──
+  function loadStep1Check() {
+    var el = document.getElementById('pfStep1Check');
+    if (!el) el = reviewGateContent;
+    el.innerHTML = '加载中...';
+    api('GET', '/api/pipeline-progress').then(function(r) {
+      var html = '';
+      if (!r || !r.ok || !r.steps) {
+        html = '<span class="preflight-dot warn ud-inline-block"></span> 无法获取流水线状态';
+      } else {
+        var s1 = r.steps.filter(function(s) { return s.step === 1; })[0];
+        if (s1 && s1.status === 'completed') {
+          html = '<span class="preflight-dot ok ud-inline-block"></span> Step 1 已完成，文档已就绪';
+        } else {
+          html = '<span class="preflight-dot err ud-inline-block"></span> Step 1 未完成，请先执行 Step 1';
+          var btn = $('execModalConfirm');
+          if (btn) { btn.disabled = true; btn.textContent = '请先执行 Step 1'; }
+        }
+      }
+      el.innerHTML = html;
+    }).catch(function() {
+      el.innerHTML = '<span class="preflight-dot warn ud-inline-block"></span> 状态检查失败';
+    });
+  }
+
+  // ── Step 5: 检查 Step4 执行结果 ──
+  function loadStep4Check() {
+    var el = document.getElementById('pfStep4Check');
+    if (!el) el = reviewGateContent;
+    el.innerHTML = '加载中...';
+    api('GET', '/api/pipeline-progress').then(function(r) {
+      var html = '';
+      if (!r || !r.ok || !r.steps) {
+        html = '<span class="preflight-dot warn ud-inline-block"></span> 无法获取流水线状态';
+      } else {
+        var s4 = r.steps.filter(function(s) { return s.step === 4; })[0];
+        var s3 = r.steps.filter(function(s) { return s.step === 3; })[0];
+        if (s4 && s4.status === 'completed') {
+          html = '<span class="preflight-dot ok ud-inline-block"></span> Step 4 已完成，有执行结果';
+        } else if (s3 && s3.status === 'completed') {
+          html = '<span class="preflight-dot warn ud-inline-block"></span> Step 4 未执行，但 Step 3 已完成（可继续）';
+        } else {
+          html = '<span class="preflight-dot err ud-inline-block"></span> Step 4 无执行结果，请先执行 Step 4';
+          var btn = $('execModalConfirm');
+          if (btn) { btn.disabled = true; btn.textContent = '请先执行 Step 4'; }
+        }
+      }
+      el.innerHTML = html;
+    }).catch(function() {
+      el.innerHTML = '<span class="preflight-dot warn ud-inline-block"></span> 状态检查失败';
+    });
+  }
+
+  // 审核门禁加载
+  var _reviewGateStep = 3;  // 记住当前门禁 step，供版本确认后重新加载
+  function loadReviewGates(step) {
+    _reviewGateStep = step;
+    reviewGateContent.innerHTML = '加载中...';
+    var promises = [];
+    // Step 3: 需求审核门禁 + 版本一致性检查
+    if (step === 3) {
+      promises.push(api('GET', '/api/status').then(function(r) {
+        var reviewState = (r && r.review_state) ? r.review_state : {};
+        var versionWarn = (r && r.version_warning) ? r.version_warning : {};
+        return { type: 'requirement', data: reviewState, versionWarn: versionWarn };
+      }).catch(function() {
+        return { type: 'requirement', data: null, error: true };
+      }));
+    }
+    // Step 4/5: 用例审核门禁
+    if (step === 4 || step === 5) {
+      promises.push(api('GET', '/api/cases/review/state').then(function(r) {
+        return { type: 'case', data: r || {} };
+      }).catch(function() {
+        return { type: 'case', data: null, error: true };
+      }));
+    }
+    Promise.all(promises).then(function(results) {
+      renderReviewGates(results);
+    }).catch(function() {
+      reviewGateContent.innerHTML = '<span class="preflight-dot warn ud-inline-block"></span> 审核门禁加载失败';
+    });
+  }
+
+  function renderReviewGates(results) {
+    var html = '';
+    var allApproved = true;
+    results.forEach(function(r) {
+      if (r.type === 'requirement') {
+        // 版本一致性警告
+        var vw = r.versionWarn;
+        if (vw && vw.active && vw.pending) {
+          html += '<div class="ud-flex ud-aic ud-gap-2 ud-mb-1 ud-flex-wrap">';
+          html += '<span class="preflight-dot warn"></span><span>版本一致性</span><span class="ud-warn-t">版本变更需确认</span>';
+          html += '<button id="vcConfirmBtn" class="btn-primary ud-fs-xs ud-btn-xs ud-ml-2">确认并继续建模</button>';
+          html += '<button id="vcCancelBtn" class="btn-secondary ud-fs-xs ud-btn-xs">跳过用例建模</button>';
+          html += '</div>';
+          allApproved = false;
+        }
+        html += '<div class="ud-flex ud-aic ud-gap-2 ud-mb-1">';
+        if (r.error) {
+          html += '<span class="preflight-dot warn"></span><span>需求审核（Step2→Step3）</span><span class="ud-warn-t">状态加载失败</span>';
+          allApproved = false;
+        } else if (!r.data || !r.data.total) {
+          html += '<span class="preflight-dot warn"></span><span>需求审核（Step2→Step3）</span><span class="ud-muted">暂无需求数据</span>';
+          allApproved = false;
+        } else if (r.data.status === 'approved') {
+          html += '<span class="preflight-dot ok"></span><span>需求审核（Step2→Step3）</span><span class="ud-ok">已通过 (' + r.data.approval_rate + '%)</span>';
+        } else {
+          html += '<span class="preflight-dot err"></span><span>需求审核（Step2→Step3）</span><span class="ud-err-t">' + r.data.pending + ' 条待审核 (' + r.data.approval_rate + '%)</span>';
+          allApproved = false;
+        }
+        html += '</div>';
+      } else if (r.type === 'case') {
+        html += '<div class="ud-flex ud-aic ud-gap-2">';
+        if (r.error) {
+          html += '<span class="preflight-dot warn"></span><span>用例审核（Step3→Step4）</span><span class="ud-warn-t">状态加载失败</span>';
+          allApproved = false;
+        } else if (!r.data || !r.data.total) {
+          html += '<span class="preflight-dot warn"></span><span>用例审核（Step3→Step4）</span><span class="ud-muted">暂无测试用例</span>';
+          allApproved = false;
+        } else if (r.data.status === 'approved') {
+          html += '<span class="preflight-dot ok"></span><span>用例审核（Step3→Step4）</span><span class="ud-ok">已通过 (' + r.data.approval_rate + '%)</span>';
+        } else {
+          html += '<span class="preflight-dot err"></span><span>用例审核（Step3→Step4）</span><span class="ud-err-t">' + r.data.pending + ' 条待审核 (' + r.data.approval_rate + '%)</span>';
+          allApproved = false;
+        }
+        html += '</div>';
+      }
+    });
+    reviewGateContent.innerHTML = html;
+    // 版本一致性确认/跳过按钮接线（P2-6 #36/#35：解除 pause_controller 挂起）
+    var vcConfirm = $('vcConfirmBtn');
+    if (vcConfirm) {
+      vcConfirm.addEventListener('click', function() { handleVersionCheck('confirm', vcConfirm); });
+    }
+    var vcCancel = $('vcCancelBtn');
+    if (vcCancel) {
+      vcCancel.addEventListener('click', function() { handleVersionCheck('cancel', vcCancel); });
+    }
+    // 如果有未通过的审核，禁用确认按钮
+    var btn = $('execModalConfirm');
+    if (!allApproved) {
+      btn.disabled = true;
+      btn.textContent = '请先完成审核';
+      btn.title = '审核门禁未通过，请先在审核面板中确认所有待审核项';
+    } else {
+      btn.disabled = false;
+      btn.textContent = '确认执行';
+      btn.title = '';
+    }
+  }
+
+  // 版本一致性确认/取消（P2-6 #36 confirm / #35 cancel）
+  // confirm → pause_controller.resume() 解除流水线永久挂起；cancel → 跳过用例建模
+  function handleVersionCheck(action, btnEl) {
+    var url = action === 'confirm' ? '/api/version-check/confirm' : '/api/version-check/cancel';
+    var doPost = function() {
+      return api('POST', url).then(function(r) {
+        if (r && r.ok) {
+          if (A.toast) A.toast(r.message || '操作成功', 'success');
+          loadReviewGates(_reviewGateStep);  // 刷新门禁与确认按钮态
+        } else {
+          if (A.toast) A.toast('操作失败: ' + ((r && r.error) || '未知错误'), 'error');
+        }
+      }).catch(function(e) {
+        if (A.toast) A.toast('网络错误: ' + e, 'error');
+      });
+    };
+    if (A.withBtnLoading) {
+      A.withBtnLoading(btnEl, '处理中...', doPost);
+    } else {
+      doPost();
+    }
+  }
+
+  // 预检渲染
+  function renderPreflight(r) {
+    if (!r || !r.ok) {
+      preflightContent.innerHTML = '<span class="ud-err-t">预检失败: ' + (r ? r.error : '无响应') + '</span>';
+      return;
+    }
+    var sources = r.sources || {};
+    var warnings = r.warnings || [];
+    var nameMap = { confluence: 'Confluence', figma: 'Figma', yapi: 'YApi', database: '目标系统数据库', dom_crawl: '目标系统', upload: '上传文件' };
+    var html = '';
+    Object.keys(nameMap).forEach(function(key) {
+      var s = sources[key];
+      if (!s) { html += '<div class="preflight-row"><span class="preflight-dot err"></span><span class="preflight-name">' + nameMap[key] + '</span><span class="preflight-detail">未检测</span></div>'; return; }
+      var dotCls = s.status === 'configured' ? 'ok' : (s.status === 'not_configured' ? 'err' : 'warn');
+      html += '<div class="preflight-row"><span class="preflight-dot ' + dotCls + '"></span><span class="preflight-name">' + nameMap[key] + '</span><span class="preflight-detail">' + escHtml(s.detail || '') + '</span></div>';
+    });
+    if (warnings.length) {
+      html += '<div class="ud-mt-2 ud-fs-micro ud-warn-t">⚠ ' + escHtml(warnings.join('; ')) + '</div>';
+    }
+    preflightContent.innerHTML = html;
+  }
+
+  // Step 4 配置加载
+  function loadStep4Config() {
+    execBrowserSelect.innerHTML = '<option value="">检测中...</option>';
+    execPriorityGroup.innerHTML = '<span class="ud-muted ud-fs-xs">加载中...</span>';
+    execCaseList.innerHTML = '加载中...';
+    execCaseCount.textContent = '0';
+    api('GET', '/api/step4-config').then(function(r) {
+      if (!r || !r.ok) { execBrowserSelect.innerHTML = '<option value="">加载失败</option>'; return; }
+      // 浏览器
+      var browsers = r.browsers || [];
+      execState.browsers = browsers;
+      execBrowserSelect.innerHTML = '';
+      if (browsers.length === 0) {
+        execBrowserSelect.innerHTML = '<option value="">未检测到浏览器</option>';
+      } else {
+        browsers.forEach(function(b) {
+          var opt = document.createElement('option');
+          opt.value = b.name || b;
+          opt.textContent = (b.name || b) + (b.default ? ' (默认)' : '');
+          if (b.default) opt.selected = true;
+          execBrowserSelect.appendChild(opt);
+        });
+      }
+      // 优先级
+      var priorities = r.priorities || [];
+      execState.priorities = priorities;
+      execPriorityGroup.innerHTML = '';
+      if (priorities.length === 0) {
+        execPriorityGroup.innerHTML = '<span class="ud-muted ud-fs-xs">无</span>';
+      } else {
+        priorities.forEach(function(p) {
+          var label = document.createElement('label');
+          label.className = 'exec-check-item';
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.value = p;
+          cb.checked = true;
+          label.appendChild(cb);
+          label.appendChild(document.createTextNode(p));
+          execPriorityGroup.appendChild(label);
+        });
+      }
+      // 并行推荐
+      var parallel = r.parallel || {};
+      if (parallel.recommendation) {
+        var rec = parallel.recommendation;
+        var recEl = document.createElement('span');
+        recEl.style.cssText = 'font-size:var(--fs-micro);color:var(--text-tertiary);margin-left:var(--space-2);';
+        recEl.textContent = '(推荐并发: ' + rec.recommended + ', 可用内存: ' + (rec.available_memory_mb || '?') + 'MB)';
+        execPriorityGroup.appendChild(recEl);
+      }
+      // 用例列表
+      loadCases();
+    }).catch(function() {
+      execBrowserSelect.innerHTML = '<option value="">加载失败</option>';
+    });
+  }
+
+  function loadCases() {
+    execCaseList.innerHTML = '加载中...';
+    api('GET', '/api/cases').then(function(r) {
+      if (!r || !r.ok) { execCaseList.innerHTML = '<span class="ud-err-t">加载失败</span>'; return; }
+      var cases = r.cases || r.intents || [];
+      execState.cases = cases;
+      execState.selectedCases = [];
+      renderCaseCheckboxes();
+    }).catch(function() {
+      execCaseList.innerHTML = '<span class="ud-err-t">加载失败</span>';
+    });
+  }
+
+  function renderCaseCheckboxes() {
+    var cases = execState.cases;
+    var selectedPriorities = [];
+    execPriorityGroup.querySelectorAll('input[type="checkbox"]:checked').forEach(function(cb) {
+      selectedPriorities.push(cb.value);
+    });
+    var filtered = cases;
+    if (selectedPriorities.length > 0) {
+      filtered = cases.filter(function(c) {
+        return selectedPriorities.indexOf(c.risk_level || c.priority || '') >= 0;
+      });
+    }
+    execCaseCount.textContent = filtered.length;
+    if (filtered.length === 0) {
+      execCaseList.innerHTML = '<span class="ud-muted">无匹配用例</span>';
+      return;
+    }
+    var html = '';
+    filtered.forEach(function(c, i) {
+      var cid = escHtml(c.case_id || c.id || ('case-' + i));
+      var title = escHtml(c.title || c.name || cid);
+      var risk = escHtml(c.risk_level || c.priority || '');
+      html += '<label class="exec-check-item ud-flex ud-pad-y-2">' +
+        '<input type="checkbox" value="' + cid + '" data-idx="' + i + '">' +
+        '<span class="ud-f1">' + title + '</span>' +
+        (risk ? '<span class="ud-muted">' + risk + '</span>' : '') +
+        '</label>';
+    });
+    execCaseList.innerHTML = html;
+  }
+
+  // 优先级变化时刷新用例列表
+  if (execPriorityGroup) {
+    execPriorityGroup.addEventListener('change', function(e) {
+      if (e.target.type === 'checkbox') renderCaseCheckboxes();
+    });
+  }
+
+  // ★ 客户端浏览器模式（CDP 远程连接）事件绑定
+  var cbCheck = $('execClientBrowserCheck');
+  var cbPanel = $('clientBrowserPanel');
+  var cbDownloadBtn = $('clientBrowserDownloadBtn');
+  var cbCheckBtn = $('clientBrowserCheckBtn');
+  var cbEndpoint = $('clientBrowserEndpoint');
+  var cbStatus = $('clientBrowserStatus');
+
+  if (cbCheck) {
+    cbCheck.addEventListener('change', function() {
+      cbPanel.style.display = cbCheck.checked ? 'block' : 'none';
+      // 勾选时自动检测 IP（仅首次）
+      if (cbCheck.checked && !cbEndpoint.value) {
+        api('GET', '/api/client-browser/detect-ip').then(function(r) {
+          if (r && r.ok && r.suggested_endpoint) {
+            cbEndpoint.value = r.suggested_endpoint;
+          }
+        }).catch(function() {});
+      }
+    });
+  }
+
+  if (cbDownloadBtn) {
+    cbDownloadBtn.addEventListener('click', function() {
+      // 直接触发 .bat 下载
+      window.location.href = '/api/client-browser/startup-script';
+    });
+  }
+
+  if (cbCheckBtn) {
+    cbCheckBtn.addEventListener('click', function() {
+      var endpoint = (cbEndpoint.value || '').trim();
+      if (!endpoint) {
+        cbStatus.textContent = '请填写 CDP 端点';
+        cbStatus.style.color = 'var(--state-error-text)';
+        return;
+      }
+      // 防重复点击
+      if (cbCheckBtn.disabled) return;
+      cbCheckBtn.disabled = true;
+      cbStatus.textContent = '检测中...';
+      cbStatus.style.color = 'var(--text-tertiary)';
+      api('POST', '/api/client-browser/check', { endpoint: endpoint }).then(function(r) {
+        if (r && r.ok) {
+          cbStatus.textContent = '✓ 连接成功，' + (r.page_count || 0) + ' 个页面可用';
+          cbStatus.style.color = 'var(--state-success-text)';
+        } else {
+          cbStatus.textContent = '✗ ' + (r && r.error ? r.error : '连接失败');
+          cbStatus.style.color = 'var(--state-error-text)';
+        }
+      }).catch(function(e) {
+        cbStatus.textContent = '✗ 网络错误: ' + e;
+        cbStatus.style.color = 'var(--state-error-text)';
+      }).finally(function() {
+        cbCheckBtn.disabled = false;
+      });
+    });
+  }
+
+  // 关闭弹窗
+  $('execModalClose').addEventListener('click', closeExecModal);
+  $('execModalCancel').addEventListener('click', closeExecModal);
+  execModal.addEventListener('click', function(e) {
+    if (e.target === execModal) closeExecModal();
+  });
+
+  // 确认执行
+  $('execModalConfirm').addEventListener('click', function() {
+    var step = execState.step;
+    var opts = {};
+    if (step === 4) {
+      var browserVal = execBrowserSelect.value;
+      if (browserVal) {
+        // 查找完整浏览器对象
+        var found = execState.browsers.filter(function(b) { return (b.name || b) === browserVal; });
+        if (found.length > 0) {
+          opts.browser_info = found[0];
+        } else {
+          opts.browser_info = { name: browserVal };
+        }
+      }
+      var selectedCases = [];
+      execCaseList.querySelectorAll('input[type="checkbox"]:checked').forEach(function(cb) {
+        selectedCases.push(cb.value);
+      });
+      if (selectedCases.length > 0) opts.case_ids = selectedCases;
+      // 优先级筛选
+      var selectedPriorities = [];
+      execPriorityGroup.querySelectorAll('input[type="checkbox"]:checked').forEach(function(cb) {
+        selectedPriorities.push(cb.value);
+      });
+      if (selectedPriorities.length > 0 && selectedPriorities.length < execState.priorities.length) {
+        opts.risk_level_filter = selectedPriorities;
+      }
+      // ★ 客户端浏览器模式：注入 cdp_endpoint 到 browser_info
+      if (cbCheck && cbCheck.checked) {
+        var cdpEp = (cbEndpoint.value || '').trim();
+        if (cdpEp) {
+          if (!opts.browser_info) opts.browser_info = {};
+          opts.browser_info.cdp_endpoint = cdpEp;
+        }
+      }
+    }
+    var btn = $('execModalConfirm');
+    btn.disabled = true;
+    btn.textContent = '启动中...';
+    api('POST', '/api/step/' + step, opts).then(function(r) {
+      if (r.ok) {
+        closeExecModal();
+        if (A.toast) A.toast('Step ' + step + ' 已启动，跳转至控制台', 'success');
+        setTimeout(function() { window.location.href = '/pipeline?step=' + step; }, 800);
+      } else {
+        if (A.toast) A.toast('启动失败: ' + (r.error || ''), 'error');
+        btn.disabled = false;
+        btn.textContent = '确认执行';
+      }
+    }).catch(function(e) {
+      if (A.toast) A.toast('网络错误: ' + e, 'error');
+      btn.disabled = false;
+      btn.textContent = '确认执行';
+    });
+  });
+
+  // 单步执行按钮 → 打开弹窗
+  document.querySelectorAll('.btn-run-step').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var step = parseInt(this.getAttribute('data-step'), 10);
+      if (!step || step < 1 || step > 5) return;
+      var permMap = { 1: 'execution.step1', 2: 'execution.step2', 3: 'execution.step3', 4: 'execution.step4', 5: 'execution.step5' };
+      if (permMap[step] && !A.hasPerm(permMap[step])) {
+        if (A.toast) A.toast('无权执行 Step ' + step, 'error');
+        return;
+      }
+      openExecModal(step);
+    });
+  });
+
+  // ── RAG 索引明细弹窗 ──
+  // 类型中文标签映射（与后端 _ALL_TYPES 对齐）
+  var RAG_TYPE_LABELS = {
+    api: 'API 接口',
+    db_table: '数据库表',
+    figma_page: 'Figma 页面',
+    figma_node: 'Figma 节点',
+    figma_component: 'Figma 组件',
+    requirement: '需求文档',
+    upload_req: '上传·需求文档',
+    upload_dict: '上传·数据字典',
+    upload_api: '上传·接口补充',
+    upload_design: '上传·设计补充',
+    upload_data: '上传·测试数据',
+    upload_ddl: '上传·DDL',
+  };
+  // 类型排序（与后端 _ALL_TYPES 一致）
+  var RAG_TYPE_ORDER = ['api', 'db_table', 'figma_page', 'figma_node', 'figma_component', 'requirement', 'upload_req', 'upload_dict', 'upload_api', 'upload_design', 'upload_data', 'upload_ddl'];
+
+  function _fmtBytes(n) {
+    if (n == null || isNaN(n)) return '—';
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    return (n / (1024 * 1024)).toFixed(2) + ' MB';
+  }
+
+  function _fmtNum(n) {
+    if (n == null || isNaN(n)) return '—';
+    return n.toLocaleString();
+  }
+
+  function openRagModal() {
+    var modal = $('ragModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    // 重置为加载态
+    $('ragStatTotal').textContent = '加载中...';
+    $('ragStatChars').textContent = '—';
+    $('ragStatBytes').textContent = '—';
+    $('ragStatEmbed').textContent = '—';
+    $('ragTableBody').innerHTML = '<tr><td colspan="5" class="ud-muted ud-center">加载中...</td></tr>';
+    // 拉取明细数据
+    api('GET', '/api/docs/rag/stats').then(function(r) {
+      if (!r || r.error) {
+        $('ragTableBody').innerHTML = '<tr><td colspan="5" style="color:var(--state-error-text);text-align:center;">' + escHtml((r && r.error) || '加载失败') + '</td></tr>';
+        return;
+      }
+      // 汇总
+      $('ragStatTotal').textContent = _fmtNum(r.chunk_count);
+      $('ragStatChars').textContent = _fmtNum(r.total_chars);
+      $('ragStatBytes').textContent = _fmtBytes(r.total_bytes);
+      var vecCount = r.vector_count || 0;
+      $('ragStatEmbed').textContent = r.has_embeddings ? ('已生成 ' + _fmtNum(vecCount)) : '未生成';
+      $('ragStatEmbed').style.color = r.has_embeddings ? 'var(--state-success-text)' : 'var(--state-warning-text)';
+      // 分类明细表
+      var byType = r.by_type || {};
+      var html = '';
+      RAG_TYPE_ORDER.forEach(function(t) {
+        var item = byType[t] || { count: 0, chars: 0, bytes: 0 };
+        var label = RAG_TYPE_LABELS[t] || t;
+        var count = item.count || 0;
+        // 数量为 0 的类型用灰色显示
+        var rowClass = count > 0 ? '' : ' class="ud-muted"';
+        // 权重展示（仅上传子类型有值），其余显示 — 
+        var weight = (item.weight != null && item.weight !== '') ? Number(item.weight).toFixed(2) : '—';
+        html += '<tr' + rowClass + '>' +
+          '<td><span class="rag-type-tag">' + escHtml(label) + '</span></td>' +
+          '<td class="col-num">' + _fmtNum(count) + '</td>' +
+          '<td class="col-num">' + _fmtNum(item.chars || 0) + '</td>' +
+          '<td class="col-num">' + _fmtBytes(item.bytes || 0) + '</td>' +
+          '<td class="col-num">' + weight + '</td>' +
+          '</tr>';
+      });
+      // 补充未在预定义列表中的类型（如果有）
+      Object.keys(byType).forEach(function(t) {
+        if (RAG_TYPE_ORDER.indexOf(t) !== -1) return;
+        var item = byType[t] || { count: 0, chars: 0, bytes: 0 };
+        var weight = (item.weight != null && item.weight !== '') ? Number(item.weight).toFixed(2) : '—';
+        html += '<tr>' +
+          '<td><span class="rag-type-tag">' + escHtml(t) + '</span></td>' +
+          '<td class="col-num">' + _fmtNum(item.count || 0) + '</td>' +
+          '<td class="col-num">' + _fmtNum(item.chars || 0) + '</td>' +
+          '<td class="col-num">' + _fmtBytes(item.bytes || 0) + '</td>' +
+          '<td class="col-num">' + weight + '</td>' +
+          '</tr>';
+      });
+      $('ragTableBody').innerHTML = html || '<tr><td colspan="5" style="color:var(--text-tertiary);text-align:center;">暂无数据</td></tr>';
+      // ★ 当总 chunks 为 0 时，显示构建索引引导
+      var totalChunks = r.chunk_count || 0;
+      var buildHint = $('ragBuildHint');
+      var buildBtn = $('ragBuildBtn');
+      if (buildHint && buildBtn) {
+        if (totalChunks === 0) {
+          buildHint.style.display = '';
+          buildBtn.style.display = '';
+        } else {
+          buildHint.style.display = 'none';
+          buildBtn.style.display = 'none';
+        }
+      }
+    }).catch(function(e) {
+      $('ragTableBody').innerHTML = '<tr><td colspan="5" style="color:var(--state-error-text);text-align:center;">网络错误: ' + escHtml(String(e)) + '</td></tr>';
+    });
+  }
+
+  function closeRagModal() {
+    var modal = $('ragModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  // KPI 卡片点击 → 打开 RAG 明细
+  var kpiRagCard = $('kpiRagCard');
+  if (kpiRagCard) kpiRagCard.addEventListener('click', openRagModal);
+  // 关闭按钮
+  var ragModalClose = $('ragModalClose');
+  if (ragModalClose) ragModalClose.addEventListener('click', closeRagModal);
+  var ragModalCloseBtn = $('ragModalCloseBtn');
+  if (ragModalCloseBtn) ragModalCloseBtn.addEventListener('click', closeRagModal);
+  // 点击遮罩关闭
+  var ragModal = $('ragModal');
+  if (ragModal) ragModal.addEventListener('click', function(e) {
+    if (e.target === this) closeRagModal();
+  });
+
+  // 启动
+  if (A._currentUser) {
+    loadDashboard();
+    // ★ 智能自适应轮询：活跃时 2s，隐藏时 30s，空闲时 10s
+    A.adaptivePoll('dashboard-status', loadStatus, { fastMs: 2000, slowMs: 10000, idleMs: 30000 });
+  }
+
+  // ★ 页面卸载时清理轮询
+  window.addEventListener('pagehide', function() { A.stopAdaptivePoll('dashboard-status'); });
+  window.addEventListener('beforeunload', function() { A.stopAdaptivePoll('dashboard-status'); });
+})();
+</script>
+{% endblock %}

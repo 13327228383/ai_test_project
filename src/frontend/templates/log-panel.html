@@ -1,0 +1,48 @@
+{% extends "_layout_base.html" %}
+{% block head_extra %}
+<style>
+  .log-panel-shell {
+    /* 占满内容区，内嵌 React 日志面板 */
+    position: relative;
+    width: 100%;
+    height: calc(100vh - 120px);
+    min-height: 480px;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 1px solid var(--border-faint);
+    background: var(--bg-elevated);
+  }
+  .log-panel-frame {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: var(--bg-elevated);
+  }
+</style>
+{% endblock %}
+{% block title %}实时日志面板 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+实时日志面板
+{% endblock %}
+
+{# ★ 根因(2026-08-31)：原 /log-panel 直接返回独立全屏 React 应用，进入会整体替换主侧边栏
+   与其它菜单（导航丢失、排序/显隐不一致）。现由本页(/realtime-logs)承接主壳，把 React
+   日志面板以 iframe 嵌入内容区，保留公共侧边栏/顶栏/权限菜单。
+   React bundle 内建 BrowserRouter basename="/log-panel"，只在 URL 恰为 /log-panel 时渲染
+   （其资源/API 均为绝对路径），故 iframe src 指向 /log-panel。 #}
+{% block content %}
+<div class="log-panel-shell">
+  <iframe
+    class="log-panel-frame"
+    src="/log-panel"
+    title="实时日志面板"
+    frameborder="0"
+    allow="clipboard-read; clipboard-write"></iframe>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% endblock %}

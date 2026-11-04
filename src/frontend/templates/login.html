@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://api.figma.com https://cdn.jsdelivr.net; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<title>登录 — E2E 智能测试引擎</title>
+<link rel="icon" type="image/jpeg" href="{{ static_ver('favicon.jpg') }}">
+<link rel="stylesheet" href="{{ static_ver('app-design.css') }}">
+<style>
+/* ── Login Page 专属样式（来源：_deprecated_prototype/pages/login.html，T05/P2-5 已迁移）── */
+.login-page {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.login-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 40%, var(--color-primary-soft) 0%, transparent 70%),
+    radial-gradient(ellipse 80% 60% at 20% 80%, var(--state-info-soft) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 50% at 85% 20%, var(--color-primary-soft) 0%, transparent 60%),
+    var(--bg-base);
+  z-index: 0;
+}
+
+.glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.glow-orb--1 {
+  width: 300px;
+  height: 300px;
+  top: -80px;
+  right: -60px;
+  background: var(--color-primary-soft);
+}
+
+.glow-orb--2 {
+  width: 200px;
+  height: 200px;
+  bottom: 60px;
+  left: -40px;
+  background: var(--state-info-soft);
+}
+
+.login-card {
+  position: relative;
+  z-index: 10;
+  width: 400px;
+  max-width: calc(100vw - 48px);
+  padding: var(--space-10) var(--space-8);
+  background: var(--bg-surface);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 0 0 1px var(--color-primary-soft),
+    0 20px 60px var(--bg-overlay),
+    0 8px 20px var(--bg-overlay);
+}
+
+.logo-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: var(--space-8);
+}
+
+.logo-badge {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--state-info-soft) 100%);
+  border: 1px solid var(--color-primary-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-4);
+  box-shadow: 0 0 20px var(--color-primary-soft);
+}
+
+.logo-badge-text {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: var(--fw-bold);
+  color: var(--color-primary);
+  letter-spacing: -0.5px;
+}
+
+.logo-title {
+  font-size: var(--fs-h1);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+}
+
+.logo-version {
+  display: inline-flex;
+  align-items: center;
+  margin-top: var(--space-2);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-primary-soft);
+  border: 1px solid var(--color-primary-border);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--color-primary);
+}
+
+.form-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.form-input-wrapper svg.field-icon {
+  position: absolute;
+  left: var(--space-3);
+  width: 16px;
+  height: 16px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.logo-badge-img {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.login-card .form-input,
+.login-card .form-select {
+  width: 100%;
+  height: var(--control-height-lg);
+  padding: 0 var(--space-3) 0 36px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-card .form-select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+  padding-right: 36px;
+}
+
+.form-input--password {
+  padding-right: var(--space-8);
+}
+
+.password-toggle {
+  position: absolute;
+  right: var(--space-2);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.password-toggle:hover {
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+}
+
+.password-toggle svg { width: 16px; height: 16px; }
+
+.btn-login-submit {
+  width: 100%;
+  height: var(--control-height-lg);
+  margin-top: var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--text-inverse);
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+}
+
+.btn-login-submit:hover {
+  background: var(--color-primary-hover);
+  box-shadow: 0 4px 16px var(--color-primary-soft);
+}
+
+.btn-login-submit:active { transform: scale(0.98); }
+.btn-login-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-login-submit svg { width: 16px; height: 16px; }
+
+.remember-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-1);
+}
+
+.remember-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.remember-label input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.remember-label input[type="checkbox"]:checked {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.remember-label input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 4.5px;
+  top: 1.5px;
+  width: 4.5px;
+  height: 8px;
+  border: solid var(--text-inverse);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+.forgot-link {
+  font-size: var(--fs-small);
+  color: var(--text-tertiary);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.forgot-link:hover { color: var(--color-primary); }
+
+.form-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-5) 0;
+}
+
+.form-divider::before,
+.form-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-default);
+}
+
+.form-divider span {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.register-link-area {
+  margin-top: var(--space-5);
+  text-align: center;
+  font-size: var(--fs-small);
+  color: var(--text-tertiary);
+}
+
+.register-link {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: var(--fw-medium);
+  transition: color 0.15s ease;
+}
+
+.register-link:hover {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
+}
+
+.login-footer {
+  position: absolute;
+  bottom: var(--space-6);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  letter-spacing: 0.3px;
+}
+
+.login-msg {
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--state-error-soft);
+  border: 1px solid var(--state-error-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-small);
+  color: var(--state-error-text);
+  text-align: center;
+}
+</style>
+</head>
+<body>
+<div class="login-page">
+  <div class="login-bg"></div>
+  <div class="glow-orb glow-orb--1"></div>
+  <div class="glow-orb glow-orb--2"></div>
+
+  <div class="login-card">
+    <div class="logo-area">
+      <div class="logo-badge">
+        <img src="{{ static_ver('logo.jpg') }}" alt="E2E" class="logo-badge-img">
+      </div>
+      <div class="logo-title">智能测试引擎</div>
+      <span class="logo-version">v4.0</span>
+    </div>
+
+    <form onsubmit="return false;" autocomplete="off">
+      <div class="form-group">
+        <label class="form-label">用户账户</label>
+        <div class="form-input-wrapper">
+          <svg class="field-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+          <select class="form-select" id="userSelect">
+            <option value="">⏳ 正在加载用户列表...</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">密码</label>
+        <div class="form-input-wrapper">
+          <svg class="field-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          <input type="password" class="form-input form-input--password" id="loginPassword" placeholder="请输入登录密码" autocomplete="new-password"/>
+          <button type="button" class="password-toggle" id="btnTogglePwd">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="eye-open">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="eye-closed" style="display:none;">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+              <line x1="1" y1="1" x2="23" y2="23"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="remember-row">
+        <label class="remember-label">
+          <input type="checkbox" id="rememberMe" checked />
+          <span>记住登录状态</span>
+        </label>
+        <!-- T05/P2-2：内联 alert → 统一 toast；此处在 IIFE 外，走 window._A 全局引用 -->
+        <a href="javascript:void(0)" class="forgot-link" title="请联系数据管理员重置" onclick="window._A &amp;&amp; window._A.toast('忘记密码？请联系数据管理员重置。', 'info')">忘记密码?</a>
+      </div>
+
+      <div id="loginMsg" class="login-msg hidden"></div>
+
+      <button type="button" class="btn-login-submit" id="btnLogin" disabled>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+          <polyline points="10 17 15 12 10 7"/>
+          <line x1="15" y1="12" x2="3" y2="12"/>
+        </svg>
+        登录系统
+      </button>
+    </form>
+
+    <div class="form-divider">
+      <span>还没有账户?</span>
+    </div>
+
+    <div class="register-link-area">
+      <a href="/register" class="register-link">注册新用户</a>
+    </div>
+  </div>
+
+  <div class="login-footer">E2E Intelligent Test Engine v4.0</div>
+</div>
+
+<script src="{{ static_ver('app-common.js') }}"></script>
+<script>
+(function() {
+'use strict';
+var A = window._A;
+var $ = A.$;
+
+// ── 获取 redirect 参数 ──
+function getRedirect() {
+  var params = new URLSearchParams(window.location.search);
+  var r = params.get('redirect');
+  if (r && r.charAt(0) === '/' && r.indexOf('//') !== 0) return r;
+  return '/dashboard';
+}
+
+// ── 已登录则跳转 ──
+A._onAuthOk = function() {
+  // 已登录，直接跳转
+  window.location.href = getRedirect();
+};
+A._onAuthFail = function() {
+  // 未登录，留在登录页，加载用户列表
+  loadUsers();
+};
+
+// ── 加载用户列表 ──
+function loadUsers() {
+  var sel = $('userSelect');
+  if (!sel) return;
+  fetch('/api/users', { credentials: 'same-origin' })
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(r) {
+      var users = Array.isArray(r) ? r : (r.users || []);
+      if (!Array.isArray(users) || users.length === 0) {
+        sel.innerHTML = '<option value="">⚠️ 暂无用户，请先注册</option>';
+        return;
+      }
+      var seen = new Set();
+      var uniq = users.filter(function(u) {
+        if (!u || !u.id) return false;
+        if (seen.has(u.id)) return false;
+        seen.add(u.id);
+        return true;
+      });
+      sel.innerHTML = '<option value="">选择用户...</option>' +
+        uniq.map(function(u) {
+          return '<option value="' + A.escAttr(u.id) + '">' + A.escHtml(u.name) + ' (' + A.escHtml(u.id) + ')</option>';
+        }).join('');
+    })
+    .catch(function(e) {
+      sel.innerHTML = '<option value="">⚠️ 加载失败，请刷新重试</option>';
+      console.warn('[login] loadUsers failed:', e);
+    });
+}
+
+// ── 密码切换 ──
+var btnTogglePwd = $('btnTogglePwd');
+if (btnTogglePwd) btnTogglePwd.addEventListener('click', function() {
+  var input = $('loginPassword');
+  var eyeOpen = btnTogglePwd.querySelector('.eye-open');
+  var eyeClosed = btnTogglePwd.querySelector('.eye-closed');
+  if (input.type === 'password') {
+    input.type = 'text';
+    eyeOpen.style.display = 'none';
+    eyeClosed.style.display = 'block';
+  } else {
+    input.type = 'password';
+    eyeOpen.style.display = 'block';
+    eyeClosed.style.display = 'none';
+  }
+});
+
+// ── 选择用户后聚焦密码框 ──
+var userSelect = $('userSelect');
+if (userSelect) userSelect.addEventListener('change', function() {
+  if (this.value) {
+    var msg = $('loginMsg');
+    if (msg) msg.classList.add('hidden');
+    var pw = $('loginPassword');
+    if (pw) setTimeout(function() { pw.focus(); }, 50);
+  }
+});
+
+// ── 密码输入同步登录按钮状态 ──
+var loginPassword = $('loginPassword');
+function syncLoginButton() {
+  var btn = $('btnLogin');
+  var uid = userSelect ? userSelect.value : '';
+  var pwVal = loginPassword ? loginPassword.value : '';
+  if (btn) btn.disabled = !uid || !pwVal || !pwVal.trim();
+}
+if (userSelect) {
+  userSelect.addEventListener('change', syncLoginButton);
+}
+if (loginPassword) {
+  loginPassword.addEventListener('keyup', syncLoginButton);
+  loginPassword.addEventListener('input', syncLoginButton);
+  loginPassword.addEventListener('focus', syncLoginButton);
+  loginPassword.addEventListener('keydown', function(e) {
+    var btn = $('btnLogin');
+    if (e && e.key === 'Enter' && btn && !btn.disabled) btn.click();
+  });
+}
+
+// ── 登录按钮 ──
+var btnLogin = $('btnLogin');
+console.log('[login] btnLogin element:', btnLogin, 'disabled:', btnLogin && btnLogin.disabled);
+if (btnLogin) {
+  console.log('[login] attaching click listener');
+  btnLogin.addEventListener('click', function() {
+    console.log('[login-v2] click handler fired, disabled:', this.disabled);
+    if (this.disabled) return;
+    var uid = userSelect ? userSelect.value : '';
+    var pwVal = loginPassword ? loginPassword.value : '';
+    if (!uid) { showMsg('请选择用户'); return; }
+    if (!pwVal) { showMsg('请输入密码'); return; }
+    hideMsg();
+    var self = this;
+    self.disabled = true;
+    self.textContent = '登录中...';
+    console.log('[login] calling api login', uid);
+    Promise.race([
+      A.api('POST', '/api/login', { user_id: uid, password: pwVal }),
+      new Promise(function(_, rej) {
+        setTimeout(function() { rej(new Error('登录超时，请稍后重试')); }, 15000);
+      })
+    ]).then(function(r) {
+      console.log('[login] api result', r);
+      if (r && r.ok) {
+        if (loginPassword) loginPassword.value = '';
+        var redirectUrl = getRedirect();
+        window.location.href = redirectUrl;
+      } else {
+        showMsg((r && r.error) || '登录失败');
+        btnLogin.disabled = false;
+        btnLogin.textContent = '登录系统';
+      }
+    }).catch(function(e) {
+      showMsg((e && e.message) || '网络错误');
+      btnLogin.disabled = false;
+      btnLogin.textContent = '登录系统';
+    });
+  });
+}
+
+function showMsg(text) {
+  var msg = $('loginMsg');
+  if (msg) { msg.textContent = text; msg.classList.remove('hidden'); }
+}
+function hideMsg() {
+  var msg = $('loginMsg');
+  if (msg) msg.classList.add('hidden');
+}
+
+})();
+</script>
+</body>
+</html>

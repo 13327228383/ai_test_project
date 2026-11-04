@@ -1,0 +1,79 @@
+{
+  "_comment": "操作动词和目标对象词典 - 支持多语言扩展",
+  "_version": "1.1",
+  
+  "operation_verbs": {
+    "zh": [
+      "点击", "输入", "选择", "提交", "删除", "修改", "保存", "查询", "搜索", "登录", "退出",
+      "上传", "下载", "审核", "审批", "启用", "禁用", "新增", "编辑", "导出", "导入", "配置",
+      "设置", "确认", "取消", "创建", "更新", "查看", "关闭", "展开", "收起", "复制", "粘贴",
+      "打印", "发送", "接收", "分配", "激活", "注销", "注册", "绑定", "解绑", "审查", "批准",
+      "驳回", "签署", "签订", "筛选", "勾选", "填写", "打开"
+    ],
+    "en": [
+      "click", "submit", "enter", "select", "delete", "update", "save", "search", "login", "logout",
+      "upload", "download", "create", "view", "close", "expand", "collapse", "copy", "paste", "print",
+      "send", "receive", "assign", "config", "enable", "disable", "bind", "approve", "reject", "edit",
+      "add", "open", "input", "query", "export", "import", "modify", "remove", "check", "uncheck"
+    ]
+  },
+  
+  "target_objects": {
+    "zh": [
+      "按钮", "表单", "列表", "页面", "弹窗", "菜单", "输入框", "复选框", "下拉框", "开关", "链接",
+      "图标", "用户", "角色", "权限", "数据", "记录", "信息", "文件", "图片", "文档", "报表", "日志",
+      "配置", "参数", "订单", "商品", "账户", "密码", "金额", "数量", "日期", "时间", "状态", "类型"
+    ],
+    "en": [
+      "button", "form", "list", "page", "dialog", "menu", "input", "checkbox", "select", "switch", "link",
+      "icon", "user", "role", "permission", "data", "record", "info", "file", "image", "document", "report",
+      "log", "config", "parameter", "order", "product", "account", "password", "amount", "quantity", "date",
+      "time", "status", "type"
+    ]
+  },
+  
+  "function_patterns": {
+    "zh": ["步骤", "预期", "条件", "规则", "限制", "约束", "校验", "验证", "反馈", "响应"],
+    "en": ["should", "must", "expected", "when", "then", "requirement", "step", "condition", "rule", "feedback"]
+  },
+  
+  "completeness_check": {
+    "vague_feedback": {
+      "zh": ["成功", "正常", "完成", "生效", "可用", "没问题", "可以", "好了", "完成操作", "操作完成", "操作成功", "处理完成", "处理成功", "系统正常", "功能正常"],
+      "en": ["success", "normal", "completed", "effective", "available", "ok", "done", "finished", "processed", "system normal", "function normal"]
+    },
+    "broad_description": {
+      "zh": ["管理正常", "运行正常", "功能正常", "系统正常", "功能完善", "正常工作", "正常运作", "工作正常"],
+      "en": ["management normal", "running normal", "function normal", "system normal", "function complete", "working normally", "operating normally", "working normally"]
+    },
+    "vague_operation": {
+      "zh": ["操作系统", "管理系统", "处理功能", "操作功能", "管理功能", "使用系统", "操作系统功能", "处理系统"],
+      "en": ["operating system", "management system", "processing function", "operation function", "management function", "use system", "operating system function", "processing system"]
+    },
+    "permission_keywords": {
+      "zh": ["权限", "角色", "管理员", "超管", "审批", "负责人", "授权", "授予"],
+      "en": ["permission", "role", "administrator", "super admin", "approval", "responsible person", "authorize", "grant"]
+    },
+    "untestable_feedback": {
+      "_comment": "主观/相对/不可量化表述：无法在自动化 E2E 中做精确断言",
+      "zh": [
+        "体验良好", "体验好", "体验友好", "用户体验", "使用体验", "界面美观", "美观大方",
+        "页面整洁", "好看", "漂亮", "操作友好", "交互友好", "交互流畅", "流畅", "使用方便",
+        "方便使用", "便捷", "易用", "好用", "感觉不错", "看起来", "似乎", "应该",
+        "很快", "快速", "极快", "非常快", "迅速", "秒级", "响应快", "加载快", "速度快",
+        "高效", "性能好", "性能良好",
+        "优于", "更好", "最佳", "最优", "最好", "更优", "更佳", "最佳体验",
+        "合理", "良好", "优秀", "出色", "完美", "稳定", "舒适", "自然"
+      ],
+      "en": [
+        "fast", "quickly", "smooth", "good", "excellent", "beautiful", "nice",
+        "user-friendly", "intuitive", "better", "best", "optimal"
+      ]
+    }
+  },
+  
+  "verb_prefixes": {
+    "zh": ["用户点击", "点击", "用户输入", "输入", "用户选择", "选择", "用户操作", "操作", "用户提交", "提交", "用户", "系统", "进行"],
+    "en": ["user clicks", "click", "user inputs", "input", "user selects", "select", "user operates", "operate", "user submits", "submit", "user", "system", "perform"]
+  }
+}

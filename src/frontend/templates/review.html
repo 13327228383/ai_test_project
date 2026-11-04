@@ -1,0 +1,1555 @@
+{% extends "_layout_base.html" %}
+{% block title %}需求审核闸门 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+需求审核闸门 (Step2)
+{% endblock %}
+
+{% block topbar_actions %}
+<a href="/pipeline" class="btn-topbar" data-tooltip="返回流水线执行页" data-tooltip-pos="bottom">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+    返回
+  </a>
+<button class="btn-topbar" id="btnRefresh" data-perm="execution.step2" data-tooltip="重新加载需求列表" data-tooltip-pos="bottom">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+    刷新列表
+  </button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════ 信息栏 ════════════ -->
+<div class="rv-info-bar">
+  <div class="rv-info-item">
+    <span class="rv-info-label">需求总数</span>
+    <span class="rv-info-value" id="totalCount">0</span>
+  </div>
+  <div class="rv-info-item">
+    <span class="rv-info-label">已审核</span>
+    <span class="rv-info-value" id="approvedCount">0</span>
+  </div>
+  <div class="rv-info-item">
+    <span class="rv-info-label">通过率</span>
+    <span class="rv-info-value" id="approvalRate">-</span>
+  </div>
+  <div class="rv-info-item">
+    <span class="rv-info-label">完整性问题</span>
+    <span class="rv-info-value rv-info-warn" id="issueCount">0</span>
+  </div>
+  <div class="rv-info-item">
+    <span class="rv-info-label">预检状态</span>
+    <div class="rv-preflight-item" id="preflightStatus">
+      <span class="rv-preflight-dot"></span>
+      <span class="rv-preflight-text">加载中...</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ 主面板 ════════════ -->
+<div class="rv-panel">
+
+  <div class="rv-cols">
+
+    <!-- 左栏：需求列表 -->
+    <div class="rv-list-col">
+      <div class="rv-list-header">
+        <div class="rv-section-title">需求条目 <span class="rv-section-count" id="listCount">0</span></div>
+        <input type="text" id="searchInput" class="rv-search" placeholder="搜索 REQ-ID / 描述...">
+        <select id="statusFilter" class="rv-filter">
+          <option value="">全部状态</option>
+          <option value="approved">已确认</option>
+          <option value="pending">待审核</option>
+          <option value="pending_review">待审核(需人工)</option>
+          <option value="rejected">已驳回</option>
+        </select>
+      </div>
+      <div class="rv-list-wrap" id="reqList">
+        <div class="rv-empty-state">加载中...</div>
+      </div>
+      <div class="rv-list-footer">
+        <span class="rv-footer-info">显示 <span id="visibleCount">0</span> / <span id="totalItemsCount">0</span> 条</span>
+      </div>
+    </div>
+
+    <!-- 右栏：详情 -->
+    <div class="rv-detail-col">
+      <div class="rv-detail-empty" id="detailEmpty">请选择左侧需求条目查看详情</div>
+      <div class="rv-detail" id="detailPanel" style="display:none;">
+        <div class="rv-detail-header">
+          <div class="rv-detail-id" id="detailReqId">-</div>
+          <div class="rv-detail-title" id="detailTitle">-</div>
+          <div class="rv-detail-badges">
+            <span class="rv-badge rv-badge-module" id="detailModule">-</span>
+            <span class="rv-badge rv-badge-status" id="detailStatus">-</span>
+          </div>
+        </div>
+
+        <div class="rv-detail-section">
+          <div class="rv-section-title">原文引用</div>
+          <div class="rv-quote-block" id="detailQuote">-</div>
+        </div>
+
+        <div class="rv-detail-section">
+          <div class="rv-section-title">需求描述</div>
+          <textarea class="rv-textarea" id="editDescription" rows="4" placeholder="需求描述"></textarea>
+        </div>
+
+        <div class="rv-detail-section">
+          <div class="rv-section-title">置信度分析</div>
+          <div class="rv-dim-list" id="dimList">
+            <div class="rv-empty-mini">无置信度数据</div>
+          </div>
+        </div>
+
+        <div class="rv-detail-section rv-confidence-card" id="confidenceCard">
+          <div class="rv-confidence-label">综合置信度</div>
+          <div class="rv-confidence-score" id="confidenceScore">-</div>
+          <div class="rv-confidence-hint">基于 5 维度加权计算</div>
+        </div>
+
+        <!-- 8. 关系链路（★ 新增 07-05h）-->
+        <div class="rv-detail-section">
+          <div class="rv-section-title">
+            关系链路
+            <button class="rv-chain-toggle-btn" id="chainToggleBtn" type="button" data-tooltip="展开/折叠完整关系链路" data-tooltip-pos="right">
+              <span class="rv-chain-toggle-icon">▶</span>
+            </button>
+          </div>
+          <div class="rv-chain-container" id="chainContainer" style="display:none;">
+            <div class="rv-chain-loading">加载中...</div>
+          </div>
+        </div>
+
+        <div class="rv-detail-section rv-completeness-section" id="completenessSection" style="display:none;">
+          <div class="rv-section-title">完整性问题</div>
+          <div class="rv-issue-list" id="issueList"></div>
+        </div>
+
+        <div class="rv-detail-actions">
+          <button class="rv-btn-ghost" id="btnReject" type="button" data-tooltip="驳回当前需求" data-tooltip-pos="top">驳回</button>
+          <button class="rv-btn-ghost" id="btnEdit" type="button" data-tooltip="保存描述修改并标记为已审核" data-tooltip-pos="top">保存修改</button>
+          <button class="rv-btn-primary" id="btnApprove" type="button" data-tooltip="通过当前需求" data-tooltip-pos="top">通过</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 底部操作 -->
+  <div class="rv-action-row">
+    <button class="rv-btn-danger" id="btnRejectAll" type="button" data-tooltip="一次性驳回所有需求并终止流水线" data-tooltip-pos="top">驳回并终止</button>
+    <button class="rv-btn-ghost" id="btnAddReq" type="button" data-tooltip="手动添加一条遗漏的需求条目" data-tooltip-pos="top">添加遗漏需求</button>
+    <button class="rv-btn-primary" id="btnConfirm" type="button" data-tooltip="自动放行 green 车道需求，yellow/red 需逐条人审" data-tooltip-pos="top">自动放行 Green 车道</button>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ★ 页面级 flex 布局，让面板填满剩余空间 */
+.content-body {
+  display: flex;
+  flex-direction: column;
+}
+/* ════════════ 信息栏 ════════════ */
+.rv-info-bar {
+  display: flex; gap: 32px;
+  padding: 16px 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.rv-info-item { display: flex; flex-direction: column; gap: 4px; }
+.rv-info-label { font-size: var(--fs-small); color: var(--text-secondary); }
+.rv-info-value {
+  font-size: var(--fs-h3); font-weight: var(--fw-semibold);
+  color: var(--text-primary); font-family: var(--font-mono);
+}
+.rv-info-primary { color: var(--color-primary); }
+.rv-info-warn { color: var(--state-warning-text); }
+
+/* ════════════ 主面板 ════════════ */
+.rv-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 8px 24px var(--bg-overlay);
+  overflow: hidden;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.rv-cols {
+  display: grid;
+  grid-template-columns: 55% 45%;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ════════════ 左栏：列表 ════════════ */
+.rv-list-col {
+  display: flex; flex-direction: column;
+  border-right: 1px solid var(--border-default);
+  overflow: hidden;              /* ★ 防止子元素撑开 */
+}
+.rv-list-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--border-faint);
+  flex-shrink: 0;
+}
+.rv-section-title {
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  display: flex; align-items: center; gap: 8px;
+}
+.rv-section-count {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  background: var(--border-subtle);
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+}
+.rv-search {
+  flex: 1;
+  height: var(--control-height);
+  padding: 0 12px;
+  border-radius: var(--control-radius);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: var(--fs-small);
+  outline: none;
+}
+.rv-search:focus { border-color: var(--color-primary); }
+.rv-filter {
+  height: var(--control-height);
+  padding: 0 12px;
+  border-radius: var(--control-radius);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: var(--fs-small);
+  outline: none;
+  cursor: pointer;
+}
+.rv-list-wrap {
+  flex: 1;
+  overflow-y: auto;
+}
+.rv-empty-state {
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: var(--fs-small);
+}
+
+.rv-req-item {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border-default);
+  cursor: pointer;
+  transition: background 0.1s;
+  border-left: 3px solid transparent;
+}
+.rv-req-item:hover { background: var(--border-faint); }
+.rv-req-item.selected {
+  background: var(--color-primary-soft);
+  border-left-color: var(--color-primary);
+}
+.rv-req-item.status-approved { border-left-color: var(--state-success); }
+.rv-req-item.status-rejected { border-left-color: var(--state-error); }
+.rv-req-item.status-pending { border-left-color: var(--text-tertiary); }
+.rv-req-row1 {
+  display: flex; align-items: center; gap: 8px;
+  font-size: var(--fs-small);
+}
+.rv-req-id {
+  font-family: var(--font-mono);
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+.rv-req-module {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  background: var(--border-subtle);
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+.rv-req-status {
+  font-size: var(--fs-xs);
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.rv-req-status.approved { background: var(--state-success-tint); color: var(--state-success-text); }
+.rv-req-status.pending { background: var(--border-default); color: var(--text-secondary); }
+.rv-req-status.rejected { background: var(--state-error-tint); color: var(--state-error-text); }
+.rv-req-desc {
+  font-size: var(--fs-small);
+  color: var(--text-primary);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rv-req-conf {
+  display: flex; align-items: center; gap: 6px;
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+}
+.rv-req-conf-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--border-default);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.rv-req-conf-fill {
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: var(--radius-full);
+}
+.rv-req-conf-fill.high { background: var(--state-success); }
+.rv-req-conf-fill.mid { background: var(--state-warning); }
+.rv-req-conf-fill.low { background: var(--state-error); }
+.rv-list-footer {
+  padding: 8px 20px;
+  border-top: 1px solid var(--border-default);
+  background: var(--border-faint);
+}
+.rv-footer-info { font-size: var(--fs-xs); color: var(--text-tertiary); }
+.rv-footer-info span { color: var(--text-primary); font-family: var(--font-mono); font-weight: var(--fw-semibold); }
+
+/* ════════════ 右栏：详情 ════════════ */
+.rv-detail-col {
+  display: flex; flex-direction: column;
+  background: var(--border-faint);
+  overflow: hidden;
+}
+.rv-detail-empty {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-tertiary);
+  font-size: var(--fs-body);
+}
+.rv-detail {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+.rv-detail-header {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-default);
+}
+.rv-detail-id {
+  font-family: var(--font-mono);
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-bold);
+  color: var(--color-primary);
+  margin-bottom: 4px;
+}
+.rv-detail-title {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+.rv-detail-badges {
+  display: flex; gap: 6px;
+}
+.rv-badge {
+  font-size: var(--fs-xs);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+.rv-badge-module { background: var(--color-primary-soft); color: var(--color-primary); }
+.rv-badge-status.approved { background: var(--state-success-tint); color: var(--state-success-text); }
+.rv-badge-status.pending { background: var(--border-default); color: var(--text-secondary); }
+.rv-badge-status.rejected { background: var(--state-error-tint); color: var(--state-error-text); }
+
+.rv-detail-section { margin-bottom: 20px; }
+.rv-detail-section .rv-section-title {
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.rv-detail-section .rv-section-title::after {
+  content: ''; flex: 1; height: 1px; background: var(--border-default); margin-left: 8px;
+}
+.rv-quote-block {
+  padding: 10px 12px;
+  background: var(--color-primary-soft);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  font-style: italic;
+  line-height: 1.6;
+  word-break: break-all;
+}
+.rv-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--control-radius);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: var(--fs-small);
+  outline: none;
+  resize: vertical;
+  line-height: 1.5;
+  overflow: auto;
+}
+.rv-textarea:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+
+.rv-dim-list { display: flex; flex-direction: column; gap: 8px; }
+.rv-dim-item { display: flex; flex-direction: column; gap: 3px; }
+.rv-dim-row { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-xs); }
+.rv-dim-name { color: var(--text-secondary); }
+.rv-dim-name-extra { color: var(--text-tertiary); }
+.rv-dim-value { color: var(--text-primary); font-family: var(--font-mono); font-weight: var(--fw-semibold); }
+.rv-dim-bar {
+  height: 5px;
+  background: var(--border-default);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.rv-dim-bar-fill {
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: var(--radius-full);
+}
+
+.rv-empty-mini {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: var(--fs-small);
+}
+.rv-empty-pad { padding: 16px; }
+
+.rv-confidence-card {
+  padding: 16px;
+  background: var(--state-success-soft);
+  border: 1px solid var(--state-success);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+.rv-confidence-label {
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+.rv-confidence-score {
+  font-size: 28px;
+  font-weight: var(--fw-bold);
+  color: var(--state-success-text);
+  font-family: var(--font-mono);
+}
+.rv-confidence-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  margin-top: 4px;
+}
+
+
+
+.rv-completeness-section .rv-issue-list {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.rv-issue-item {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--state-warning-soft);
+  border-left: 2px solid var(--state-warning);
+  font-size: var(--fs-xs);
+  color: var(--state-warning-text);
+}
+
+.rv-detail-actions {
+  display: flex; gap: 8px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-default);
+}
+.rv-btn-ghost, .rv-btn-primary, .rv-btn-danger {
+  height: var(--control-height-lg);
+  padding: 0 20px;
+  border-radius: var(--radius-md);
+  font-size: var(--fs-body);
+  font-family: var(--font-sans);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.rv-btn-ghost {
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-secondary);
+}
+.rv-btn-ghost:hover { border-color: var(--border-hover); color: var(--text-primary); }
+.rv-btn-primary {
+  border: none;
+  background: var(--color-primary);
+  color: var(--text-inverse);
+  font-weight: var(--fw-semibold);
+  margin-left: auto;
+}
+.rv-btn-primary:hover {
+  background: var(--color-primary-hover);
+  box-shadow: 0 0 16px var(--color-primary-glow);
+}
+.rv-btn-danger {
+  border: 1px solid var(--state-error);
+  background: transparent;
+  color: var(--state-error-text);
+}
+.rv-btn-danger:hover {
+  background: var(--state-error);
+  color: var(--text-on-color);
+}
+.rv-btn-ghost:disabled, .rv-btn-primary:disabled, .rv-btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.rv-btn-ghost:disabled:hover, .rv-btn-primary:disabled:hover, .rv-btn-danger:disabled:hover {
+  background: transparent;
+  border-color: var(--border-default);
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+
+/* ════════════ 底部操作 ════════════ */
+.rv-action-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-default);
+  background: var(--border-faint);
+  flex-shrink: 0;
+}
+.rv-action-row .rv-btn-primary { margin-left: auto; }
+
+/* ★ 关系链路组件（07-05h）*/
+.rv-chain-toggle-btn {
+  display: inline-block;
+  background: transparent;
+  border: none;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  padding: 0 6px;
+  transition: transform 0.2s;
+}
+.rv-chain-toggle-btn:hover { color: var(--color-primary-hover); }
+.rv-chain-toggle-icon { display: inline-block; transition: transform 0.2s; }
+.rv-chain-toggle-btn.expanded .rv-chain-toggle-icon { transform: rotate(90deg); }
+
+.rv-chain-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 12px;
+  background: var(--color-primary-soft);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.rv-chain-loading {
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  text-align: center;
+  padding: 12px;
+}
+
+.rv-chain-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rv-chain-section-title {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border-default);
+  padding-bottom: 4px;
+}
+
+.rv-chain-item {
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border-left: 2px solid var(--color-primary);
+  font-size: var(--fs-xs);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.rv-chain-item:hover { background: var(--color-primary-soft); }
+
+.rv-chain-item-title {
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.rv-chain-item-meta {
+  color: var(--text-secondary);
+  font-size: var(--fs-micro);
+  font-family: var(--font-sans);
+}
+
+.rv-chain-empty {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  font-style: italic;
+  padding: 4px 0;
+}
+
+.rv-chain-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-medium);
+  margin-right: 4px;
+}
+.rv-chain-tag-req { background: var(--step2-soft); color: var(--step2-color); }
+.rv-chain-tag-case { background: var(--step3-soft); color: var(--step3-color); }
+.rv-chain-tag-slice { background: var(--state-info-tint); color: var(--state-info); }
+.rv-chain-tag-figma { background: var(--color-figma-soft); color: var(--color-figma); }
+.rv-chain-tag-api { background: var(--state-success-tint); color: var(--state-success); }
+.rv-chain-tag-db { background: var(--state-warning-tint); color: var(--state-warning); }
+/* 预检状态 */
+.rv-preflight-item { display: flex; align-items: center; gap: 8px; }
+.rv-preflight-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--text-tertiary); }
+.rv-preflight-dot.ok { background: var(--state-success); }
+.rv-preflight-dot.warn { background: var(--state-warning); }
+.rv-preflight-dot.err { background: var(--state-error); }
+.rv-preflight-text { font-size: var(--fs-small); color: var(--text-primary); }
+.rv-preflight-sub { font-size: var(--fs-xs); color: var(--text-tertiary); }
+
+/* ★ 搜索建议列表（添加遗漏需求） */
+.rv-search-suggestions {
+  margin-bottom: 20px;
+}
+.rv-suggestion-item {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-default);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.rv-suggestion-item:hover { background: var(--color-primary-soft); }
+.rv-suggestion-item:last-child { border-bottom: none; }
+.rv-suggestion-row1 {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 4px;
+}
+.rv-suggestion-row2 {
+  margin-bottom: 4px;
+}
+.rv-suggestion-row3 {
+  font-size: var(--fs-xs);
+}
+.rv-coverage-covered {
+  color: var(--state-success-text);
+  font-weight: var(--fw-semibold);
+}
+.rv-coverage-none {
+  color: var(--text-tertiary);
+}
+
+/* ★ P1-7: 三车道分色（lane 徽章 + 行级边框，复用现有状态色变量，不改布局） */
+.rv-req-item.row-lane-green { border-left-color: var(--state-success); }
+.rv-req-item.row-lane-yellow { border-left-color: var(--state-warning); }
+.rv-req-item.row-lane-red { border-left-color: var(--state-error); }
+.rv-lane-badge {
+  display: inline-block; font-size: 10px; padding: 0 6px; border-radius: 10px;
+  margin-left: 6px; line-height: 18px; font-weight: 600; vertical-align: middle;
+}
+.rv-lane-badge.green { background: var(--state-success-tint); color: var(--state-success-text); }
+.rv-lane-badge.yellow { background: var(--state-warning-tint); color: var(--state-warning-text); }
+.rv-lane-badge.red { background: var(--state-error-tint); color: var(--state-error-text); }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+'use strict';
+
+const A = window._A;
+if (!A) { console.error('[review] _A 未初始化'); return; }
+const $ = A.$, escHtml = A.escHtml, escAttr = A.escAttr, api = A.api, appendLog = A.appendLog;
+
+// ── 状态 ──
+const state = {
+  requirements: [],
+  filtered: [],
+  selectedReqId: null,
+  currentReq: null,
+  stats: {},
+  laneMap: {},         // ★ P1-7: {req_id: {lane, reason, routed_to_human}}
+};
+
+// ── 元素引用 ──
+const els = {
+  curProject: $('curProject'),
+  totalCount: $('totalCount'),
+  approvedCount: $('approvedCount'),
+  approvalRate: $('approvalRate'),
+  issueCount: $('issueCount'),
+  searchInput: $('searchInput'),
+  statusFilter: $('statusFilter'),
+  reqList: $('reqList'),
+  listCount: $('listCount'),
+  visibleCount: $('visibleCount'),
+  totalItemsCount: $('totalItemsCount'),
+  detailEmpty: $('detailEmpty'),
+  detailPanel: $('detailPanel'),
+  detailReqId: $('detailReqId'),
+  detailTitle: $('detailTitle'),
+  detailModule: $('detailModule'),
+  detailStatus: $('detailStatus'),
+  detailQuote: $('detailQuote'),
+  editDescription: $('editDescription'),
+  dimList: $('dimList'),
+  confidenceCard: $('confidenceCard'),
+  confidenceScore: $('confidenceScore'),
+  completenessSection: $('completenessSection'),
+  issueList: $('issueList'),
+  btnReject: $('btnReject'),
+  btnEdit: $('btnEdit'),
+  btnApprove: $('btnApprove'),
+  btnRejectAll: $('btnRejectAll'),
+  btnAddReq: $('btnAddReq'),
+  btnConfirm: $('btnConfirm'),
+  btnRefresh: $('btnRefresh'),
+  preflightStatus: $('preflightStatus'),
+};
+
+// ════════════ 工具函数 ════════════
+
+const DIMENSIONS = [
+  { key: 'source_traceable', label: '原文可追溯', weight: 0.25 },
+  { key: 'source_verified', label: '原文已验证', weight: 0.20 },
+  { key: 'section_covered', label: '章节覆盖度', weight: 0.15 },
+  { key: 'uniqueness', label: '唯一性', weight: 0.15 },
+  { key: 'description_specific', label: '描述具体性', weight: 0.10 },
+  { key: 'completeness', label: '完整性', weight: 0.15 },
+];
+
+function getConfidenceScore(req) {
+  if (!req) return null;
+  if (req._avg_confidence != null) return req._avg_confidence;
+  if (req.confidence == null) return null;
+  if (typeof req.confidence === 'number') return req.confidence;
+  if (typeof req.confidence === 'object') {
+    return req.confidence._avg_confidence != null ? req.confidence._avg_confidence : req.confidence.score;
+  }
+  return null;
+}
+
+function getConfidenceClass(score) {
+  if (score == null) return 'mid';
+  if (score >= 0.8) return 'high';
+  if (score >= 0.5) return 'mid';
+  return 'low';
+}
+
+function getReviewStatus(req) {
+  var rs = req.review_status || 'pending';
+  // ★ modified 视为已确认（修改后自动通过），与后端 _get_review_state 逻辑一致
+  if (rs === 'modified') return 'approved';
+  return rs;
+}
+
+function getStatusLabel(s) {
+  if (s === 'approved' || s === 'modified') return '已确认';
+  if (s === 'rejected') return '已驳回';
+  return '待审核';
+}
+
+// ════════════ 数据加载 ════════════
+
+async function loadRequirements() {
+  els.reqList.innerHTML = '<div class="rv-empty-state">加载中...</div>';
+  try {
+    const d = await api('GET', '/api/requirements');
+    if (!d || d.error) {
+      els.reqList.innerHTML = '<div class="rv-empty-state">加载失败: ' + escHtml((d && d.error) || '未知') + '</div>';
+      return;
+    }
+    state.requirements = d.requirements || [];
+    state.stats = d.stats || {};
+    renderStats();
+    applyFilters();
+    // ★ 默认条目：进入页面后若无任何选中项，自动选中并展示第一条需求详情，
+    //   避免右侧详情区一直停留在「请选择左侧需求条目查看详情」的空态。
+    //   仅首次（selectedReqId 为空）触发，用户手动选择或筛选后不强行跳转。
+    if (state.selectedReqId === null && state.filtered.length > 0) {
+      selectRequirement(state.filtered[0].req_id);
+    }
+    // ★ P1-7: 并行加载三车道数据（不阻断主流程，失败时降级为空 laneMap）
+    loadLaneData();
+  } catch (e) {
+    els.reqList.innerHTML = '<div class="rv-empty-state">加载异常: ' + escHtml(String(e)) + '</div>';
+    appendLog('⚠️ 加载需求列表失败: ' + String(e));
+  }
+}
+
+// ★ P1-7: 加载三车道路由数据
+async function loadLaneData() {
+  try {
+    const d = await api('GET', '/api/review/lane');
+    if (d && d.ok && d.lanes) {
+      const map = {};
+      d.lanes.forEach(function(l) {
+        const rid = l.req_id || l.case_id || '';
+        if (rid) {
+          map[rid] = {
+            lane: l.lane || 'yellow',
+            reason: l.reason || '',
+            routed_to_human: l.routed_to_human !== false,
+          };
+        }
+      });
+      state.laneMap = map;
+      // 更新列表中的 lane 分色
+      updateLaneBadges();
+    }
+  } catch (e) {
+    appendLog('⚠️ 加载三车道数据失败（降级为无 lane）: ' + String(e));
+  }
+}
+
+// ★ P1-7: 更新列表中的 lane badge（不重新渲染整个列表）
+function updateLaneBadges() {
+  els.reqList.querySelectorAll('.rv-req-item').forEach(function(item) {
+    const rid = item.dataset.reqId;
+    const laneInfo = state.laneMap[rid];
+    const oldBadge = item.querySelector('.rv-lane-badge');
+    if (oldBadge) oldBadge.remove();
+    if (laneInfo) {
+      const lane = laneInfo.lane;
+      const laneClass = 'row-lane-' + lane;
+      // 移除旧 lane class
+      item.classList.remove('row-lane-green', 'row-lane-yellow', 'row-lane-red');
+      item.classList.add(laneClass);
+      const badge = document.createElement('span');
+      badge.className = 'rv-lane-badge ' + lane;
+      badge.title = laneInfo.reason || '';
+      badge.textContent = lane === 'green' ? '绿' : (lane === 'yellow' ? '黄' : '红');
+      const reqIdEl = item.querySelector('.rv-req-id');
+      if (reqIdEl) reqIdEl.after(badge);
+    }
+  });
+}
+
+function renderStats() {
+  if (A._currentProject) {
+    if (els.curProject) els.curProject.textContent = A._currentProjectName || A._currentProject || '-';
+  }
+  const s = state.stats;
+  els.totalCount.textContent = s.total || state.requirements.length;
+  els.approvedCount.textContent = s.approved || 0;
+  els.approvalRate.textContent = s.approval_rate != null ? s.approval_rate + '%' : '-';
+  els.issueCount.textContent = s.completeness_issue_count || 0;
+}
+
+// ════════════ 过滤 ════════════
+
+function applyFilters() {
+  const kw = els.searchInput.value.trim().toLowerCase();
+  const statusF = els.statusFilter.value;
+  state.filtered = state.requirements.filter(r => {
+    if (kw) {
+      const id = (r.req_id || '').toLowerCase();
+      const desc = (r.description || '').toLowerCase();
+      if (!id.includes(kw) && !desc.includes(kw)) return false;
+    }
+    if (statusF && getReviewStatus(r) !== statusF) return false;
+    return true;
+  });
+  renderList();
+}
+
+function renderList() {
+  els.listCount.textContent = state.requirements.length;
+  els.totalItemsCount.textContent = state.requirements.length;
+  els.visibleCount.textContent = state.filtered.length;
+
+  if (state.filtered.length === 0) {
+    els.reqList.innerHTML = '<div class="rv-empty-state">暂无数据</div>';
+    // ★ 通用性修复：列表为空时右侧详情占位文案与空态保持一致，
+    //   杜绝「空列表却提示请选择左侧条目」的自相矛盾。
+    if (els.detailEmpty) {
+      els.detailEmpty.textContent =
+        state.requirements.length === 0 ? '暂无需求数据' : '当前筛选条件下无匹配条目';
+    }
+    return;
+  }
+  els.reqList.innerHTML = state.filtered.map(r => {
+    const id = r.req_id || '-';
+    const status = getReviewStatus(r);
+    const statusLabel = getStatusLabel(status);
+    const score = getConfidenceScore(r);
+    const confClass = getConfidenceClass(score);
+    const displayScore = score != null ? (score > 1 ? Math.round(score) : Math.round(score * 100)) : null;
+    const percent = displayScore != null ? displayScore + '%' : '-';
+    const selectedCls = state.selectedReqId === id ? ' selected' : '';
+    return '<div class="rv-req-item status-' + status + selectedCls + '" data-req-id="' + escAttr(id) + '">' +
+      '<div class="rv-req-row1">' +
+        '<span class="rv-req-id">' + escHtml(id) + '</span>' +
+        '<span class="rv-req-module">' + escHtml(r.module || '-') + '</span>' +
+        '<span class="rv-req-status ' + status + '">' + statusLabel + '</span>' +
+      '</div>' +
+      '<div class="rv-req-desc">' + escHtml(r.description || '-') + '</div>' +
+      '<div class="rv-req-conf">' +
+        '<span>置信度</span>' +
+        '<div class="rv-req-conf-bar"><div class="rv-req-conf-fill ' + confClass + '" style="width:' + (displayScore != null ? displayScore : 0) + '%"></div></div>' +
+        '<span>' + percent + '</span>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  els.reqList.querySelectorAll('.rv-req-item').forEach(item => {
+    item.addEventListener('click', function() {
+      selectRequirement(this.dataset.reqId);
+    });
+  });
+}
+
+function selectRequirement(reqId) {
+  // ★ 退出添加模式
+  if (state._addingReq) resetAddMode();
+  state.selectedReqId = reqId;
+  state.currentReq = state.requirements.find(r => r.req_id === reqId);
+  renderList();
+  renderDetail(state.currentReq);
+}
+
+// ════════════ 详情渲染 ════════════
+
+function renderDetail(r) {
+  // ★ 重置关系链路状态（07-05h）
+  _chainLoaded = false;
+  _chainExpanded = false;
+  const chainContainer = document.getElementById('chainContainer');
+  if (chainContainer) chainContainer.style.display = 'none';
+  const chainBtn = document.getElementById('chainToggleBtn');
+  if (chainBtn) chainBtn.classList.remove('expanded');
+  const chainIcon = chainBtn ? chainBtn.querySelector('.rv-chain-toggle-icon') : null;
+  if (chainIcon) chainIcon.textContent = '▶';
+
+  if (!r) {
+    els.detailEmpty.style.display = 'flex';
+    els.detailPanel.style.display = 'none';
+    return;
+  }
+  els.detailEmpty.style.display = 'none';
+  els.detailPanel.style.display = 'block';
+  // ★ 记录当前需求ID供关系链路使用（07-05h）
+  window._currentReqId = r.req_id || '';
+  els.detailReqId.textContent = r.req_id || '-';
+  els.detailTitle.textContent = r.description ? r.description.substring(0, 80) : '-';
+  els.detailModule.textContent = r.module || '-';
+  const status = getReviewStatus(r);
+  els.detailStatus.textContent = getStatusLabel(status);
+  els.detailStatus.className = 'rv-badge rv-badge-status ' + status;
+  els.detailQuote.textContent = r.source_quote || r.quote || '无原文引用';
+  els.editDescription.value = r.description || '';
+
+  // 置信度
+  const confidence = r.confidence || {};
+  const score = getConfidenceScore(r);
+  if (score != null) {
+    els.confidenceCard.style.display = 'block';
+    // ★ 置信度计算：检测是否已经是百分比形式（防止 7500% 错误）
+    let displayScore = score;
+    if (score > 1) {
+      // score > 1 说明已经是百分比形式（如 75 表示 75%），不再乘以100
+      displayScore = Math.round(score);
+    } else {
+      // score <= 1 说明是小数形式（如 0.75 表示 75%），需要乘以100
+      displayScore = Math.round(score * 100);
+    }
+    els.confidenceScore.textContent = displayScore + '%';
+  } else {
+    els.confidenceCard.style.display = 'none';
+  }
+  renderDimensions(confidence);
+
+  // 完整性问题
+  const issues = r.completeness_issues || [];
+  if (issues.length > 0) {
+    els.completenessSection.style.display = 'block';
+    els.issueList.innerHTML = issues.map(i => {
+      const text = typeof i === 'string' ? i : (i.message || i.issue || JSON.stringify(i));
+      return '<div class="rv-issue-item">' + escHtml(text) + '</div>';
+    }).join('');
+  } else {
+    els.completenessSection.style.display = 'none';
+  }
+}
+
+function renderDimensions(confidence) {
+  if (!confidence || typeof confidence !== 'object') {
+    els.dimList.innerHTML = '<div class="rv-empty-mini">无置信度数据</div>';
+    return;
+  }
+  els.dimList.innerHTML = DIMENSIONS.map(dim => {
+    const val = confidence[dim.key] != null ? confidence[dim.key] : 0;
+    const percent = Math.round(val * 100);
+    return '<div class="rv-dim-item">' +
+      '<div class="rv-dim-row">' +
+        '<span class="rv-dim-name">' + escHtml(dim.label) + ' <span class="rv-dim-name-extra">(' + dim.weight + ')</span></span>' +
+        '<span class="rv-dim-value">' + percent + '%</span>' +
+      '</div>' +
+      '<div class="rv-dim-bar"><div class="rv-dim-bar-fill" style="width:' + percent + '%"></div></div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderTraceLinks(traceLinks) {
+  // ★ 已废弃：追溯链接功能已由关系链路替代，保留空函数防止报错
+}
+
+// ★ 关系链路展开/折叠（07-05h）
+let _chainLoaded = false;
+let _chainExpanded = false;
+
+async function toggleChain() {
+  const container = document.getElementById('chainContainer');
+  const btn = document.getElementById('chainToggleBtn');
+  const icon = btn.querySelector('.rv-chain-toggle-icon');
+
+  _chainExpanded = !_chainExpanded;
+
+  if (_chainExpanded) {
+    container.style.display = 'block';
+    btn.classList.add('expanded');
+    icon.textContent = '▼';
+
+    if (!_chainLoaded) {
+      container.innerHTML = '<div class="rv-chain-loading">加载中...</div>';
+      try {
+        const reqId = (window._currentReqId || '').trim();
+        if (!reqId) {
+          container.innerHTML = '<div class="rv-chain-empty">无需求ID</div>';
+          return;
+        }
+        const r = await A.api('GET', '/api/trace/req/' + encodeURIComponent(reqId));
+        if (r && !r.error) {
+          renderChain(r, container);
+          _chainLoaded = true;
+        } else {
+          container.innerHTML = '<div class="rv-chain-empty">加载失败: ' + A.escHtml((r && r.error) || '') + '</div>';
+        }
+      } catch (e) {
+        container.innerHTML = '<div class="rv-chain-empty">异常: ' + A.escHtml(String(e)) + '</div>';
+      }
+    }
+  } else {
+    container.style.display = 'none';
+    btn.classList.remove('expanded');
+    icon.textContent = '▶';
+  }
+}
+
+function renderChain(data, container) {
+  let html = '';
+
+  // 1. 切片
+  if (data.slice && data.slice.slice_id) {
+    const s = data.slice;
+    html += '<div class="rv-chain-section">';
+    html += '<div class="rv-chain-section-title">需求切片</div>';
+    html += '<div class="rv-chain-item" title="点击查看切片关联需求">';
+    html += '<span class="rv-chain-tag rv-chain-tag-slice">SLICE</span>';
+    html += '<span class="rv-chain-item-title">' + A.escHtml(s.slice_id || '') + '</span>';
+    if (s.section) html += '<div class="rv-chain-item-meta">章节: ' + A.escHtml(s.section) + '</div>';
+    if (s.feature_label) html += '<div class="rv-chain-item-meta">功能: ' + A.escHtml(s.feature_label) + '</div>';
+    html += '<div class="rv-chain-item-meta">' + (s.char_count || 0) + '字' + (s.needs_review ? ' · 需审核' : '') + '</div>';
+    html += '</div>';
+    html += '</div>';
+  }
+
+  // ★ H1: 原文档来源（source_documents）
+  if (data.source_document && data.source_document.doc_type) {
+    const d = data.source_document;
+    html += '<div class="rv-chain-section">';
+    html += '<div class="rv-chain-section-title">原文档来源</div>';
+    html += '<div class="rv-chain-item">';
+    html += '<span class="rv-chain-tag">DOC</span>';
+    html += '<span class="rv-chain-item-title">' + A.escHtml(d.filename || d.doc_type) + '</span>';
+    if (d.category) html += '<div class="rv-chain-item-meta">分类: ' + A.escHtml(d.category) + '</div>';
+    if (d.source_url) html += '<div class="rv-chain-item-meta"><a href="' + A.escAttr(d.source_url) + '" target="_blank" rel="noopener">查看原文档 ↗</a></div>';
+    html += '</div>';
+    html += '</div>';
+  }
+
+  // ★ 归一化(2026-08-04): 方法论/分类与 action/check taxonomy 对齐展示
+  //   action 分类: mouse/form/keyboard/navigation/advanced/import_export/verification
+  //   check 族: style/toast/refresh/position/download/element_*/text_*/url_*/api_*/db_*
+  var _TAXONOMY_CAT = {
+    mouse: '鼠标操作', form: '表单输入', keyboard: '键盘操作',
+    navigation: '页面导航', advanced: '高级交互',
+    import_export: '导入导出工作流', verification: '断言校验'
+  };
+  function _taxonomyLabel(v) {
+    if (!v) return '';
+    var s = String(v).toLowerCase().trim();
+    if (_TAXONOMY_CAT[s]) return _TAXONOMY_CAT[s];
+    if (/(check|verify|assert|style|toast|refresh|position|download|element_|text_|url_|api_|db_|no_error)/.test(s)) return '断言校验';
+    return '';
+  }
+  // ★ 风险等级中文化：high/medium/low → 高/中/低（与 pipeline.html riskCn 一致）
+  var _RISK_CN = { high: '高', medium: '中', low: '低' };
+  function _riskCn(v) {
+    if (!v) return '';
+    var s = String(v).toLowerCase().trim();
+    return _RISK_CN[s] || String(v);
+  }
+
+  // 2. 测试用例
+  if (data.test_cases && data.test_cases.length > 0) {
+    html += '<div class="rv-chain-section">';
+    html += '<div class="rv-chain-section-title">测试用例 (' + data.test_cases.length + ')</div>';
+    data.test_cases.forEach(c => {
+      html += '<div class="rv-chain-item" title="点击查看用例详情">';
+      html += '<span class="rv-chain-tag rv-chain-tag-case">CASE</span>';
+      html += '<span class="rv-chain-item-title">' + A.escHtml(c.case_id || '') + '</span>';
+      html += '<div class="rv-chain-item-meta">' + A.escHtml((c.title || '').slice(0, 60)) + '</div>';
+      if (c.test_method) {
+        html += '<div class="rv-chain-item-meta">方法论: ' + A.escHtml(c.test_method) + '</div>';
+        var _tcat = _taxonomyLabel(c.test_method);
+        if (_tcat) html += '<div class="rv-chain-item-meta">体系分类: ' + _tcat + '</div>';
+      }
+      if (c.risk_level) html += '<div class="rv-chain-item-meta">风险: ' + A.escHtml(_riskCn(c.risk_level)) + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // 3. API端点
+  if (data.api_endpoints && data.api_endpoints.length > 0) {
+    html += '<div class="rv-chain-section">';
+    html += '<div class="rv-chain-section-title">API 端点 (' + data.api_endpoints.length + ')</div>';
+    data.api_endpoints.forEach(a => {
+      const txt = typeof a === 'string' ? a : (a.method + ' ' + a.path || JSON.stringify(a));
+      html += '<div class="rv-chain-item"><span class="rv-chain-tag rv-chain-tag-api">API</span>' + A.escHtml(txt) + '</div>';
+    });
+    html += '</div>';
+  }
+
+  // 4. 数据库表（兼容 array / object 两种返回格式）
+  const dbTableList = Array.isArray(data.db_tables)
+    ? data.db_tables
+    : (data.db_tables && typeof data.db_tables === 'object' ? Object.keys(data.db_tables).map(k => ({ table_name: k, info: data.db_tables[k] })) : []);
+  if (dbTableList.length > 0) {
+    html += '<div class="rv-chain-section">';
+    html += '<div class="rv-chain-section-title">数据库表 (' + dbTableList.length + ')</div>';
+    dbTableList.forEach(t => {
+      const txt = typeof t === 'string' ? t : (t.table_name || JSON.stringify(t));
+      html += '<div class="rv-chain-item"><span class="rv-chain-tag rv-chain-tag-db">DB</span>' + A.escHtml(txt) + '</div>';
+    });
+    html += '</div>';
+  }
+
+  // 5. Figma 页面
+  if (data.figma_pages && data.figma_pages.length > 0) {
+    html += '<div class="rv-chain-section">';
+    html += '<div class="rv-chain-section-title">Figma 页面 (' + data.figma_pages.length + ')</div>';
+    data.figma_pages.forEach(f => {
+      const txt = typeof f === 'string' ? f : (f.page_name || f.page_id || JSON.stringify(f));
+      html += '<div class="rv-chain-item"><span class="rv-chain-tag rv-chain-tag-figma">FIGMA</span>' + A.escHtml(txt) + '</div>';
+    });
+    html += '</div>';
+  }
+
+  if (!html) {
+    html = '<div class="rv-chain-empty">暂无关系链路数据</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+// ════════════ 操作 ════════════
+
+async function reviewAction(action, reqId, data) {
+  try {
+    const body = { action: action, req_id: reqId };
+    if (data) {
+      if (action === 'reject' && typeof data === 'string') {
+        body.comment = data;
+      } else {
+        Object.assign(body, { data: data });
+      }
+    }
+    const d = await api('POST', '/api/requirements/review', body);
+    if (d && d.ok) {
+      appendLog('✅ 需求审核操作: ' + action + ' - ' + reqId);
+      // 更新本地状态
+      const r = state.requirements.find(x => x.req_id === reqId);
+      if (r) {
+        if (action === 'approve') r.review_status = 'approved';
+        else if (action === 'reject') r.review_status = 'rejected';
+        else if (action === 'modify' && data) {
+          if (data.description) r.description = data.description;
+          r.review_status = 'modified';
+        }
+      }
+      renderStats();
+      renderList();
+      if (state.currentReq && state.currentReq.req_id === reqId) {
+        renderDetail(state.currentReq);
+      }
+      return true;
+    } else {
+      A.toast('操作失败: ' + (d && d.error ? d.error : '未知'), 'error');
+      return false;
+    }
+  } catch (e) {
+    A.toast('操作异常: ' + String(e), 'error');
+    return false;
+  }
+}
+
+async function approveCurrent() {
+  if (!state.currentReq) return;
+  await reviewAction('approve', state.currentReq.req_id);
+}
+
+async function rejectCurrent() {
+  if (!state.currentReq) return;
+  if (!(await A.confirm('确认驳回需求 ' + (state.currentReq.req_id || '') + '？'))) return;
+  await reviewAction('reject', state.currentReq.req_id, null);
+}
+
+async function saveEdit() {
+  // ★ 如果处于添加模式，调用添加逻辑
+  if (state._addingReq) {
+    await confirmAddRequirement();
+    return;
+  }
+  if (!state.currentReq) return;
+  const newDesc = els.editDescription.value.trim();
+  if (!newDesc) { A.toast('需求描述不能为空', 'warning'); return; }
+  await reviewAction('modify', state.currentReq.req_id, { description: newDesc });
+}
+
+async function rejectAll() {
+  if (!(await A.confirm('确认驳回所有需求并终止流水线？', { danger: true }))) return;
+  try {
+    const d = await api('POST', '/api/review/reject');
+    if (d && d.ok) {
+      appendLog('✅ 已驳回所有需求: ' + (d.rejected || 0) + ' 条');
+      A.toast('已驳回 ' + (d.rejected || 0) + ' 条需求', 'success');
+      await loadRequirements();
+    } else {
+      A.toast('驳回失败: ' + (d && d.error ? d.error : '未知'), 'error');
+    }
+  } catch (e) {
+    A.toast('驳回异常: ' + String(e), 'error');
+  }
+}
+
+async function addRequirement() {
+  // ★ 增强：使用搜索+选择列表模式，而非简单文本框
+  els.detailEmpty.style.display = 'none';
+  els.detailPanel.style.display = 'block';
+  els.detailReqId.textContent = '新增';
+  els.detailTitle.textContent = '手动添加遗漏需求';
+  els.detailModule.textContent = '-';
+  els.detailStatus.textContent = '待审核';
+  els.detailStatus.className = 'rv-badge rv-badge-status pending';
+  els.detailQuote.textContent = '手动添加';
+  els.editDescription.value = '';
+  els.editDescription.placeholder = '输入关键词搜索已有需求，或直接输入新需求描述...';
+  els.editDescription.focus();
+  els.confidenceCard.style.display = 'none';
+  els.dimList.innerHTML = '<div class="rv-empty-mini">手动添加，无置信度数据</div>';
+  els.completenessSection.style.display = 'none';
+  // ★ 新增：搜索建议列表容器
+  _showSearchSuggestions('');
+  els.btnEdit.textContent = '确认添加';
+  els.btnEdit.dataset.adding = 'true';
+  els.btnApprove.style.display = 'none';
+  els.btnReject.style.display = 'none';
+  state._addingReq = true;
+  state.currentReq = { req_id: '_new_', description: '', module: '', review_status: 'pending' };
+  state.selectedReqId = '_new_';
+}
+
+// ★ 新增：搜索建议列表
+var _searchTimer = null;
+
+function _showSearchSuggestions(keyword) {
+  // 移除旧的建议列表
+  var oldList = document.getElementById('rvSearchSuggestions');
+  if (oldList) oldList.remove();
+
+  if (state._addingReq !== true) return;
+
+  var filtered = state.requirements.filter(function(r) {
+    if (!keyword) return true;
+    var kw = keyword.toLowerCase();
+    var id = (r.req_id || '').toLowerCase();
+    var desc = (r.description || '').toLowerCase();
+    return id.includes(kw) || desc.includes(kw);
+  });
+
+  // 限制显示数量
+  var showItems = filtered.slice(0, 10);
+
+  var container = document.createElement('div');
+  container.id = 'rvSearchSuggestions';
+  container.className = 'rv-search-suggestions';
+  container.style.cssText = 'max-height:240px;overflow-y:auto;border:1px solid var(--border-default);border-radius:var(--radius-md);background:var(--bg-surface);margin-top:4px;';
+
+  if (showItems.length === 0) {
+    container.innerHTML = '<div class="rv-empty-mini rv-empty-pad">' +
+      (keyword ? '无匹配需求，可直接输入新需求描述' : '当前无已有需求，可直接输入新需求描述') +
+      '</div>';
+  } else {
+    container.innerHTML = showItems.map(function(r) {
+      var status = getReviewStatus(r);
+      var statusLabel = getStatusLabel(status);
+      var hasCases = r._case_count > 0;
+      var coverageCls = hasCases ? 'rv-coverage-covered' : 'rv-coverage-none';
+      var coverageText = hasCases ? '已覆盖 (' + r._case_count + ' 条用例)' : '未覆盖';
+      return '<div class="rv-suggestion-item" data-req-id="' + escAttr(r.req_id || '') + '">' +
+        '<div class="rv-suggestion-row1">' +
+          '<span class="rv-req-id">' + escHtml(r.req_id || '-') + '</span>' +
+          '<span class="rv-req-status ' + status + '">' + statusLabel + '</span>' +
+        '</div>' +
+        '<div class="rv-suggestion-row2">' +
+          '<span class="rv-req-desc">' + escHtml((r.description || '').substring(0, 80)) + '</span>' +
+        '</div>' +
+        '<div class="rv-suggestion-row3">' +
+          '<span class="' + coverageCls + '">' + coverageText + '</span>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // 插入到描述框后面
+  var descEl = els.editDescription;
+  if (descEl && descEl.parentNode) {
+    descEl.parentNode.insertBefore(container, descEl.nextSibling);
+  }
+
+  // 绑定点击事件
+  container.querySelectorAll('.rv-suggestion-item').forEach(function(item) {
+    item.addEventListener('click', function() {
+      var reqId = this.dataset.reqId;
+      _selectSuggestion(reqId);
+    });
+  });
+}
+
+function _selectSuggestion(reqId) {
+  // 取消添加模式，选中已有需求
+  resetAddMode();
+  selectRequirement(reqId);
+}
+
+async function confirmAddRequirement() {
+  var desc = els.editDescription.value.trim();
+  if (!desc) { A.toast('需求描述不能为空', 'warning'); return; }
+  try {
+    var d = await api('POST', '/api/requirements/review', {
+      action: 'add',
+      data: { description: desc, module: '' }
+    });
+    if (d && d.ok) {
+      appendLog('✅ 已添加需求');
+      await loadRequirements();
+      resetAddMode();
+    } else {
+      A.toast('添加失败: ' + (d && d.error ? d.error : '未知'), 'error');
+    }
+  } catch (e) {
+    A.toast('添加异常: ' + String(e), 'error');
+  }
+}
+
+function resetAddMode() {
+  state._addingReq = false;
+  state.currentReq = null;
+  state.selectedReqId = null;
+  els.btnEdit.textContent = '保存修改';
+  els.btnEdit.dataset.adding = 'false';
+  els.btnApprove.style.display = '';
+  els.btnReject.style.display = '';
+  els.editDescription.placeholder = '需求描述';
+  els.detailEmpty.style.display = 'flex';
+  els.detailPanel.style.display = 'none';
+}
+
+// ════════════ 预检逻辑 ════════════
+var preflightState = null;
+
+async function loadPreflight() {
+  try {
+    var r = await api('GET', '/api/preflight');
+    if (!r || !r.ok) {
+      preflightState = { can_proceed: false };
+      updatePreflightUI(false);
+      return;
+    }
+    preflightState = r;
+    updatePreflightUI(r.can_proceed, r.warnings);
+  } catch (e) {
+    preflightState = { can_proceed: false };
+    updatePreflightUI(false);
+  }
+}
+
+function updatePreflightUI(canProceed, warnings) {
+  var el = els.preflightStatus;
+  if (!el) return;
+  var dot = el.querySelector('.rv-preflight-dot');
+  var text = el.querySelector('.rv-preflight-text');
+  if (canProceed) {
+    dot.className = 'rv-preflight-dot ok';
+    text.textContent = '数据源正常';
+  } else {
+    dot.className = 'rv-preflight-dot err';
+    text.textContent = '无可用数据源';
+  }
+  if (warnings && warnings.length) {
+    text.textContent += ' (有警告)';
+    dot.className = 'rv-preflight-dot warn';
+  }
+}
+
+async function confirmReview() {
+  // 预检数据源状态
+  if (preflightState && !preflightState.can_proceed) {
+    A.toast('预检未通过: 未检测到已配置的数据源，请先在项目配置中配置至少一个数据源', 'error');
+    return;
+  }
+  if (preflightState && preflightState.warnings && preflightState.warnings.length) {
+    if (!(await A.confirm('预检警告:\n' + preflightState.warnings.join('\n') + '\n\n是否继续？'))) return;
+  }
+  // ★ P1-7: 自动放行 green 车道需求（仅 green 自动批，yellow/red 需逐条人审）
+  //   无 review_lane 数据时后端拒绝批量（返回400），引导逐条审核或重跑 Step2
+  if (!(await A.confirm('确认自动放行 green 车道需求？yellow/red 车道需逐条人审。'))) return;
+  try {
+    const d = await api('POST', '/api/requirements/review/confirm');
+    if (d && d.ok) {
+      var approved = d.approved || 0;
+      var skippedYellow = d.skipped_yellow || 0;
+      var skippedRed = d.skipped_red || 0;
+      var alreadyApproved = d.already_approved || 0;
+      appendLog('✅ 需求审核完成: green=' + approved +
+        (skippedYellow ? ' yellow=' + skippedYellow : '') +
+        (skippedRed ? ' red=' + skippedRed : '') +
+        (alreadyApproved ? ' already=' + alreadyApproved : ''));
+      // ★ 修复"全部已通过却提示需人审"误导：与用例审核页同口径，
+      //   区分为 新放行 / 需人审 / 已全过 / 无数据 四种清晰结果
+      var needReview = skippedYellow + skippedRed;
+      if (approved > 0 || needReview > 0) {
+        await A.confirm('Green 车道已自动放行 ' + approved + ' 条\n\n' +
+              '黄车道（中风险）：' + skippedYellow + ' 条\n' +
+              '红车道（高风险）：' + skippedRed + ' 条\n\n' +
+              (needReview > 0 ? 'yellow/red 车道需逐条人审。' : 'green 车道用例已全部通过。'),
+              { title: '自动放行结果', okText: '知道了', cancelText: '关闭' });
+      } else if (alreadyApproved > 0) {
+        await A.confirm('所有 green 车道需求均已通过（' + alreadyApproved + ' 条，含此前已通过），无需自动放行。',
+              { title: '自动放行结果', okText: '知道了', cancelText: '关闭' });
+      } else {
+        A.toast('当前项目不存在可自动放行的需求（未生成三车道分流或已全部审核）。', 'info');
+      }
+      await loadRequirements();
+    } else {
+      if (d && d.code === 'NO_LANE_DATA') {
+        A.toast('未启用三车道分流（review_lane 表无数据）\n\n请重跑 Step2 生成分流，或逐条审核需求。', 'error');
+      } else {
+        A.toast('完成审核失败: ' + (d && d.error ? d.error : '未知'), 'error');
+      }
+    }
+  } catch (e) {
+    A.toast('完成审核异常: ' + String(e), 'error');
+  }
+}
+
+// ════════════ 事件 ════════════
+
+function bindEvents() {
+  els.searchInput.addEventListener('input', function() {
+    applyFilters();
+    // ★ 如果在添加模式，更新搜索建议
+    if (state._addingReq) {
+      var kw = els.editDescription.value.trim();
+      _showSearchSuggestions(kw);
+    }
+  });
+  els.statusFilter.addEventListener('change', applyFilters);
+  els.btnApprove.addEventListener('click', function() { A.withBtnLoading(els.btnApprove, '处理中...', approveCurrent); });
+  els.btnReject.addEventListener('click', function() { A.withBtnLoading(els.btnReject, '处理中...', rejectCurrent); });
+  els.btnEdit.addEventListener('click', function() { A.withBtnLoading(els.btnEdit, '保存中...', saveEdit); });
+  els.btnRejectAll.addEventListener('click', function() { A.withBtnLoading(els.btnRejectAll, '处理中...', rejectAll); });
+  els.btnAddReq.addEventListener('click', function() { A.withBtnLoading(els.btnAddReq, '添加中...', addRequirement); });
+  els.btnConfirm.addEventListener('click', function() { A.withBtnLoading(els.btnConfirm, '处理中...', confirmReview); });
+  els.btnRefresh.addEventListener('click', function() { A.withBtnLoading(els.btnRefresh, '加载中...', loadRequirements); });
+
+  // ★ 添加模式下：描述输入框搜索建议
+  els.editDescription.addEventListener('input', function() {
+    if (state._addingReq) {
+      clearTimeout(_searchTimer);
+      _searchTimer = setTimeout(function() {
+        _showSearchSuggestions(els.editDescription.value.trim());
+      }, 200);
+    }
+  });
+
+  // ★ 关系链路展开/折叠绑定（07-05h）
+  const chainToggleBtn = document.getElementById('chainToggleBtn');
+  if (chainToggleBtn) chainToggleBtn.addEventListener('click', toggleChain);
+}
+
+// ════════════ 入口 ════════════
+
+A._onAuthOk = function() {
+  if (A._renderSidebarUser) A._renderSidebarUser();
+  if (A.applyPermissions) A.applyPermissions();
+  loadPreflight();
+  loadRequirements();
+  A._startStepBadgePolling();
+};
+
+bindEvents();
+
+if (A._currentUser) {
+  loadRequirements();
+}
+
+})();
+</script>
+{% endblock %}

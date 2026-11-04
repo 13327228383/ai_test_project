@@ -1,0 +1,1065 @@
+{% extends "_layout_base.html" %}
+{% block head_extra %}
+<style>
+.pc-grid {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: var(--space-5);
+  /* ★ 实时预览占满屏幕：让整个配置页至少铺满可视区域高度，
+     预览区 .pc-preview-wrap{flex:1} 自动吃满剩余空间 */
+  /* ★ 高度修复(2026-09-01)：min-height 由 calc(100vh-128px) 改为 100%——父容器
+     .content-body 是 flex:1+overflow-y:auto 的滚动区，高度确定，100% 正确解析，
+     消除魔法偏移对不齐导致的底部空白；内容超高时仍可正常滚动 */
+  min-height: 100%;
+}
+/* ★ 布局调整(2026-08-31)：背景配置(左 1列) | 主题配色+KPI(右 2列 上下堆叠)；实时预览单独整行置于底部并占满剩余高度 */
+/* ★ 对齐修复(2026-09-01)：两列拉伸到同一行高，右列主题配色+KPI 用 flex:1 平分剩余高度，
+     使"背景配置高度 == 主题配色+KPI高度"，底部对齐消除错位 */
+.pc-top {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: var(--space-5);
+  align-items: stretch;
+}
+.pc-rightstack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.pc-rightstack .pc-card {
+  flex: 1;
+}
+.pc-preview-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.pc-preview-wrap .pc-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+@media (max-width: 1180px) {
+  .pc-top { grid-template-columns: 1fr; }
+}
+.pc-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+.pc-card-title {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-1);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.pc-card-subtitle {
+  font-size: var(--fs-small);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-5);
+}
+.pc-form-group { margin-bottom: var(--space-4); }
+.pc-form-label {
+  display: block;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+}
+.pc-form-row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.pc-form-row > * { flex-shrink: 1; min-width: 0; }
+.pc-select, .pc-input {
+  height: var(--control-height);
+  padding: 0 var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--fs-body);
+  outline: none;
+  flex: 1 1 160px;
+  min-width: 160px;
+}
+.pc-select:focus, .pc-input:focus { border-color: var(--color-primary); }
+.pc-color-input {
+  width: 44px;
+  height: 32px;
+  padding: 2px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.pc-slider {
+  flex: 1;
+  min-width: 120px;
+  accent-color: var(--color-primary);
+}
+.pc-preview-box {
+  width: 100%;
+  flex: 1;
+  min-height: 260px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  display: flex;
+  flex-direction: column;
+  color: var(--text-tertiary);
+  font-size: var(--fs-small);
+  overflow: hidden;
+  position: relative;
+}
+.pc-preview-box img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* ★ 实时预览占满修复(2026-09-01)：预览框改为列布局，示例画布 flex 吃满整框，
+   底部不再留空白；示例 KPI 卡片 + 辅助文字实时反映 透明度/配色/每行列数/字体大小 */
+.pc-prev-sample {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+.pc-prev-cards {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.pc-prev-kpi {
+  display: grid;
+  grid-template-columns: repeat(var(--kpi-cols, 6), minmax(0, 1fr));
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 900px;
+}
+.pc-prev-kpi-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-2);
+  text-align: center;
+  box-shadow: var(--shadow-xs);
+}
+.pc-prev-kpi-num {
+  font-size: calc(1.4rem * var(--ui-scale, 1));
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+.pc-prev-kpi-label {
+  margin-top: var(--space-1);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+}
+.pc-prev-textsample {
+  flex-shrink: 0;
+  text-align: center;
+  font-size: calc(0.85rem * var(--ui-scale, 1));
+}
+.pc-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+.pc-gallery-item {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--radius-md);
+  border: 2px solid transparent;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--bg-elevated);
+}
+.pc-gallery-item.active { border-color: var(--color-primary); }
+.pc-gallery-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pc-gallery-actions {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.pc-gallery-item:hover .pc-gallery-actions { opacity: 1; }
+.pc-gallery-actions button {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pc-upload-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.pc-upload-wrap input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.pc-scheme-options {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.pc-scheme-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.pc-scheme-option.active {
+  border-color: var(--color-primary);
+  color: var(--text-primary);
+  background: var(--color-primary-soft);
+}
+.pc-scheme-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+}
+.pc-scheme-dot.qingluan { background: linear-gradient(135deg, var(--step1-color), var(--color-primary)); }
+.pc-scheme-dot.moyun    { background: linear-gradient(135deg, var(--text-secondary), var(--text-tertiary)); }
+.pc-scheme-dot.songshi  { background: linear-gradient(135deg, var(--state-warning), var(--state-error)); }
+.pc-scheme-dot.custom   { background: var(--color-primary); }
+.pc-rotate-row { margin-top: var(--space-2); }
+.pc-rotate-label { margin: 0; white-space: nowrap; }
+.pc-custom-color-row { margin-top: var(--space-3); }
+.pc-empty-tip {
+  font-size: var(--fs-small);
+  color: var(--text-tertiary);
+  text-align: center;
+  padding: var(--space-4);
+}
+/* 开关组件 */
+.pc-toggle {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 11px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+}
+.pc-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  transition: transform 0.2s, background 0.2s;
+}
+.pc-toggle.active {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+}
+.pc-toggle.active::after {
+  transform: translateX(18px);
+  background: var(--color-primary);
+}
+.pc-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.pc-toggle-label {
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  color: var(--text-secondary);
+}
+.pc-toggle-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+}
+.pc-toggle-hint.mt { margin-top: var(--space-2); }
+/* 分组分隔（字体大小等次级分组上缘分隔线） */
+.pc-form-group-sep { padding-top: var(--space-3); border-top: 1px solid var(--border-default); }
+/* 字体大小预览样例（A 字母，随字号档位缩放） */
+.pc-font-sample { line-height: 1.4; }
+.pc-font-sample.sm { font-size: 12px; }
+.pc-font-sample.md { font-size: 14px; font-weight: 600; }
+.pc-font-sample.lg { font-size: 16px; font-weight: 700; }
+</style>
+{% endblock %}
+{% block title %}个性化配置 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33"/></svg>
+个性化配置
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnSaveBg" data-tooltip="保存背景配置（模式、颜色、角度、背景透明度、卡片透明度、文字色、自动旋转）" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+  保存背景与卡片
+</button>
+<button class="btn-topbar" id="btnSaveStyle" data-tooltip="保存主题配色方案（按钮/链接/激活态等全站主色调）" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><path d="M13.5 9c-4.4 0-8 3.6-8 8v1h16v-1c0-4.4-3.6-8-8-8z"/><path d="M4 18h20"/></svg>
+  保存主题色
+</button>
+{% endblock %}
+
+{% block content %}
+
+<div class="pc-grid">
+  <div class="pc-top">
+    <div class="pc-card">
+      <div class="pc-card-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15 16 10 5 21"/></svg>
+        背景配置
+      </div>
+      <div class="pc-card-subtitle">设置登录页与独立页面的背景样式（用户级，跨项目共享）</div>
+
+      <div class="pc-form-group">
+        <label class="pc-form-label">背景模式</label>
+        <select class="pc-select" id="bgMode">
+          <option value="custom">渐变背景</option>
+          <option value="gallery">图库图片</option>
+          <option value="none">默认背景</option>
+        </select>
+      </div>
+
+      <div class="pc-form-group" id="customColors">
+        <label class="pc-form-label">渐变颜色</label>
+        <div class="pc-form-row">
+          <input type="color" class="pc-color-input" id="bgColor1">
+          <input type="color" class="pc-color-input" id="bgColor2">
+          <input type="color" class="pc-color-input" id="bgColor3">
+          <input type="color" class="pc-color-input" id="bgColor4">
+        </div>
+      </div>
+
+      <div class="pc-form-group">
+        <label class="pc-form-label">辅助文字色 <span class="text-xs text-tertiary">（控制全站次要文字颜色，如标签、说明、占位符）</span></label>
+        <div class="pc-form-row">
+          <input type="color" class="pc-color-input" id="textColor">
+          <span class="text-xs text-tertiary" id="textColorVal"></span>
+        </div>
+      </div>
+
+      <div class="pc-form-group" id="customAngle">
+        <label class="pc-form-label">渐变角度 <span id="angleVal">64</span>°</label>
+        <div class="pc-form-row">
+          <input type="range" class="pc-slider" id="bgAngle" min="0" max="360" value="64">
+        </div>
+      </div>
+
+      <div class="pc-form-group" id="customOpacity">
+        <label class="pc-form-label">背景透明度 <span id="opacityVal">100</span>% <span class="text-xs text-tertiary">（影响背景本身的透明度）</span></label>
+        <div class="pc-form-row">
+          <input type="range" class="pc-slider" id="bgOpacity" min="0" max="100" value="100">
+        </div>
+      </div>
+
+      <div class="pc-form-group" id="cardOpacityGroup">
+        <label class="pc-form-label">卡片透明度 <span id="cardOpacityVal">100</span>% <span class="text-xs text-tertiary">（让背景透过控制面板、任务、日志等卡片）</span></label>
+        <div class="pc-form-row">
+          <input type="range" class="pc-slider" id="cardOpacity" min="0" max="100" value="100">
+        </div>
+      </div>
+
+      <div class="pc-form-group" id="autoRotateSection">
+        <div class="pc-toggle-row">
+          <div class="pc-toggle" id="autoRotateToggle"></div>
+          <span class="pc-toggle-label">自动旋转</span>
+          <span class="pc-toggle-hint">开启后渐变角度自动循环变化</span>
+        </div>
+        <div class="pc-form-row pc-rotate-row" id="rotateSpeedRow" style="display:none;">
+          <label class="pc-form-label pc-rotate-label">旋转速度 <span id="rotateSpeedVal">3</span></label>
+          <input type="range" class="pc-slider" id="rotateSpeed" min="1" max="10" value="3">
+        </div>
+      </div>
+
+      <div class="pc-form-group" id="gallerySection">
+        <label class="pc-form-label">我的图库</label>
+        <div class="pc-form-row">
+          <div class="pc-upload-wrap btn btn-sm primary">
+            <input type="file" id="bgFileInput" accept="image/png,image/jpeg,image/gif,image/webp">
+            <span>上传背景图</span>
+          </div>
+          <span class="text-xs text-tertiary">支持 jpg/png/gif/webp，单张不超过 10MB</span>
+        </div>
+        <div class="pc-gallery" id="bgGallery"></div>
+      </div>
+    </div>
+    <div class="pc-rightstack">
+
+    <div class="pc-card">
+      <div class="pc-card-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><path d="M13.5 9c-4.4 0-8 3.6-8 8v1h16v-1c0-4.4-3.6-8-8-8z"/><path d="M4 18h20"/></svg>
+        主题配色
+      </div>
+      <div class="pc-card-subtitle">选择系统主色调（按钮、链接、激活态、徽章等全站元素）</div>
+      <div class="pc-scheme-options" id="schemeOptions">
+        <div class="pc-scheme-option" data-scheme="qingluan">
+          <span class="pc-scheme-dot qingluan"></span>
+          <span>青鸾</span>
+        </div>
+        <div class="pc-scheme-option" data-scheme="moyun">
+          <span class="pc-scheme-dot moyun"></span>
+          <span>墨云</span>
+        </div>
+        <div class="pc-scheme-option" data-scheme="songshi">
+          <span class="pc-scheme-dot songshi"></span>
+          <span>松石</span>
+        </div>
+        <div class="pc-scheme-option" data-scheme="custom">
+          <span class="pc-scheme-dot custom" id="customSchemeDot"></span>
+          <span>自定义</span>
+        </div>
+      </div>
+      <div class="pc-form-group pc-custom-color-row" id="customColorRow" style="display: none;">
+        <label class="pc-form-label">自定义主色调 <span class="text-xs text-tertiary">（支持 hex 格式的颜色值）</span></label>
+        <div class="pc-form-row">
+          <input type="color" class="pc-color-input" id="customColor">
+          <span class="text-xs text-tertiary" id="customColorVal"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pc-card">
+      <div class="pc-card-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        KPI 显示配置
+      </div>
+      <div class="pc-card-subtitle">设置指标中心 KPI 卡片的每行显示数量（影响所有域）</div>
+
+      <div class="pc-form-group">
+        <label class="pc-form-label">每行显示 <span id="kpiColumnsVal">6</span> 个</label>
+        <div class="pc-form-row">
+          <input type="range" class="pc-slider" id="kpiColumns" min="3" max="8" value="6" step="1">
+          <span class="text-xs text-tertiary">范围：3-8 个</span>
+        </div>
+      </div>
+
+      <div class="pc-form-group pc-form-group-sep">
+        <label class="pc-form-label">字体大小</label>
+        <div class="pc-form-row">
+          <div class="pc-scheme-options" id="uiScaleOptions">
+            <div class="pc-scheme-option" data-scale="1">
+              <span class="pc-font-sample sm">A</span>
+              <span>标准</span>
+            </div>
+            <div class="pc-scheme-option" data-scale="1.15">
+              <span class="pc-font-sample md">A</span>
+              <span>大</span>
+            </div>
+            <div class="pc-scheme-option" data-scale="1.3">
+              <span class="pc-font-sample lg">A</span>
+              <span>超大</span>
+            </div>
+          </div>
+        </div>
+        <div class="pc-toggle-hint mt">保存后立即生效，影响所有页面文字</div>
+      </div>
+    </div>
+    </div>
+  </div>
+
+  <div class="pc-preview-wrap">
+    <div class="pc-card">
+      <div class="pc-card-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+        实时预览
+      </div>
+      <div class="pc-card-subtitle">当前背景配置效果</div>
+      <div class="pc-preview-box" id="bgPreview">默认背景</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  var A = window._A;
+  if (!A) return;
+
+  var els = {
+    mode: document.getElementById('bgMode'),
+    color1: document.getElementById('bgColor1'),
+    color2: document.getElementById('bgColor2'),
+    color3: document.getElementById('bgColor3'),
+    color4: document.getElementById('bgColor4'),
+    textColor: document.getElementById('textColor'),
+    textColorVal: document.getElementById('textColorVal'),
+    angle: document.getElementById('bgAngle'),
+    angleVal: document.getElementById('angleVal'),
+    opacity: document.getElementById('bgOpacity'),
+    opacityVal: document.getElementById('opacityVal'),
+    cardOpacity: document.getElementById('cardOpacity'),
+    cardOpacityVal: document.getElementById('cardOpacityVal'),
+    autoRotateToggle: document.getElementById('autoRotateToggle'),
+    rotateSpeed: document.getElementById('rotateSpeed'),
+    rotateSpeedVal: document.getElementById('rotateSpeedVal'),
+    rotateSpeedRow: document.getElementById('rotateSpeedRow'),
+    customColors: document.getElementById('customColors'),
+    customAngle: document.getElementById('customAngle'),
+    customOpacity: document.getElementById('customOpacity'),
+    autoRotateSection: document.getElementById('autoRotateSection'),
+    gallerySection: document.getElementById('gallerySection'),
+    gallery: document.getElementById('bgGallery'),
+    fileInput: document.getElementById('bgFileInput'),
+    preview: document.getElementById('bgPreview'),
+    schemeOptions: document.getElementById('schemeOptions'),
+    customColor: document.getElementById('customColor'),
+    customColorVal: document.getElementById('customColorVal'),
+    customColorRow: document.getElementById('customColorRow'),
+    customSchemeDot: document.getElementById('customSchemeDot'),
+    kpiColumns: document.getElementById('kpiColumns'),
+    kpiColumnsVal: document.getElementById('kpiColumnsVal'),
+    uiScaleOptions: document.getElementById('uiScaleOptions'),
+    btnSaveBg: document.getElementById('btnSaveBg'),
+    btnSaveStyle: document.getElementById('btnSaveStyle'),
+  };
+
+  var state = {
+    bg: { mode: 'none', card_opacity: 100, kpi_columns: 6 },
+    gallery: [],
+    scheme: 'qingluan',
+    custom_color: '',
+    kpi_columns: 6,
+    font_scale: 1
+  };
+  var animFrameId = null;
+
+  var $ = A.$;
+
+  function buildGradient(angle, colors, opacity) {
+    var alpha = (opacity !== undefined ? opacity : 100) / 100;
+    var rgbaColors = colors.filter(Boolean).map(function(c) { return A.mixAlpha(c, alpha); });
+    return 'linear-gradient(' + angle + 'deg, ' + rgbaColors.join(', ') + ')';
+  }
+
+  function stopAnim() {
+    if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+  }
+
+  function renderPreview() {
+    stopAnim();
+    var p = els.preview;
+    p.removeAttribute('style');  // 清掉上次的模式背景/颜色，统一重挂
+    var tc = state.bg.text_color || 'inherit';
+
+    // ★ 通用示例画布：KPI 卡片(实时反映每行列数/字体/卡片透明度) + 底部辅助文字(反映文字色)，占满整框不残留空白
+    var cols = Math.max(3, Math.min(8, state.kpi_columns || 6));
+    var pad = cols >= 7 ? 16 : cols >= 5 ? 9 : cols >= 3 ? 6 : 3;
+    var cards = '';
+    for (var i = 0; i < cols; i++) {
+      cards += '<div class="pc-prev-kpi-card">'
+        + '<div class="pc-prev-kpi-num">' + ((i + 1) * pad) + '</div>'
+        + '<div class="pc-prev-kpi-label">指标 ' + (i + 1) + '</div>'
+        + '</div>';
+    }
+    var hint = (state.bg.mode === 'gallery' && !state.gallery.some(function(it) { return it.is_current; }))
+      ? '请选择图库图片' : '辅助文字示例';
+    p.innerHTML = '<div class="pc-prev-sample">'
+      + '<div class="pc-prev-cards">'
+      + '<div class="pc-prev-kpi" style="--kpi-cols:' + cols + '">' + cards + '</div>'
+      + '</div>'
+      + '<div class="pc-prev-textsample" style="color:' + tc + '">' + hint + '</div>'
+      + '</div>';
+
+    if (state.bg.mode === 'none') {
+      p.style.background = 'var(--bg-base)';
+    } else if (state.bg.mode === 'gallery') {
+      p.style.background = 'var(--bg-elevated)';
+      var current = state.gallery.find(function(it) { return it.is_current; });
+      if (current) {
+        var imgEl = document.createElement('img');
+        imgEl.src = '/api/bg-image/' + current.id + '?t=' + Date.now();
+        p.appendChild(imgEl);
+      }
+    } else {
+      // custom（渐变背景）
+      var colors = [state.bg.color1, state.bg.color2, state.bg.color3, state.bg.color4];
+      if (state.bg.auto_rotate) {
+        // 自动旋转：requestAnimationFrame 循环更新角度
+        var lastTime = 0;
+        var animAngle = state.bg.angle;
+        function animate(time) {
+          if (!lastTime) lastTime = time;
+          var dt = (time - lastTime) / 1000;
+          lastTime = time;
+          var speed = state.bg.rotate_speed || 3;
+          animAngle = (animAngle + speed * 30 * dt) % 360;
+          p.style.background = buildGradient(Math.round(animAngle), colors, state.bg.opacity);
+          animFrameId = requestAnimationFrame(animate);
+        }
+        animFrameId = requestAnimationFrame(animate);
+      } else {
+        p.style.background = buildGradient(state.bg.angle, colors, state.bg.opacity);
+      }
+    }
+  }
+
+  function updateFormVisibility() {
+    var mode = els.mode.value;
+    var isGradient = (mode === 'custom');
+    els.customColors.style.display = isGradient ? 'block' : 'none';
+    els.customAngle.style.display = isGradient ? 'block' : 'none';
+    els.customOpacity.style.display = isGradient ? 'block' : 'none';
+    els.autoRotateSection.style.display = isGradient ? 'block' : 'none';
+    els.gallerySection.style.display = (mode === 'gallery') ? 'block' : 'none';
+    // 自动旋转时禁用角度滑块（角度自动变化）
+    els.angle.disabled = state.bg.auto_rotate;
+    els.rotateSpeedRow.style.display = state.bg.auto_rotate ? 'flex' : 'none';
+  }
+
+  function renderGallery() {
+    if (!state.gallery.length) {
+      els.gallery.innerHTML = '<div class="pc-empty-tip">暂无图片，请上传</div>';
+      return;
+    }
+    // ★ 修复（2026-07-17）：懒加载 img src，避免一次性触发 20+ 并发 bg-image 请求打爆连接池。
+    // 用 data-src 占位，IntersectionObserver 进入视口才设置真实 src。
+    // 同时复用浏览器缓存（ETag 304），重复渲染不会打 DB。
+    var frag = document.createDocumentFragment();
+    state.gallery.forEach(function(it) {
+      var itemDiv = document.createElement('div');
+      itemDiv.className = 'pc-gallery-item' + (it.is_current ? ' active' : '');
+      itemDiv.setAttribute('data-id', String(it.id));
+
+      var img = document.createElement('img');
+      img.setAttribute('data-src', '/api/bg-image/' + it.id);
+      img.setAttribute('alt', '');
+      img.setAttribute('loading', 'lazy');
+      itemDiv.appendChild(img);
+
+      var actions = document.createElement('div');
+      actions.className = 'pc-gallery-actions';
+
+      var activateBtn = document.createElement('button');
+      activateBtn.className = 'btn-activate';
+      activateBtn.setAttribute('data-id', String(it.id));
+      activateBtn.setAttribute('title', '使用');
+      activateBtn.textContent = '✓';
+      actions.appendChild(activateBtn);
+
+      var deleteBtn = document.createElement('button');
+      deleteBtn.className = 'btn-delete';
+      deleteBtn.setAttribute('data-id', String(it.id));
+      deleteBtn.setAttribute('title', '删除');
+      deleteBtn.textContent = '✕';
+      actions.appendChild(deleteBtn);
+
+      itemDiv.appendChild(actions);
+      frag.appendChild(itemDiv);
+    });
+    els.gallery.innerHTML = '';
+    els.gallery.appendChild(frag);
+
+    // ★ 懒加载：图片进入视口才加载真实 src
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            var img = entry.target;
+            var realSrc = img.getAttribute('data-src');
+            if (realSrc) {
+              img.src = realSrc;
+              img.removeAttribute('data-src');
+            }
+            io.unobserve(img);
+          }
+        });
+      }, { rootMargin: '100px' });
+      Array.prototype.forEach.call(els.gallery.querySelectorAll('img[data-src]'), function(img) {
+        io.observe(img);
+      });
+    } else {
+      // 不支持 IntersectionObserver 的浏览器（IE）：直接加载
+      Array.prototype.forEach.call(els.gallery.querySelectorAll('img[data-src]'), function(img) {
+        img.src = img.getAttribute('data-src');
+        img.removeAttribute('data-src');
+      });
+    }
+
+    Array.prototype.forEach.call(els.gallery.querySelectorAll('.btn-activate'), function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        activateGalleryImage(parseInt(btn.dataset.id, 10));
+      });
+    });
+    Array.prototype.forEach.call(els.gallery.querySelectorAll('.btn-delete'), function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        // T05/P2-2：删除是不可逆写操作，补 loading/disabled 防重复点击
+        A.withBtnLoading(btn, '删除中...', function() {
+          return deleteGalleryImage(parseInt(btn.dataset.id, 10));
+        });
+      });
+    });
+  }
+
+  function loadBgConfig() {
+    return A.api('GET', '/api/bg-config').then(function(r) {
+      if (r && r.ok) {
+        // ★ 兼容旧 default 模式：映射为 custom（渐变背景）
+        var mode = r.mode || 'custom';
+        if (mode === 'default') mode = 'custom';
+        state.bg.mode = mode;
+        state.bg.color1 = r.color1 || '';
+        state.bg.color2 = r.color2 || '';
+        state.bg.color3 = r.color3 || '';
+        state.bg.color4 = r.color4 || '';
+        state.bg.angle = r.angle !== undefined ? r.angle : 64;
+        state.bg.text_color = r.text_color || '';
+        state.bg.opacity = r.opacity !== undefined ? r.opacity : 100;
+        state.bg.auto_rotate = r.auto_rotate || false;
+        state.bg.rotate_speed = r.rotate_speed !== undefined ? r.rotate_speed : 3;
+        state.bg.card_opacity = r.card_opacity !== undefined ? r.card_opacity : 100;
+        state.kpi_columns = r.kpi_columns !== undefined ? r.kpi_columns : 6;
+        els.color1.value = state.bg.color1;
+        els.color2.value = state.bg.color2;
+        els.color3.value = state.bg.color3;
+        els.color4.value = state.bg.color4;
+        els.textColor.value = state.bg.text_color;
+        els.textColorVal.textContent = state.bg.text_color;
+        els.angle.value = state.bg.angle;
+        els.angleVal.textContent = state.bg.angle;
+        els.opacity.value = state.bg.opacity;
+        els.opacityVal.textContent = state.bg.opacity;
+        els.cardOpacity.value = state.bg.card_opacity;
+        els.cardOpacityVal.textContent = state.bg.card_opacity;
+        els.rotateSpeed.value = state.bg.rotate_speed;
+        els.rotateSpeedVal.textContent = state.bg.rotate_speed;
+        els.kpiColumns.value = state.kpi_columns;
+        els.kpiColumnsVal.textContent = state.kpi_columns;
+        els.autoRotateToggle.classList.toggle('active', state.bg.auto_rotate);
+        // ★ 字体大小：从配置读取 ui_scale
+        state.font_scale = (r.ui_scale !== undefined && Number(r.ui_scale) > 0) ? Number(r.ui_scale) : 1;
+        renderFontScale();
+        applyFontScaleLocal();
+      }
+      // ★ 恢复 select 选项（初始化时被替换为"加载中..."）
+      els.mode.innerHTML = '<option value="custom">渐变背景</option><option value="gallery">图库图片</option><option value="none">默认背景</option>';
+      els.mode.value = state.bg.mode;
+      updateFormVisibility();
+      renderPreview();
+    }).catch(function() {
+      // ★ API 失败时也要恢复 select 选项
+      els.mode.innerHTML = '<option value="custom">渐变背景</option><option value="gallery">图库图片</option><option value="none">默认背景</option>';
+      els.mode.value = state.bg.mode;
+      updateFormVisibility();
+      renderPreview();
+    });
+  }
+
+  function loadGallery() {
+    return A.api('GET', '/api/bg-gallery').then(function(r) {
+      if (r && r.ok) {
+        state.gallery = r.items || [];
+        renderGallery();
+        renderPreview();
+      }
+    });
+  }
+
+  function loadInputStyle() {
+    return A.api('GET', '/api/input-style').then(function(r) {
+      if (r && r.ok) {
+        state.scheme = r.scheme || 'qingluan';
+        state.custom_color = r.custom_color || '';
+        // ★ 同步自定义颜色选择器与色点显示
+        if (els.customColor) {
+          els.customColor.value = state.custom_color;
+          els.customColorVal.textContent = state.custom_color;
+        }
+        if (els.customSchemeDot) {
+          els.customSchemeDot.style.background = state.custom_color;
+        }
+        Array.prototype.forEach.call(els.schemeOptions.children, function(child) {
+          child.classList.toggle('active', child.dataset.scheme === state.scheme);
+        });
+        // ★ 选中 custom 时显示自定义颜色行
+        if (els.customColorRow) {
+          els.customColorRow.style.display = (state.scheme === 'custom') ? 'block' : 'none';
+        }
+      }
+    });
+  }
+
+  function saveBgConfig(btn) {
+    A.withBtnLoading(btn, '保存中...', async function() {
+      var payload = {
+        mode: els.mode.value,
+        color1: els.color1.value,
+        color2: els.color2.value,
+        color3: els.color3.value,
+        color4: els.color4.value,
+        angle: parseInt(els.angle.value, 10),
+        text_color: els.textColor.value,
+        opacity: parseInt(els.opacity.value, 10),
+        card_opacity: parseInt(els.cardOpacity.value, 10),
+        auto_rotate: state.bg.auto_rotate,
+        rotate_speed: parseInt(els.rotateSpeed.value, 10),
+        kpi_columns: state.kpi_columns,
+        ui_scale: state.font_scale
+      };
+      var r = await A.api('POST', '/api/bg-config', payload);
+      if (r && r.ok) {
+        A.toast('背景配置已保存', 'success');
+        state.bg = payload;
+        // ★ 立即应用到当前页面
+        if (A.applyPersonalConfig) A.applyPersonalConfig();
+        renderPreview();
+      } else {
+        A.toast('保存失败: ' + (r && r.error || '未知错误'), 'error');
+      }
+    });
+  }
+
+  function saveInputStyle(btn) {
+    A.withBtnLoading(btn, '保存中...', async function() {
+      var payload = { scheme: state.scheme };
+      // ★ custom 方案必须附带 custom_color
+      if (state.scheme === 'custom') {
+        payload.custom_color = state.custom_color;
+      }
+      var r = await A.api('POST', '/api/input-style', payload);
+      if (r && r.ok) {
+        A.toast('主题配色已保存: ' + state.scheme + (state.scheme === 'custom' ? ' (' + state.custom_color + ')' : ''), 'success');
+        // ★ 立即应用到当前页面
+        if (A.applyInputStyle) A.applyInputStyle();
+      } else {
+        A.toast('保存失败: ' + (r && r.error || '未知错误'), 'error');
+      }
+    });
+  }
+
+  function activateGalleryImage(id) {
+    A.api('POST', '/api/bg-gallery/activate', { id: id }).then(function(r) {
+      if (r && r.ok) {
+        state.gallery.forEach(function(it) { it.is_current = (it.id === id) ? 1 : 0; });
+        renderGallery();
+        renderPreview();
+        A.toast('已切换到该背景图', 'success');
+      } else {
+        A.toast('切换失败: ' + (r && r.error || ''), 'error');
+      }
+    });
+  }
+
+  // T05/P2-2：内部改用 await A.confirm(...)（Promise），函数必须声明为 async
+  async function deleteGalleryImage(id) {
+    if (!(await A.confirm('确定删除这张背景图吗？', { danger: true }))) return;
+    // ★ 返回 Promise，供外层 A.withBtnLoading 正确维持 loading 态直到请求结束
+    return fetch('/api/bg-gallery/' + id, { method: 'DELETE', credentials: 'same-origin' }).then(function(r) { return r.json(); }).then(function(r) {
+      if (r && r.ok) {
+        state.gallery = state.gallery.filter(function(it) { return it.id !== id; });
+        renderGallery();
+        renderPreview();
+        A.toast('已删除', 'success');
+      } else {
+        A.toast('删除失败: ' + (r && r.error || ''), 'error');
+      }
+    });
+  }
+
+  function uploadGalleryImage(file) {
+    var fd = new FormData();
+    fd.append('file', file);
+    fetch('/api/upload-bg', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function(r) { return r.json(); }).then(function(r) {
+      if (r && r.ok) {
+        loadGallery();
+        A.toast('上传成功', 'success');
+      } else {
+        A.toast('上传失败: ' + (r && r.error || ''), 'error');
+      }
+    }).catch(function(e) {
+      A.toast('上传异常: ' + String(e), 'error');
+    });
+  }
+
+  // 事件绑定
+  els.mode.addEventListener('change', function() {
+    state.bg.mode = els.mode.value;
+    updateFormVisibility();
+    renderPreview();
+  });
+  ['color1','color2','color3','color4'].forEach(function(k) {
+    els[k].addEventListener('input', function() {
+      state.bg[k] = els[k].value;
+      renderPreview();
+    });
+  });
+  els.textColor.addEventListener('input', function() {
+    state.bg.text_color = els.textColor.value;
+    els.textColorVal.textContent = els.textColor.value;
+    renderPreview();
+  });
+  els.angle.addEventListener('input', function() {
+    state.bg.angle = parseInt(els.angle.value, 10);
+    els.angleVal.textContent = els.angle.value;
+    renderPreview();
+  });
+  els.opacity.addEventListener('input', function() {
+    state.bg.opacity = parseInt(els.opacity.value, 10);
+    els.opacityVal.textContent = els.opacity.value;
+    renderPreview();
+  });
+  els.cardOpacity.addEventListener('input', function() {
+    state.bg.card_opacity = parseInt(els.cardOpacity.value, 10);
+    els.cardOpacityVal.textContent = els.cardOpacity.value;
+    renderPreview();
+    // ★ 实时预览卡片透明度效果（无需保存即可看到）
+    // 基色对应用例 --bg-surface(--card-bg) 与 --bg-elevated(--card-bg-elevated)，用运行时 alpha 重挂
+    var alpha = state.bg.card_opacity / 100;
+    var root = document.documentElement;
+    root.style.setProperty('--card-bg', A.mixAlpha('111827', alpha));
+    root.style.setProperty('--card-bg-elevated', A.mixAlpha('1e293b', alpha));
+  });
+  els.autoRotateToggle.addEventListener('click', function() {
+    state.bg.auto_rotate = !state.bg.auto_rotate;
+    els.autoRotateToggle.classList.toggle('active', state.bg.auto_rotate);
+    updateFormVisibility();
+    renderPreview();
+  });
+  els.rotateSpeed.addEventListener('input', function() {
+    state.bg.rotate_speed = parseInt(els.rotateSpeed.value, 10);
+    els.rotateSpeedVal.textContent = els.rotateSpeed.value;
+  });
+  els.fileInput.addEventListener('change', function() {
+    if (els.fileInput.files && els.fileInput.files[0]) {
+      uploadGalleryImage(els.fileInput.files[0]);
+      els.fileInput.value = '';
+    }
+  });
+  els.kpiColumns.addEventListener('input', function() {
+    state.kpi_columns = parseInt(els.kpiColumns.value, 10);
+    els.kpiColumnsVal.textContent = state.kpi_columns;
+  });
+
+  // ★ 字体大小：渲染选中态 + 本地实时预览（保存后 applyPersonalConfig 全站生效）
+  function renderFontScale() {
+    Array.prototype.forEach.call(els.uiScaleOptions.children, function(child) {
+      child.classList.toggle('active', Number(child.dataset.scale) === state.font_scale);
+    });
+  }
+  function applyFontScaleLocal() {
+    document.documentElement.style.setProperty('--ui-scale', state.font_scale);
+  }
+  Array.prototype.forEach.call(els.uiScaleOptions.children, function(child) {
+    child.addEventListener('click', function() {
+      state.font_scale = Number(child.dataset.scale);
+      renderFontScale();
+      applyFontScaleLocal();
+    });
+  });
+
+  els.btnSaveBg.addEventListener('click', function() { saveBgConfig(els.btnSaveBg); });
+  els.btnSaveStyle.addEventListener('click', function() { saveInputStyle(els.btnSaveStyle); });
+
+  // ★ 本地预览主题配色（无需保存即可看到效果），配色数据同 app-common.js 单一数据源
+  function applySchemeLocal() {
+    var s = A.getSchemeColors(state.scheme, state.custom_color);
+    if (!s) return;
+    var root = document.documentElement;
+    root.style.setProperty('--color-primary', s.primary);
+    root.style.setProperty('--color-primary-soft', s.soft);
+    root.style.setProperty('--color-primary-border', s.border);
+    root.style.setProperty('--color-primary-hover', s.hover);
+  }
+
+  Array.prototype.forEach.call(els.schemeOptions.children, function(child) {
+    child.addEventListener('click', function() {
+      state.scheme = child.dataset.scheme;
+      Array.prototype.forEach.call(els.schemeOptions.children, function(c) {
+        c.classList.toggle('active', c === child);
+      });
+      // ★ 选中 custom 时显示自定义颜色行，否则隐藏
+      if (els.customColorRow) {
+        els.customColorRow.style.display = (state.scheme === 'custom') ? 'block' : 'none';
+      }
+      // ★ 立即预览主题配色（无需保存）
+      applySchemeLocal();
+    });
+  });
+
+  els.customColor.addEventListener('input', function() {
+    state.custom_color = els.customColor.value;
+    els.customColorVal.textContent = els.customColor.value;
+    if (els.customSchemeDot) els.customSchemeDot.style.background = els.customColor.value;
+    // ★ 实时预览自定义颜色
+    applySchemeLocal();
+  });
+
+  // 初始化 — 并行加载背景配置、图库和输入样式，减少等待时间
+  // ★ 显示加载态
+  ['bgMode', 'bgColor1', 'bgColor2', 'bgColor3', 'bgColor4', 'inputStyle'].forEach(function(id) {
+    var el = $(id);
+    if (el && el.tagName === 'SELECT') el.innerHTML = '<option value="">加载中...</option>';
+  });
+  Promise.all([loadBgConfig(), loadGallery(), loadInputStyle()]);
+
+  // ── 清理函数（释放 requestAnimationFrame 动画）──
+  function _cleanupPersonalConfig() {
+    stopAnim();
+  }
+  // ★ 挂到全局，供侧边栏导航拦截主动清理（比 pagehide 更早触发，避免阻塞后续页面）
+  A._cleanupPersonalConfig = _cleanupPersonalConfig;
+
+  // ── 页面可见性：隐藏时停止动画释放主线程 ──
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+      stopAnim();
+    }
+  });
+
+  // ── 页面卸载清理（双保险）──
+  window.addEventListener('pagehide', _cleanupPersonalConfig);
+  window.addEventListener('beforeunload', _cleanupPersonalConfig);
+})();
+</script>
+{% endblock %}

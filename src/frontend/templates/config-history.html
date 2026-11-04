@@ -1,0 +1,456 @@
+{% extends "_layout_base.html" %}
+{% block title %}配置历史 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+配置历史
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnRefreshHistory" data-perm="project.config.history">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  刷新
+</button>
+<a class="btn-topbar" href="/config" id="btnBackConfig" data-perm="project.config.view">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  返回配置
+</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════ 信息栏 ════════════ -->
+<div class="ch-info-bar">
+  <div class="ch-info-item">
+    <span class="ch-info-label">历史记录</span>
+    <span class="ch-info-value" id="historyCount">0</span>
+  </div>
+  <div class="ch-info-item">
+    <span class="ch-info-label">最近变更</span>
+    <span class="ch-info-value" id="lastChange">-</span>
+  </div>
+</div>
+
+<!-- ════════════ 筛选栏 ════════════ -->
+<div class="ch-filter-bar">
+  <div class="ch-search-wrapper">
+    <svg class="ch-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+    <input type="text" id="searchInput" class="ch-search-input" placeholder="搜索字段 / 操作人..." />
+  </div>
+  <div class="ch-filter-tabs">
+    <span class="ch-filter-tab active" data-action="all">全部</span>
+    <span class="ch-filter-tab" data-action="update">修改</span>
+    <span class="ch-filter-tab" data-action="create">创建</span>
+    <span class="ch-filter-tab" data-action="delete">删除</span>
+    <span class="ch-filter-tab" data-action="rollback">回滚</span>
+  </div>
+</div>
+
+<!-- ════════════ 历史记录列表 ════════════ -->
+<div class="ch-history-list" id="historyList">
+  <div class="ch-empty">暂无配置变更历史</div>
+</div>
+
+{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ════════════ 配置历史页样式 ════════════ */
+.ch-info-bar {
+  display: flex;
+  gap: 32px;
+  padding: 16px 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+.ch-info-item { display: flex; flex-direction: column; gap: 4px; }
+.ch-info-label { font-size: var(--fs-small); color: var(--text-secondary); }
+.ch-info-value {
+  font-size: var(--fs-h3); font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.ch-filter-bar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+.ch-search-wrapper {
+  position: relative;
+  flex: 1;
+  max-width: 320px;
+}
+.ch-search-icon {
+  position: absolute;
+  left: 10px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+}
+.ch-search-input {
+  width: 100%;
+  padding: 8px 12px 8px 34px;
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--fs-small);
+}
+.ch-search-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+.ch-filter-tabs {
+  display: flex; gap: 4px;
+}
+.ch-filter-tab {
+  padding: 6px 12px;
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  transition: all 0.15s;
+}
+.ch-filter-tab:hover { background: var(--bg-elevated); }
+.ch-filter-tab.active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  border-color: var(--color-primary-border);
+}
+
+/* ── 历史记录列表 ── */
+.ch-history-list {
+  display: flex; flex-direction: column;
+  gap: 8px;
+}
+.ch-empty {
+  padding: 48px;
+  text-align: center;
+  color: var(--text-tertiary);
+}
+
+.ch-history-item {
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px 18px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  transition: border-color 0.15s;
+}
+.ch-history-item:hover {
+  border-color: var(--border-hover);
+}
+
+.ch-history-icon {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.ch-history-icon.update {
+  background: var(--state-info-soft);
+  color: var(--state-info-text);
+}
+.ch-history-icon.create {
+  background: var(--state-success-soft);
+  color: var(--state-success-text);
+}
+.ch-history-icon.delete {
+  background: var(--state-error-soft);
+  color: var(--state-error-text);
+}
+.ch-history-icon.rollback {
+  background: var(--state-warning-soft);
+  color: var(--state-warning-text);
+}
+.ch-history-icon.default {
+  background: var(--bg-elevated);
+  color: var(--text-tertiary);
+}
+
+.ch-history-main {
+  flex: 1;
+  min-width: 0;
+}
+.ch-history-title {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 4px;
+}
+.ch-history-key {
+  font-family: var(--font-mono);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.ch-history-action {
+  font-size: var(--fs-micro);
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  font-weight: var(--fw-medium);
+}
+.ch-history-action.update {
+  background: var(--state-info-soft);
+  color: var(--state-info-text);
+}
+.ch-history-action.create {
+  background: var(--state-success-soft);
+  color: var(--state-success-text);
+}
+.ch-history-action.delete {
+  background: var(--state-error-soft);
+  color: var(--state-error-text);
+}
+.ch-history-action.rollback {
+  background: var(--state-warning-soft);
+  color: var(--state-warning-text);
+}
+.ch-history-diff {
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ch-history-diff .old {
+  color: var(--state-error-text);
+  text-decoration: line-through;
+}
+.ch-history-diff .arrow {
+  color: var(--text-tertiary);
+  margin: 0 6px;
+}
+.ch-history-diff .new {
+  color: var(--state-success-text);
+}
+
+.ch-history-meta {
+  display: flex; flex-direction: column; align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.ch-history-time {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+}
+.ch-history-user {
+  font-size: var(--fs-micro);
+  color: var(--text-secondary);
+}
+
+.ch-history-actions {
+  flex-shrink: 0;
+}
+.ch-btn-rollback {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 6px 10px;
+  background: transparent;
+  color: var(--state-warning-text);
+  border: 1px solid var(--state-warning-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-micro);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.ch-btn-rollback:hover {
+  background: var(--state-warning);
+  color: var(--text-inverse);
+}
+.ch-btn-rollback:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  'use strict';
+  var A = window._A;
+  if (!A) return;
+  var $ = A.$, esc = A.escHtml;
+
+  // ── 状态 ──
+  var allHistory = [];
+  var currentAction = 'all';
+  var searchText = '';
+
+  // ── 加载历史 ──
+  async function loadHistory() {
+    var list = $('historyList');
+    if (list) list.innerHTML = '<div class="ch-empty"><span class="inline-loading">加载中</span></div>';
+    var r = await A.api('GET', '/api/config/history');
+    if (!r || r.error) {
+      if (list) list.innerHTML = '<div class="ch-empty">' + esc((r && r.error) || '加载失败') + '</div>';
+      return;
+    }
+    allHistory = r.history || [];
+    if ($('curProject')) $('curProject').textContent = r.project || '未选择';
+    if ($('historyCount')) $('historyCount').textContent = allHistory.length;
+    if (allHistory.length > 0 && $('lastChange')) {
+      $('lastChange').textContent = formatTime(allHistory[0].created_at || allHistory[0].ts);
+    }
+    renderList();
+  }
+
+  // ── 格式化时间（统一走全局 A.fmtDateTime，输出 年月日 时分秒）──
+  function formatTime(ts) {
+    return A.fmtDateTime(ts);
+  }
+
+  // ── 推断操作类型（config_history 表无 action 字段，从 old/new 值推断）──
+  function inferAction(h) {
+    var oldVal = h.old_value;
+    var newVal = h.new_value;
+    var hasOld = oldVal != null && oldVal !== '' && oldVal !== 'null' && oldVal !== '""';
+    var hasNew = newVal != null && newVal !== '' && newVal !== 'null' && newVal !== '""';
+    if (!hasOld && hasNew) return 'create';
+    if (hasOld && !hasNew) return 'delete';
+    return 'update';
+  }
+
+  // ── 过滤 ──
+  function filterHistory() {
+    return allHistory.filter(function(h) {
+      var action = inferAction(h);
+      if (currentAction !== 'all' && action !== currentAction) return false;
+      if (searchText) {
+        var q = searchText.toLowerCase();
+        var text = [h.section, h.user_id, action].join(' ').toLowerCase();
+        if (text.indexOf(q) < 0) return false;
+      }
+      return true;
+    });
+  }
+
+  // ── 渲染列表 ──
+  function renderList() {
+    var list = $('historyList');
+    if (!list) return;
+    var filtered = filterHistory();
+    if (filtered.length === 0) {
+      list.innerHTML = '<div class="ch-empty">' + (searchText || currentAction !== 'all' ? '无匹配记录' : '暂无配置变更历史') + '</div>';
+      return;
+    }
+    var html = filtered.map(function(h) {
+      var action = inferAction(h);
+      var key = h.section || '-';
+      var oldVal = h.old_value != null ? h.old_value : '';
+      var newVal = h.new_value != null ? h.new_value : '';
+      var userId = h.user_id || 'system';
+      var ts = formatTime(h.created_at);
+
+      var iconSvg = getActionIcon(action);
+      var diffHtml = '';
+      if (action === 'delete') {
+        diffHtml = '<span class="old">' + esc(String(oldVal).substring(0, 60)) + '</span>';
+      } else if (action === 'create') {
+        diffHtml = '<span class="new">' + esc(String(newVal).substring(0, 60)) + '</span>';
+      } else {
+        diffHtml = '<span class="old">' + esc(String(oldVal).substring(0, 40)) + '</span>'
+          + '<span class="arrow">→</span>'
+          + '<span class="new">' + esc(String(newVal).substring(0, 40)) + '</span>';
+      }
+
+      var rollbackBtn = '';
+      if (action === 'update' || action === 'delete') {
+        rollbackBtn = '<button class="ch-btn-rollback" data-key="' + esc(key) + '" data-value="' + esc(String(oldVal)) + '">'
+          + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>'
+          + '回滚'
+        + '</button>';
+      }
+
+      return '<div class="ch-history-item">'
+        + '<div class="ch-history-icon ' + action + '">' + iconSvg + '</div>'
+        + '<div class="ch-history-main">'
+          + '<div class="ch-history-title">'
+            + '<span class="ch-history-key">' + esc(key) + '</span>'
+            + '<span class="ch-history-action ' + action + '">' + esc(action) + '</span>'
+          + '</div>'
+          + '<div class="ch-history-diff">' + diffHtml + '</div>'
+        + '</div>'
+        + '<div class="ch-history-meta">'
+          + '<div class="ch-history-time">' + esc(ts) + '</div>'
+          + '<div class="ch-history-user">@' + esc(userId) + '</div>'
+        + '</div>'
+        + '<div class="ch-history-actions">' + rollbackBtn + '</div>'
+      + '</div>';
+    }).join('');
+    list.innerHTML = html;
+    bindRollbackButtons();
+  }
+
+  function getActionIcon(action) {
+    var icons = {
+      update: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+      create: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+      delete: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+      rollback: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>'
+    };
+    return icons[action] || icons.update;
+  }
+
+  // ── 回滚 ──
+  async function rollbackConfig(key, value) {
+    if (!key) return;
+    if (!(await A.confirm('确认回滚配置「' + key + '」到旧值？\n旧值: ' + value.substring(0, 80)))) return;
+    var r = await A.api('POST', '/api/config/rollback', { key: key, value: value });
+    if (r && r.ok) {
+      A.toast && A.toast('回滚成功：' + key, 'success');
+      await loadHistory();
+    } else {
+      A.toast && A.toast((r && r.error) || '回滚失败', 'error');
+    }
+  }
+
+  function bindRollbackButtons() {
+    var btns = document.querySelectorAll('.ch-btn-rollback');
+    btns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var key = btn.getAttribute('data-key');
+        var value = btn.getAttribute('data-value');
+        rollbackConfig(key, value);
+      });
+    });
+  }
+
+  // ── 绑定事件 ──
+  function bindEvents() {
+    var btnRefresh = $('btnRefreshHistory');
+    if (btnRefresh) btnRefresh.addEventListener('click', loadHistory);
+    var search = $('searchInput');
+    if (search) search.addEventListener('input', function() {
+      searchText = search.value.trim();
+      renderList();
+    });
+    var tabs = document.querySelectorAll('.ch-filter-tab');
+    tabs.forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        tabs.forEach(function(t) { t.classList.remove('active'); });
+        tab.classList.add('active');
+        currentAction = tab.getAttribute('data-action') || 'all';
+        renderList();
+      });
+    });
+  }
+
+  // ── 登录态守卫 ──
+  A._onAuthOk = function() {
+    A._renderSidebarUser();
+    A.applyPermissions();
+    loadHistory();
+    A._startStepBadgePolling();
+  };
+  // 兜底：即使 _currentUser 尚未初始化也尝试加载，API 会返回未登录/未选项目等错误态，避免“加载中...”残留
+  loadHistory();
+
+  bindEvents();
+})();
+</script>
+{% endblock %}

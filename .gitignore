@@ -1,0 +1,216 @@
+# ----------------------------
+# 1. 环境变量和虚拟环境
+# ----------------------------
+ai_test_env/
+.venv/
+venv/
+env/
+# Python 虚拟环境
+tests/全链路
+# ----------------------------
+# 2. 依赖包与缓存
+# ----------------------------
+node_modules/
+__pycache__/
+*.pyc
+*.zip
+*.whl
+.playwright/
+
+# ----------------------------
+# 3. 浏览器驱动
+# ----------------------------
+chrome-win64/
+
+# ----------------------------
+# 4. IDE 配置
+# ----------------------------
+.idea/
+.vscode/
+*.iml
+
+# ----------------------------
+# 5. 系统垃圾文件
+# ----------------------------
+.DS_Store
+Thumbs.db
+
+# ----------------------------
+# 6. AI 助手配置
+# ----------------------------
+
+# ----------------------------
+# 7. 项目运行时数据 & 产出
+# ----------------------------
+data/
+/docs-process/
+/docs-raw/
+/docs-result/
+/Tools/
+
+# ★ 防止空项目名导致在裸目录下生成 docs-raw/docs-process
+/src/users/data.db
+/src/users/data.db-wal
+/src/users/data.db-shm
+/src/users/db.key
+
+# 本地临时文件 & 启动器
+temp/
+tests/watchdog.log
+tests/watchdog_launcher.py
+_doStartStep*.txt
+.reasonix/
+.cache/
+
+# ★ sentence-transformers 模型缓存（自动下载，固定路径）
+models/
+
+# Confluence MCP npm 依赖（npx -y 自动下载，本地仅锁版本）
+src/pipeline/steps/step1/mcp/node_modules/
+src/pipeline/steps/step1/mcp/package-lock.json
+src/pipeline/steps/step1/mcp/package.json
+
+# ----------------------------
+# 8. 大文件类型 & 数据库
+# ----------------------------
+*.exe
+*.dll
+*.sqlite
+
+# ----------------------------
+# 9. 环境变量文件
+# ----------------------------
+.env
+# 机器本地 MCP 配置可能含密钥（如 FIGMA_API_KEY），不入库
+.mcp.json
+*.db
+app.py.debug
+
+# ----------------------------
+# 10. GUI 桌面端（已弃用，主用 Web 端）
+# ----------------------------
+src/gui_app.py
+fix_request.txt
+
+# ----------------------------
+# 11. Pytest 验证与通用环境
+# ----------------------------
+.pytest_cache/
+.coverage
+htmlcov/
+# Python 虚拟环境
+
+# 忽略 Windows 保留设备名产生的垃圾文件
+/nul
+
+# ----------------------------
+# 12. AI 助手/团队工作目录（W2 补充 2026-08-05）
+# ----------------------------
+.workbuddy/
+.claude/
+.codebase-memory/
+.agents/
+.agnes/
+.reasonix/
+.uploads/
+.model_cache.json
+
+# 运行时日志与密钥
+logs/
+.flask_secret
+.encryption_key_v2
+# 密钥备份目录：任意层级下该目录的内容一律忽略，仅放行不含密钥内容的 README.md。
+# 注意两点：
+#   1) 必须写 `**/目录/*`（忽略"内容"）而非 `目录/`（忽略"目录本身"），
+#      否则父目录被整体排除时 `!` negation 不生效；
+#   2) 必须带 `**/` 前缀 —— 含斜杠的 pattern 会被锚定到仓库根，
+#      写成 `encryption_key_recovery/*` 会漏掉 docs/、scripts/docs/、
+#      src/docs/、src/backend/docs/ 等深层同名目录。
+**/encryption_key_recovery/*
+!**/encryption_key_recovery/README.md
+scripts/_tmp/
+scripts/_tmp/_git_old_packs_backup/
+scripts/_tmp_chrome_profile/
+scripts/tmp/
+.git_broken_bak/
+
+# 性能相对基线（机器本地运行时产物，随硬件/环境变化，无跨机意义——不入库）
+src/extensions/perf_baseline/baselines/*.json
+
+# ----------------------------
+# 13. 开发验证截图与会话残留（W4清理 2026-08-07）
+# ----------------------------
+screenshots/
+verify_screenshots/
+flask_session_files/
+
+# ----------------------------
+# 14. 数据库与散落截图（2026-08-10 补充，防止 db/二进制截图入库）
+# ----------------------------
+db.sqlite3
+*.sqlite3
+screenshot_*.png
+
+# ----------------------------
+# 15. 清理轮补充（2026-08-11 A/B 级清理前置）
+# ----------------------------
+# 运行期缓存产出目录（原为空目录，本轮 A 级删除，防止再生后入库）
+运行缓存/
+
+# ----------------------------
+# 16. 第三方通用性验证靶子（E 阶段，非自有代码）
+# ----------------------------
+third_party_targets/
+
+# ----------------------------
+# 17. 实证套件各靶子实时可写库（按 target_key 落 .verify_dbs/，防误入库）
+# ----------------------------
+.verify_dbs/
+
+# 18. Playwright 浏览器缓存（非源码，本地生成）
+.pw_browsers/
+
+# ----------------------------
+# 19. 临时诊断脚本 & 扫地垃圾（2026-09-05 仓库卫生，防误入库）
+# ----------------------------
+# 根目录临时探查/诊断脚本（_diag / _probe / _audit / _verify 等历史脚本）
+/_[di]*.py
+/_[a-z]*_*.py
+/_t_*.py
+# 根目录临时输出（*_out.txt / *_run*.txt / *_log 等）
+/_*.txt
+/_*.log
+/.ui_sweep/
+# 可疑单字符空文件（误创建的 '=' 等）
+/=
+# 构建产出
+/build/
+/dist/
+# Frontend bundle 产物（node 构建生成，非源码）
+/src/bundle/
+/scripts/bundle/
+
+# 一次性验收/探针脚本（证据保留在 logs/，不入库）
+scripts/_*
+!scripts/_tmp/
+
+# 本地备份（225M，不入库）
+backup/
+
+# ----------------------------
+# 20. GitHub 推送范围（2026-11-04）：仅引擎代码与文档
+# ----------------------------
+# 靶子系统 / 第三方系统 / 营销资料 / 实证报告均不入库（本地保留，取消跟踪）
+examples/
+target_systems/
+ModSystem/
+marketing/
+e2e-test-report-*/
+deliverables/promo/
+# 大型媒体文件（宣传视频等，非引擎代码）
+*.mp4
+*.mov
+
+# 例外：README 展示用界面截图需要入库
+!docs/screenshots/
+!docs/screenshots/*.png

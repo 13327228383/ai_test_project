@@ -1,0 +1,206 @@
+{% extends "_layout_base.html" %}
+{% block title %}数据导出 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+数据导出
+{% endblock %}
+
+{% block head_extra %}
+<style>
+.export-layout { display: grid; gap: var(--space-5); }
+.export-card { background: var(--bg-card); border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: var(--space-5); }
+.export-card-header { margin-bottom: var(--space-4); }
+.export-card-title { font-size: var(--fs-h3); font-weight: 600; }
+.export-card-sub { font-size: var(--fs-small); color: var(--text-secondary); margin-top: var(--space-1); }
+.export-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-4); }
+.export-item { border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: var(--space-4); transition: border-color 0.2s; }
+.export-item:hover { border-color: var(--accent-color); }
+.export-item-icon { width: 40px; height: 40px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; margin-bottom: var(--space-3); }
+.export-item-icon.blue { background: var(--state-info-soft); color: var(--state-info); }
+.export-item-icon.green { background: var(--state-success-soft); color: var(--state-success); }
+.export-item-icon.orange { background: var(--state-warning-soft); color: var(--state-warning); }
+.export-item-icon.purple { background: var(--step2-soft); color: var(--step2-color); }
+.export-item-icon.teal { background: var(--color-primary-soft); color: var(--color-primary); }
+.export-item-title { font-weight: 600; margin-bottom: var(--space-1); }
+.export-item-desc { font-size: var(--fs-small); color: var(--text-secondary); margin-bottom: var(--space-3); }
+.export-item-btn { display: flex; gap: var(--space-2); }
+.export-format-select { display: flex; gap: var(--space-2); align-items: center; }
+.export-format-select select { padding: var(--space-1) var(--space-2); border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-primary); font-size: var(--fs-small); }
+.export-preview { background: var(--bg-code); border: 1px solid var(--border-default); border-radius: var(--radius-md); padding: var(--space-4); max-height: 400px; overflow-y: auto; display: none; margin-top: var(--space-4); }
+.export-preview pre { margin: 0; font-family: var(--font-mono); font-size: var(--fs-tiny); white-space: pre-wrap; }
+.export-preview-table { width: 100%; border-collapse: collapse; font-size: var(--fs-small); }
+.export-preview-table th, .export-preview-table td { border: 1px solid var(--border-default); padding: var(--space-1) var(--space-2); text-align: left; vertical-align: top; }
+.export-preview-table th { background: var(--bg-elevated); color: var(--text-secondary); font-weight: 600; position: sticky; top: 0; }
+/* 页面主体：明确套用主题深色背景，避免白底（design token，不硬编码色值） */
+.exp-page { background: var(--bg-base); border-radius: var(--radius-lg); padding: var(--space-4); }
+.exp-page .export-card { background: var(--bg-card); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="export-layout exp-page">
+  <div class="export-card">
+    <div class="export-card-header">
+      <div class="export-card-title">数据导出</div>
+      <div class="export-card-sub">将测试数据导出为 Excel / CSV 格式，便于外部分析和归档</div>
+    </div>
+    <div class="export-grid">
+      <!-- 需求文档 -->
+      <div class="export-item">
+        <div class="export-item-icon blue">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        </div>
+        <div class="export-item-title">需求文档</div>
+        <div class="export-item-desc">导出所有需求文档及其关联的测试用例映射</div>
+        <div class="export-item-btn">
+          <button class="btn-primary" onclick="doExport('requirements', 'xlsx')">导出 Excel</button>
+          <button class="btn-secondary" onclick="previewExport('requirements')">预览</button>
+        </div>
+      </div>
+      <!-- 测试用例 -->
+      <div class="export-item">
+        <div class="export-item-icon green">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </div>
+        <div class="export-item-title">测试用例</div>
+        <div class="export-item-desc">导出所有验证意图（Validation Intent）及执行状态</div>
+        <div class="export-item-btn">
+          <button class="btn-primary" onclick="doExport('validation-intents', 'xlsx')">导出 Excel</button>
+          <button class="btn-secondary" onclick="previewExport('validation-intents')">预览</button>
+        </div>
+      </div>
+      <!-- 测试报告 -->
+      <div class="export-item">
+        <div class="export-item-icon orange">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        </div>
+        <div class="export-item-title">测试报告</div>
+        <div class="export-item-desc">导出完整的测试执行报告（含通过/失败/跳过详情）</div>
+        <div class="export-item-btn">
+          <button class="btn-primary" onclick="doExport('report', 'xlsx')">导出 Excel</button>
+          <button class="btn-secondary" onclick="previewExport('report')">预览</button>
+        </div>
+      </div>
+      <!-- 覆盖率 -->
+      <div class="export-item">
+        <div class="export-item-icon purple">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        </div>
+        <div class="export-item-title">覆盖率数据</div>
+        <div class="export-item-desc">导出需求覆盖率、模块覆盖等质量指标数据</div>
+        <div class="export-item-btn">
+          <button class="btn-primary" onclick="doExport('coverage', 'xlsx')">导出 Excel</button>
+          <button class="btn-secondary" onclick="previewExport('coverage')">预览</button>
+        </div>
+      </div>
+      <!-- 导航树 -->
+      <div class="export-item">
+        <div class="export-item-icon teal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5M5 17v-3h14v3"/></svg>
+        </div>
+        <div class="export-item-title">站点导航树</div>
+        <div class="export-item-desc">导出被测系统的站点结构和页面导航关系</div>
+        <div class="export-item-btn">
+          <button class="btn-primary" onclick="doExport('navigation-tree', 'xlsx')">导出 JSON</button>
+          <button class="btn-secondary" onclick="previewExport('navigation-tree')">预览</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 预览区域 -->
+    <div class="export-preview" id="exportPreview">
+      <div class="ud-flex ud-jcsb ud-aic ud-mb-3">
+        <span class="ud-fw-se" id="previewTitle">预览</span>
+        <button class="btn-secondary ud-fs-tiny" onclick="closePreview()">关闭</button>
+      </div>
+      <pre id="previewContent"></pre>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  if (!window._A) return;
+  var A = window._A, $ = A.$, api = A.api, escHtml = A.escHtml;
+
+  A._onAuthOk = function() {
+    A._renderSidebarUser();
+    A.applyPermissions();
+    A._startStepBadgePolling();
+  };
+
+  window.doExport = function(type, format) {
+    var url = '/api/export/' + type + '?format=' + (format || 'xlsx');
+    // 直接触发下载
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = type + '.' + (format || 'xlsx');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    A.toast('正在下载 ' + type + '...', 'info');
+  };
+
+  function renderPreviewRows(columns, rows) {
+    if (!rows || !rows.length) return '（无数据）';
+    var head = columns.map(function (c) {
+      return '<th>' + escHtml(c) + '</th>';
+    }).join('');
+    var tbody = rows.slice(0, 100).map(function (r) {
+      return '<tr>' + columns.map(function (c) {
+        var v = r[c];
+        if (v === null || v === undefined) v = '';
+        if (typeof v === 'object') v = JSON.stringify(v);
+        return '<td>' + escHtml(String(v)) + '</td>';
+      }).join('') + '</tr>';
+    }).join('') + (rows.length > 100
+      ? '<tr><td colspan="' + columns.length + '">… 仅展示前 100 / ' + rows.length + ' 行</td></tr>'
+      : '');
+    return '<table class="export-preview-table"><thead><tr>' + head + '</tr></thead><tbody>' + tbody + '</tbody></table>';
+  }
+
+  function renderPreview(el, r) {
+    if (r.ok && r.columns && r.rows) {
+      el.innerHTML = renderPreviewRows(r.columns, r.rows);
+    } else if (r.ok && r.content) {
+      var c = r.content;
+      el.textContent = typeof c === 'string' ? c : JSON.stringify(c, null, 2);
+    } else {
+      el.textContent = '无预览数据';
+    }
+  }
+
+  window.previewExport = function(type) {
+    var previewEl = $('exportPreview');
+    var contentEl = $('previewContent');
+    var titleEl = $('previewTitle');
+    previewEl.style.display = '';
+    contentEl.textContent = '加载中...';
+    titleEl.textContent = '预览: ' + type;
+    // 导航树走专用 JSON 预览；其余类型走统一 preview 接口
+    var url = type === 'navigation-tree'
+      ? '/api/navigation-tree/preview'
+      : '/api/export/' + type + '/preview';
+    api('GET', url).then(function(r) {
+      if (r && r.ok) {
+        renderPreview(contentEl, r);
+      } else {
+        contentEl.textContent = (r && r.error) ? ('加载失败: ' + r.error) : '加载失败';
+      }
+    }).catch(function(e) {
+      contentEl.textContent = '加载失败: ' + String(e);
+    });
+  };
+
+  window.closePreview = function() {
+    $('exportPreview').style.display = 'none';
+  };
+
+  if (A._currentUser) {
+    A._onAuthOk();
+  }
+})();
+</script>
+{% endblock %}

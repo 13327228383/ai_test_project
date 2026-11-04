@@ -1,0 +1,80 @@
+{% extends "_layout_base.html" %}
+{% block title %}质量治理面板 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l7 4v6c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+质量治理面板
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnRefreshQuality">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  刷新
+</button>
+{% endblock %}
+
+{% block content %}
+{#
+  T04 / P1-4 + P1-5 — W3 质量治理面板
+  ────────────────────────────────────────────────────────────
+  · 卡片栅格复用 metrics.html 的「容器 + JS 渲染」模式（§T04 文件清单）；
+  · 页面本身零内联业务 JS，全部逻辑在 /static/quality-panel.js（§8.10）；
+  · ★ 只读红线：本页只消费 GET /api/quality/w3-summary 与 GET /api/config/flags，
+    唯一写操作是用户显式二次确认后的 POST /api/config/toggle，
+    绝不触发任何执行行为（不引用任何 run_* / enforce_* 端点）。
+#}
+
+<!-- ════════════ 开关区（P1-5） ════════════ -->
+<div class="quality-toggle-bar">
+  <div class="quality-toggle-bar-head">
+    <span>能力开关</span>
+    <span class="quality-toggle-hint">
+      变更即时热加载并写入 config_history 留痕；标注 <code>env</code> 的开关被环境变量锁定，页面修改不会生效
+    </span>
+  </div>
+  <div id="toggleArea" data-perm="execution.run">
+    <!-- renderToggles() 按 group 渲染 -->
+  </div>
+</div>
+
+<!-- ════════════ 只读卡片区（P1-4，5 类） ════════════ -->
+<div class="docs-panel-header">
+  质量治理能力
+  <span class="docs-panel-hint">数据生成时间：<span id="genTime">—</span></span>
+</div>
+<div class="quality-grid" id="qualityGrid">
+  <!-- renderCards() 渲染 5 张卡：假通过 / 引擎健康 / 性能基线 / ADI 分布 / 契约·幂等·网络故障 -->
+</div>
+
+<!-- ════════════ T2：Step3 方法论标签校验标记（流水线强化专项） ════════════ -->
+<div class="docs-panel-header" style="margin-top:var(--space-5);">
+  Step3 方法论标签校验
+  <span class="docs-panel-hint">白名单外 scenario_type / test_method 的处置记录（低危自动修正 / 高危阻断）</span>
+</div>
+<div id="methodologyArea">
+  <!-- loadMethodology() 渲染 -->
+</div>
+
+{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ★ T2 流水线强化专项：方法论标签校验标记区
+   状态胶囊 .methodology-tag / -fixed / -blocked 已提升为 app-design.css 全局共享类
+   （与 .state-tag-* 同一份定义），本页不再重复声明颜色。 */
+#methodologyArea { margin-top: var(--space-1); }
+.methodology-summary { display: flex; gap: var(--space-3); flex-wrap: wrap; padding: var(--space-2) 0 var(--space-3); }
+.methodology-stat { font-size: var(--fs-small); padding: var(--space-1) var(--space-3); border-radius: var(--radius-full); background: var(--bg-elevated); border: 1px solid var(--border-default); color: var(--text-secondary); font-family: var(--font-mono); }
+.methodology-stat-fixed { color: var(--state-success); border-color: var(--state-success-border); background: var(--state-success-soft); }
+.methodology-stat-blocked { color: var(--state-error); border-color: var(--state-error-border); background: var(--state-error-soft); }
+.methodology-list { display: flex; flex-direction: column; border: 1px solid var(--border-default); border-radius: var(--radius-lg); overflow: hidden; }
+.methodology-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-default); background: var(--bg-surface); }
+.methodology-row:last-child { border-bottom: none; }
+.methodology-case { font-size: var(--fs-small); font-family: var(--font-mono); color: var(--text-primary); flex-shrink: 0; min-width: 90px; }
+.methodology-note { font-size: var(--fs-small); color: var(--text-secondary); }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ static_ver('quality-panel.js') }}"></script>
+{% endblock %}

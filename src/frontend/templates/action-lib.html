@@ -1,0 +1,1409 @@
+{% extends "_layout_base.html" %}
+{% block head_extra %}
+<style>
+/* ════════════ action-lib.html 专用样式 ════════════ */
+
+.al-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  margin-bottom: var(--space-4);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+}
+.al-stat-val {
+  color: var(--color-primary);
+  font-weight: var(--fw-semibold);
+  font-family: var(--font-mono);
+}
+.al-stat-val-op {
+  color: var(--step4-color);
+}
+.al-stat-val-chk {
+  color: var(--state-success);
+}
+.al-stat-hint {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  margin-left: var(--space-2);
+}
+
+.al-cat-tabs {
+  display: flex;
+  /* ★ 分类多时换行铺开：单行 nowrap + overflow 会把后半排按钮裁在可视区外
+     （计数/文案越长的越靠右，表现为「筛选按钮被压缩」）。与二级筛选条同一契约。 */
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-2);
+}
+.al-cat-tab {
+  display: inline-flex;
+  /* ★ 按钮按内容取宽，不参与收缩：分类再多、计数再长也不会被压扁 */
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  position: relative; /* ★ 让 tooltip ::after 的 min-width: 100% 相对于按钮本身 */
+}
+.al-cat-tab:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+.al-cat-tab.active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  border-color: var(--color-primary-border);
+}
+.al-cat-tab-op.active {
+  background: var(--step4-soft);
+  color: var(--step4-color);
+  border-color: var(--step4-border);
+}
+.al-cat-tab-chk.active {
+  background: var(--state-success-soft);
+  color: var(--state-success);
+  border-color: var(--state-success-border);
+}
+.al-cat-icon { font-size: var(--fs-body); }
+.al-tab-count {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  text-align: center;
+}
+.al-cat-tab.active .al-tab-count {
+  background: var(--color-primary);
+  color: var(--text-inverse);
+}
+.al-cat-tab-op.active .al-tab-count {
+  background: var(--step4-color);
+  color: var(--text-inverse);
+}
+.al-cat-tab-chk.active .al-tab-count {
+  background: var(--state-success);
+  color: var(--text-inverse);
+}
+
+/* ════════════ 二级筛选条（断言分类下） ════════════ */
+.al-sub-tabs {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px dashed var(--border-default);
+  flex-wrap: wrap;
+}
+.al-sub-tab {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  background: transparent;
+}
+.al-sub-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+.al-sub-tab.active {
+  color: var(--state-success);
+  background: var(--state-success-soft);
+  border-color: var(--state-success-border);
+}
+.al-sub-tab .al-tab-count {
+  background: var(--bg-elevated);
+  min-width: 14px;
+  padding: 0 4px;
+}
+.al-sub-tab.active .al-tab-count {
+  background: var(--state-success);
+  color: var(--text-inverse);
+}
+
+.al-inst-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4);
+}
+.al-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: var(--space-8);
+  color: var(--text-tertiary);
+  font-size: var(--fs-small);
+}
+.al-empty-error { color: var(--state-error-text); }
+
+.al-inst-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  flex-direction: column;
+  min-height: 120px;
+}
+.al-inst-card:hover { border-color: var(--border-hover); }
+.al-inst-card.selected {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-soft);
+}
+
+.al-inst-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-2);
+}
+.al-inst-cat {
+  font-weight: var(--fw-medium);
+}
+.al-inst-badges {
+  display: inline-flex;
+  gap: var(--space-1);
+}
+.al-ai-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: var(--step2-soft);
+  color: var(--step2-color);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  border: 1px solid var(--step2-border);
+}
+.al-wf-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: var(--step3-soft);
+  color: var(--step3-color);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  border: 1px solid var(--step3-border);
+}
+/* 操作徽章（蓝色，对应 Step4 执行阶段） */
+.al-op-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: var(--step4-soft);
+  color: var(--step4-color);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  border: 1px solid var(--step4-border);
+}
+/* 断言徽章（绿色，对应校验通过状态） */
+.al-chk-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: var(--state-success-soft);
+  color: var(--state-success);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  border: 1px solid var(--state-success-border);
+}
+
+/* ════════════ Tooltip 宽度对齐修复（避免阴影与按钮长度不一致） ════════════ */
+/* ★ 关键：给按钮加 position: relative，让 ::after 的 width: 100% 相对于按钮本身而非 viewport */
+.al-cat-tab[data-tooltip],
+#btnRefreshLib[data-tooltip] {
+  position: relative;
+}
+/* tooltip 宽度严格 = 按钮宽度，内容换行适应，不再出现 tooltip 比按钮宽/窄的情况 */
+.al-cat-tab[data-tooltip]::after,
+.btn-topbar[data-tooltip]::after {
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
+  white-space: normal;
+  word-break: break-word;
+  box-sizing: border-box;
+  text-align: center;
+}
+.al-cat-tab[data-tooltip]::before,
+.btn-topbar[data-tooltip]::before {
+  left: 50%;
+}
+/* 徽章类触发元素（OP/CHK/AI/WF）：tooltip 太小会失去提示意义，固定最小宽度避免过窄 */
+.al-op-badge[data-tooltip]::after,
+.al-chk-badge[data-tooltip]::after,
+.al-ai-badge[data-tooltip]::after,
+.al-wf-badge[data-tooltip]::after {
+  min-width: 140px;
+  box-sizing: border-box;
+  text-align: left;
+  white-space: pre-line;
+}
+/* 徽章 tooltip 的箭头从左侧 1/4 处指向徽章中心 */
+.al-op-badge[data-tooltip-pos="bottom"]::before,
+.al-chk-badge[data-tooltip-pos="bottom"]::before,
+.al-ai-badge[data-tooltip-pos="bottom"]::before,
+.al-wf-badge[data-tooltip-pos="bottom"]::before {
+  left: 50%;
+  margin-left: -5px;
+}
+
+.al-inst-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+  min-width: 0;
+}
+.al-inst-label {
+  font-size: var(--fs-hero);
+  font-weight: var(--fw-bold);
+  color: var(--text-primary);
+  min-width: 0;
+}
+.al-inst-label-text {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.al-inst-stats {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+}
+.al-inst-id {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--color-primary);
+  margin-bottom: var(--space-1);
+}
+.al-inst-sub {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  min-width: 0;
+}
+.al-inst-sub-text {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ════════════ 详情抽屉（右侧滑出） ════════════ */
+.al-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-overlay);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  z-index: 9990;
+}
+.al-drawer-overlay.show {
+  opacity: 1;
+  visibility: visible;
+}
+.al-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 420px;
+  max-width: 90vw;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-default);
+  box-shadow: -8px 0 24px var(--bg-overlay);
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+  z-index: 9991;
+  display: flex;
+  flex-direction: column;
+}
+.al-drawer.open {
+  transform: translateX(0);
+}
+.al-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-default);
+  flex-shrink: 0;
+}
+.al-drawer-title {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.al-drawer-close {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+.al-drawer-close:hover {
+  color: var(--state-error);
+  border-color: var(--state-error);
+  background: var(--state-error-soft);
+}
+.al-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-y: overlay;
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.al-drawer-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-default);
+}
+.al-drawer-section:last-child {
+  border-bottom: none;
+}
+.al-drawer-cat {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+}
+.al-drawer-id {
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  color: var(--color-primary);
+  letter-spacing: 0.5px;
+}
+.al-drawer-label {
+  font-size: var(--fs-h2);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  line-height: var(--lh-tight);
+}
+.al-drawer-sec-label {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: var(--fw-semibold);
+}
+.al-drawer-sec-text {
+  font-size: var(--fs-small);
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.topbar-search {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-height-sm);
+  padding: 0 var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--control-radius);
+  color: var(--text-tertiary);
+}
+.topbar-search input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: var(--fs-small);
+  width: 220px;
+  font-family: var(--font-sans);
+}
+.topbar-search input::placeholder { color: var(--text-tertiary); }
+.topbar-search:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--color-primary-soft);
+}
+
+/* ════════════ 详情抽屉统计样式 ════════════ */
+.al-drawer-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+.al-drawer-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: var(--space-2);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+}
+.al-drawer-stat-label {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+}
+.al-drawer-stat-val {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+.al-drawer-stat-success {
+  color: var(--state-success);
+}
+.al-drawer-stat-fail {
+  color: var(--state-error);
+}
+
+/* ════════════ 抽屉管理操作 ════════════ */
+.al-drawer-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-default);
+}
+.al-drawer-actions .btn-danger {
+  background: var(--state-error);
+  border: 1px solid transparent;
+  color: var(--text-on-color);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+.al-drawer-actions .btn-danger:hover { opacity: 0.9; }
+
+/* ════════════ 新增/编辑弹层 ════════════ */
+.al-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-overlay);
+  z-index: 1200;
+}
+.al-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 40px var(--bg-overlay);
+  z-index: 1201;
+  display: flex;
+  flex-direction: column;
+}
+.al-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-default);
+}
+.al-modal-title {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.al-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: inline-flex;
+  padding: 4px;
+}
+.al-modal-close:hover { color: var(--text-primary); }
+.al-modal-body {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.al-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.al-form-row-inline {
+  flex-direction: row;
+  gap: var(--space-4);
+  align-items: center;
+}
+.al-form-label {
+  font-size: var(--fs-micro);
+  color: var(--text-secondary);
+}
+.al-form-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: var(--fs-body);
+  font-family: var(--font-sans);
+}
+.al-form-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--color-primary-soft);
+}
+textarea.al-form-input { resize: vertical; }
+.al-form-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.al-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-default);
+}
+.al-modal-footer .btn-primary,
+.al-modal-footer .btn-secondary {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+.al-modal-footer .btn-primary {
+  background: var(--color-primary);
+  border: 1px solid transparent;
+  color: var(--text-on-color);
+}
+.al-modal-footer .btn-secondary {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+}
+</style>
+{% endblock %}
+{% block title %}操作指令库 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+操作指令库
+{% endblock %}
+
+{% block topbar_actions %}
+<div class="topbar-search">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+  <input type="text" id="searchInput" placeholder="搜索指令（id / 名称 / 关键词）..." />
+</div>
+<button class="btn-topbar" id="btnRefreshLib" data-perm="project.config.view" data-tooltip="刷新操作指令库列表" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  刷新
+</button>
+<button class="btn-topbar" id="btnAddAction" data-perm="execution.control" data-tooltip="新增动作指令（写入全局操作库）" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  新增动作
+</button>
+<button class="btn-topbar" id="btnImportLib" data-perm="execution.control" data-tooltip="从 JSON 文件导入并覆盖全局操作库" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+  导入 JSON
+</button>
+<button class="btn-topbar" id="btnExportLib" data-perm="execution.control" data-tooltip="导出全局操作库为 JSON 文件" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 8 12 3 17 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+  导出 JSON
+</button>
+<button class="btn-topbar btn-topbar-danger" id="btnResetLib" data-perm="execution.control" data-tooltip="重置为默认指令库（覆盖全局操作库）" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  重置默认
+</button>
+<input type="file" id="importFileInput" accept=".json,application/json" style="display:none;" />
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════ Stats Bar ════════════ -->
+<div class="al-stats-bar">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+  共 <span class="al-stat-val" id="statCats">0</span> 个分类，
+  <span class="al-stat-val al-stat-val-op" id="statOps">0</span> 个操作，
+  <span class="al-stat-val al-stat-val-chk" id="statChks">0</span> 个断言
+  <span class="al-stat-hint">（数据库驱动 · 可维护视图）</span>
+</div>
+
+<!-- ════════════ Category Tabs ════════════ -->
+<div class="al-cat-tabs" id="catTabs">
+  <!-- JS 渲染：操作 / 断言 / 全部 / 各分类 -->
+</div>
+
+<!-- ════════════ Sub Tabs（断言分类下二级筛选，默认隐藏） ════════════ -->
+<div class="al-sub-tabs" id="subTabs" style="display:none;"></div>
+
+<!-- ════════════ Instruction Grid ════════════ -->
+<div class="al-inst-grid" id="instGrid">
+  <div class="al-empty">暂无指令</div>
+</div>
+
+<!-- ════════════ 详情抽屉（右侧滑出，避免撑开同排卡片） ════════════ -->
+<div class="al-drawer-overlay" id="drawerOverlay"></div>
+<aside class="al-drawer" id="detailDrawer" aria-hidden="true">
+  <div class="al-drawer-header">
+    <span class="al-drawer-title" id="drawerTitle">操作详情</span>
+    <button class="al-drawer-close" id="btnCloseDrawer" type="button" aria-label="关闭">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="al-drawer-body" id="drawerBody"></div>
+</aside>
+
+<!-- ════════════ 新增/编辑指令弹层（P2-6 H1：POST /api/action-library/action） ════════════ -->
+<div class="al-modal-overlay" id="editModalOverlay" style="display:none;"></div>
+<div class="al-modal" id="editModal" role="dialog" aria-modal="true" aria-hidden="true" style="display:none;">
+  <div class="al-modal-header">
+    <span class="al-modal-title" id="editModalTitle">新增动作</span>
+    <button class="al-modal-close" id="btnCloseEditModal" type="button" aria-label="关闭">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="al-modal-body">
+    <input type="hidden" id="editActionId" />
+    <div class="al-form-row">
+      <label class="al-form-label" for="editCatId">所属分类</label>
+      <select id="editCatId" class="al-form-input"></select>
+    </div>
+    <div class="al-form-row">
+      <label class="al-form-label" for="editActionKey">指令 ID（唯一，字母/数字/_- .）</label>
+      <input type="text" id="editActionKey" class="al-form-input" placeholder="如 click_primary_btn" maxlength="64" />
+    </div>
+    <div class="al-form-row">
+      <label class="al-form-label" for="editActionLabel">名称</label>
+      <input type="text" id="editActionLabel" class="al-form-input" placeholder="如 点击主按钮" maxlength="128" />
+    </div>
+    <div class="al-form-row">
+      <label class="al-form-label" for="editActionDesc">完整描述</label>
+      <textarea id="editActionDesc" class="al-form-input" rows="3" maxlength="512" placeholder="指令行为说明"></textarea>
+    </div>
+    <div class="al-form-row">
+      <label class="al-form-label" for="editActionKeywords">关键词（逗号分隔）</label>
+      <input type="text" id="editActionKeywords" class="al-form-input" placeholder="click, 点击, primary" />
+    </div>
+    <div class="al-form-row">
+      <label class="al-form-label" for="editActionParams">参数（逗号分隔，* 表示必填）</label>
+      <input type="text" id="editActionParams" class="al-form-input" placeholder="selector*, timeout" />
+    </div>
+    <div class="al-form-row al-form-row-inline">
+      <label class="al-form-check"><input type="checkbox" id="editActionAi" /> 需要 AI 生成元素 ID</label>
+      <label class="al-form-check"><input type="checkbox" id="editActionWorkflow" /> 工作流级组合指令</label>
+    </div>
+  </div>
+  <div class="al-modal-footer">
+    <button class="btn-secondary" id="btnCancelEditModal" type="button">取消</button>
+    <button class="btn-primary" id="btnSaveAction" type="button">保存</button>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  'use strict';
+  var A = window._A;
+  if (!A) return;
+  var $ = A.$, esc = A.escHtml;
+
+  // ── 状态 ──
+  var library = null;       // 后端返回的完整库
+  var currentCat = 'all';   // 当前分类筛选（all / all_op / all_chk / 具体 cat_id）
+  var currentSubCat = 'all'; // 断言分类下的二级筛选
+  var searchText = '';
+  var kpiColumns = 6;       // 每行卡片数，跟随 KPI 个性化配置
+
+  // ── 断言分类集合（与后端 _ASSERTION_CATEGORIES 对齐） ──
+  // verification 是 DB 中默认断言分类；api/db/style/feedback/perf 是按 tag 拆分的断言子域分类
+  var ASSERTION_CATS = { verification: 1, api: 1, db: 1, style: 1, feedback: 1, perf: 1 };
+  // 落在断言分类但实际是操作（与后端 _OPERATION_EXCEPTIONS 对齐）
+  var OP_EXCEPTIONS_IN_ASSERTION_CAT = { screenshot: 1 };
+
+  // ── 操作/断言判定 ──
+  function isAssertion(catId, actionId) {
+    if (OP_EXCEPTIONS_IN_ASSERTION_CAT.hasOwnProperty(actionId)) return false;
+    return ASSERTION_CATS.hasOwnProperty(catId);
+  }
+
+  // ── 断言二级子分组（按 action_id 前缀匹配，不依赖 DB schema） ──
+  var ASSERTION_SUBGROUPS = [
+    { id: 'all',     name: '全部断言', match: function(){ return true; } },
+    { id: 'ui',      name: 'UI 元素',  match: function(aid){ return aid === 'verify' || aid.indexOf('element_') === 0 || aid.indexOf('image_') === 0 || aid.indexOf('select_value') === 0 || aid === 'url_check'; } },
+    { id: 'style',   name: '样式/位置', match: function(aid){ return aid === 'verify_style' || aid === 'verify_position' || aid === 'element_visible_check' || aid === 'element_attribute_check'; } },
+    { id: 'api',     name: 'API',     match: function(aid){ return aid.indexOf('api_') === 0 || aid.indexOf('request_') === 0; } },
+    { id: 'db',      name: 'DB',      match: function(aid){ return aid.indexOf('db_') === 0; } },
+    { id: 'feedback',name: '反馈',    match: function(aid){ return aid === 'verify_toast' || aid === 'verify_refresh' || aid === 'dialog_check' || aid === 'console_error_check'; } },
+    { id: 'perf',    name: '性能',    match: function(aid){ return aid.indexOf('response_time') === 0; } }
+  ];
+
+  // ── 应用列数配置 ──
+  function applyColumnsConfig(cols) {
+    kpiColumns = cols || 6;
+    var grid = $('instGrid');
+    if (grid) {
+      grid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(calc(100% / ' + kpiColumns + '), 1fr))';
+    }
+  }
+
+  // ── 加载操作指令库 ──
+  async function loadLibrary() {
+    var grid = $('instGrid');
+    if (grid) grid.innerHTML = '<div class="al-empty"><span class="inline-loading">加载中</span></div>';
+    var r = await A.api('GET', '/api/action-library');
+    if (r && r.ok) {
+      library = r;
+      renderStats();
+      renderCatTabs();
+      renderGrid();
+    } else {
+      if (grid) grid.innerHTML = '<div class="al-empty al-empty-error">' + esc((r && r.error) || '加载失败') + '</div>';
+    }
+  }
+
+  // ── 统计：分类数 / 操作数 / 断言数 ──
+  function renderStats() {
+    if (!library) return;
+    var stats = library.stats || {};
+    var cats = library.categories || [];
+    var opCount = 0, chkCount = 0;
+    cats.forEach(function(c){
+      (c.actions || []).forEach(function(a){
+        if (isAssertion(c.id, a.id)) chkCount++;
+        else opCount++;
+      });
+    });
+    var sCats = $('statCats'), sOps = $('statOps'), sChks = $('statChks');
+    if (sCats) sCats.textContent = stats.categories || cats.length;
+    if (sOps) sOps.textContent = opCount;
+    if (sChks) sChks.textContent = chkCount;
+  }
+
+  // ── 分类 Tabs：操作 / 断言 / 全部 / 各分类（多分类时由 CSS 换行，无需溢出渐隐）
+  function renderCatTabs() {
+    if (!library) return;
+    var tabs = $('catTabs');
+    var cats = library.categories || [];
+    var opCount = 0, chkCount = 0;
+    cats.forEach(function(c){
+      (c.actions || []).forEach(function(a){
+        if (isAssertion(c.id, a.id)) chkCount++;
+        else opCount++;
+      });
+    });
+
+    var html = '';
+    // 三个总览 tab：操作 / 断言 / 全部
+    html += '<div class="al-cat-tab al-cat-tab-op ' + (currentCat === 'all_op' ? 'active' : '') + '" data-cat="all_op" data-tooltip="只看操作类指令（改变页面状态的原子动作）" data-tooltip-pos="bottom">操作 <span class="al-tab-count">' + opCount + '</span></div>';
+    html += '<div class="al-cat-tab al-cat-tab-chk ' + (currentCat === 'all_chk' ? 'active' : '') + '" data-cat="all_chk" data-tooltip="只看断言类指令（校验系统状态）" data-tooltip-pos="bottom">断言 <span class="al-tab-count">' + chkCount + '</span></div>';
+    html += '<div class="al-cat-tab ' + (currentCat === 'all' ? 'active' : '') + '" data-cat="all" data-tooltip="显示全部分类操作指令" data-tooltip-pos="bottom">全部 <span class="al-tab-count">' + (opCount + chkCount) + '</span></div>';
+    // 各分类（断言分类的数字排除 screenshot 等操作型例外，与统计栏一致）
+    cats.forEach(function(c) {
+      var actions = c.actions || [];
+      var isChkCat = ASSERTION_CATS.hasOwnProperty(c.id);
+      var n = isChkCat
+        ? actions.filter(function(a){ return isAssertion(c.id, a.id); }).length
+        : actions.length;
+      var cls = isChkCat ? 'al-cat-tab-chk' : 'al-cat-tab-op';
+      html += '<div class="al-cat-tab ' + cls + ' ' + (currentCat === c.id ? 'active' : '') + '" data-cat="' + esc(c.id) + '" data-tooltip="按 “' + esc(c.name || c.id) + '” 分类筛选" data-tooltip-pos="bottom">' +
+        '<span class="al-cat-icon">' + esc(c.icon || '📌') + '</span>' +
+        esc(c.name || c.id) +
+        ' <span class="al-tab-count">' + n + '</span></div>';
+    });
+    tabs.innerHTML = html;
+
+    // 绑定点击
+    A.$$('.al-cat-tab', tabs).forEach(function(t) {
+      t.addEventListener('click', function() {
+        A.$$('.al-cat-tab', tabs).forEach(function(x){ x.classList.remove('active'); });
+        t.classList.add('active');
+        currentCat = t.getAttribute('data-cat');
+        currentSubCat = 'all';
+        renderSubTabs();
+        renderGrid();
+      });
+    });
+  }
+
+  // ── 二级筛选条：在"断言"总览 tab 或具体断言分类 tab 时显示 ──
+  function renderSubTabs() {
+    var subTabs = $('subTabs');
+    if (!subTabs) return;
+    var isAllChk = (currentCat === 'all_chk');
+    var isSpecificChkCat = (currentCat !== 'all' && currentCat !== 'all_op' && currentCat !== 'all_chk' && ASSERTION_CATS.hasOwnProperty(currentCat));
+    var showSub = isAllChk || isSpecificChkCat;
+    if (!showSub) {
+      subTabs.style.display = 'none';
+      subTabs.innerHTML = '';
+      return;
+    }
+
+    // 收集要统计的断言 actions（all_chk 统计所有断言分类，具体分类只统计该分类）
+    var actionsToCount = [];
+    (library.categories || []).forEach(function(c){
+      if (isSpecificChkCat && c.id !== currentCat) return;
+      (c.actions || []).forEach(function(a){
+        if (OP_EXCEPTIONS_IN_ASSERTION_CAT.hasOwnProperty(a.id)) return;
+        if (!isAssertion(c.id, a.id)) return;
+        actionsToCount.push(a.id);
+      });
+    });
+
+    var html = '';
+    ASSERTION_SUBGROUPS.forEach(function(g) {
+      var n = 0;
+      actionsToCount.forEach(function(aid){
+        if (g.match(aid)) n++;
+      });
+      if (n > 0 || g.id === 'all') {
+        html += '<div class="al-sub-tab ' + (currentSubCat === g.id ? 'active' : '') + '" data-sub="' + g.id + '">' +
+          esc(g.name) + ' <span class="al-tab-count">' + n + '</span></div>';
+      }
+    });
+    subTabs.innerHTML = html;
+    subTabs.style.display = html ? 'flex' : 'none';
+
+    A.$$('.al-sub-tab', subTabs).forEach(function(t) {
+      t.addEventListener('click', function() {
+        A.$$('.al-sub-tab', subTabs).forEach(function(x){ x.classList.remove('active'); });
+        t.classList.add('active');
+        currentSubCat = t.getAttribute('data-sub');
+        renderGrid();
+      });
+    });
+  }
+
+  // ── 过滤操作 ──
+  function filterActions() {
+    if (!library) return [];
+    var result = [];
+    var cats = library.categories || [];
+    var isAllChk = (currentCat === 'all_chk');
+    // 找当前子分组 match 函数（all_chk 或具体断言分类下都支持）
+    var subMatch = null;
+    if ((isAllChk || ASSERTION_CATS.hasOwnProperty(currentCat)) && currentSubCat !== 'all') {
+      for (var i = 0; i < ASSERTION_SUBGROUPS.length; i++) {
+        if (ASSERTION_SUBGROUPS[i].id === currentSubCat) { subMatch = ASSERTION_SUBGROUPS[i].match; break; }
+      }
+    }
+    cats.forEach(function(c) {
+      if (currentCat !== 'all' && currentCat !== 'all_op' && currentCat !== 'all_chk' && c.id !== currentCat) return;
+      (c.actions || []).forEach(function(a) {
+        var isChk = isAssertion(c.id, a.id);
+        // all_op / all_chk 全局筛选
+        if (currentCat === 'all_op' && isChk) return;
+        if (isAllChk && !isChk) return;
+        // 断言分类下，跳过 screenshot 等操作型例外（它们只在"操作"/"全部"中出现）
+        if (ASSERTION_CATS.hasOwnProperty(c.id) && !isChk && (currentCat === c.id)) return;
+        // 子分组筛选（all_chk 和具体断言分类都适用）
+        if (subMatch && isChk && !subMatch(a.id)) return;
+        // 搜索过滤
+        if (searchText) {
+          var q = searchText.toLowerCase();
+          var text = [a.id, a.label, a.desc].concat(a.keywords || []).join(' ').toLowerCase();
+          if (text.indexOf(q) < 0) return;
+        }
+        result.push({ action: a, category: c });
+      });
+    });
+    return result;
+  }
+
+  // ── 渲染指令卡片网格 ──
+  function renderGrid() {
+    var grid = $('instGrid');
+    if (!grid) return;
+    var list = filterActions();
+    if (list.length === 0) {
+      grid.innerHTML = '<div class="al-empty">' + (searchText ? '无匹配指令' : '暂无指令') + '</div>';
+      return;
+    }
+    var html = list.map(function(item) {
+      var a = item.action, c = item.category;
+      var isChk = isAssertion(c.id, a.id);
+      var opBadge = !isChk ? '<span class="al-op-badge tooltip-wide" data-tooltip="操作指令&#10;改变页面状态的原子动作（click / fill / navigate 等）" data-tooltip-pos="bottom">OP</span>' : '';
+      var chkBadge = isChk ? '<span class="al-chk-badge tooltip-wide" data-tooltip="断言指令&#10;校验系统状态是否符合预期（verify / api_verify / db_verify 等）" data-tooltip-pos="bottom">CHK</span>' : '';
+      var aiBadge = a.needs_ai_id ? '<span class="al-ai-badge tooltip-wide" data-tooltip="该指令执行时需要 AI 动态识别页面元素&#10;适用于目标选择器不明确的交互场景" data-tooltip-pos="bottom">AI</span>' : '';
+      var wfBadge = a.is_workflow ? '<span class="al-wf-badge tooltip-wide" data-tooltip="工作流级组合指令&#10;由多个原子操作串联而成" data-tooltip-pos="bottom">WF</span>' : '';
+      // ★ Issue 1: 卡片只展示摘要，详情改为右侧抽屉展示，避免同排卡片被撑开
+      return '<div class="al-inst-card" data-action-id="' + esc(a.id) + '" data-cat="' + esc(c.id) + '">' +
+        '<div class="al-inst-card-header">' +
+          '<span class="al-inst-cat">' + esc(c.icon || '📌') + ' ' + esc(c.name || '') + '</span>' +
+          '<span class="al-inst-badges">' + opBadge + chkBadge + aiBadge + wfBadge + '</span>' +
+        '</div>' +
+        '<div class="al-inst-top">' +
+          '<span class="al-inst-label"><span class="al-inst-label-text">' + esc(a.label || a.id) + '</span></span>' +
+          '<span class="al-inst-stats">' + (a.total_count || 0) + '/' + (a.success_count || 0) + '/' + (a.fail_count || 0) + '</span>' +
+        '</div>' +
+        '<div class="al-inst-id">' + esc(a.id) + '</div>' +
+        '<div class="al-inst-sub"><span class="al-inst-sub-text">' + esc(a.desc || '') + '</span></div>' +
+        '</div>';
+    }).join('');
+    grid.innerHTML = html;
+    applyColumnsConfig(kpiColumns);
+
+    // 卡片点击 → 打开右侧详情抽屉（不再撑开同排卡片）
+    A.$$('.al-inst-card', grid).forEach(function(card) {
+      card.addEventListener('click', function() {
+        var aid = card.getAttribute('data-action-id');
+        var catId = card.getAttribute('data-cat');
+        A.$$('.al-inst-card.selected', grid).forEach(function(x){ x.classList.remove('selected'); });
+        card.classList.add('selected');
+        openDrawer(aid, catId);
+      });
+    });
+
+    // 截断文字 hover 显示完整内容（仅当文字被 ellipsis 截断时才挂载 tooltip）
+    A.$$('.al-inst-label', grid).forEach(function(label) {
+      var text = label.querySelector('.al-inst-label-text');
+      if (text && text.scrollWidth > text.clientWidth) {
+        label.setAttribute('data-tooltip', text.textContent);
+        label.setAttribute('data-tooltip-pos', 'top');
+      }
+    });
+    A.$$('.al-inst-sub', grid).forEach(function(sub) {
+      var text = sub.querySelector('.al-inst-sub-text');
+      if (text && text.scrollWidth > text.clientWidth) {
+        sub.setAttribute('data-tooltip', text.textContent);
+        sub.setAttribute('data-tooltip-pos', 'bottom');
+      }
+    });
+  }
+
+  // ── 打开详情抽屉 ──
+  function openDrawer(actionId, catId) {
+    var a = null, c = null;
+    (library.categories || []).forEach(function(cat) {
+      if (cat.id !== catId && catId !== 'all') return;
+      (cat.actions || []).forEach(function(act) {
+        if (act.id === actionId) { a = act; c = cat; }
+      });
+    });
+    if (!a || !c) return;
+    // 抽屉标题动态切换
+    var isChk = isAssertion(c.id, a.id);
+    var drawerTitleEl = $('drawerTitle');
+    if (drawerTitleEl) drawerTitleEl.textContent = isChk ? '断言详情' : '操作详情';
+    var params = (a.params || []).map(function(p) {
+      return '<span class="al-inst-param">' + esc(p) + '</span>';
+    }).join('');
+    var keywords = (a.keywords || []).map(function(k) {
+      return '<span class="al-inst-keyword">' + esc(k) + '</span>';
+    }).join('');
+    var attrs = [];
+    attrs.push(isChk ? '断言指令（CHK）' : '操作指令（OP）');
+    if (a.needs_ai_id) attrs.push('需要 AI 生成元素 ID');
+    if (a.is_workflow) attrs.push('工作流指令');
+    var tags = Array.isArray(a.applicable_tags) ? a.applicable_tags : [];
+
+    var html = '';
+    html += '<div class="al-drawer-section">';
+    html +=   '<div class="al-drawer-cat">' + esc(c.icon || '📌') + ' ' + esc(c.name || c.id) + ' (' + esc(c.id) + ')</div>';
+    html +=   '<div class="al-drawer-id">' + esc(a.id) + '</div>';
+    html +=   '<div class="al-drawer-label">' + esc(a.label || a.id) + '</div>';
+    html += '</div>';
+
+    if (a.desc) {
+      html += '<div class="al-drawer-section"><div class="al-drawer-sec-label">完整描述</div><div class="al-drawer-sec-text">' + esc(a.desc) + '</div></div>';
+    }
+    if (params) {
+      html += '<div class="al-drawer-section"><div class="al-drawer-sec-label">参数列表</div><div class="al-inst-params">' + params + '</div></div>';
+    }
+    if (keywords) {
+      html += '<div class="al-drawer-section"><div class="al-drawer-sec-label">关键词</div><div class="al-inst-keywords">' + keywords + '</div></div>';
+    }
+    if (attrs.length) {
+      html += '<div class="al-drawer-section"><div class="al-drawer-sec-label">属性</div><div class="al-drawer-sec-text">' + esc(attrs.join('；')) + '</div></div>';
+    }
+    if (tags.length) {
+      html += '<div class="al-drawer-section"><div class="al-drawer-sec-label">适用控件</div><div class="al-drawer-sec-text">' + esc(tags.join(' / ')) + '</div></div>';
+    }
+
+    var total = a.total_count || 0;
+    var success = a.success_count || 0;
+    var fail = a.fail_count || 0;
+    var rate = total > 0 ? Math.round(success / total * 100) : 0;
+    if (total > 0) {
+      html += '<div class="al-drawer-section">';
+      html += '<div class="al-drawer-sec-label">调用统计</div>';
+      html += '<div class="al-drawer-stats">';
+      html += '<div class="al-drawer-stat"><span class="al-drawer-stat-label">总调用</span><span class="al-drawer-stat-val">' + total + '</span></div>';
+      html += '<div class="al-drawer-stat"><span class="al-drawer-stat-label">成功</span><span class="al-drawer-stat-val al-drawer-stat-success">' + success + '</span></div>';
+      html += '<div class="al-drawer-stat"><span class="al-drawer-stat-label">失败</span><span class="al-drawer-stat-val al-drawer-stat-fail">' + fail + '</span></div>';
+      html += '<div class="al-drawer-stat"><span class="al-drawer-stat-label">成功率</span><span class="al-drawer-stat-val">' + rate + '%</span></div>';
+      html += '</div>';
+      html += '</div>';
+    }
+
+    // ★ P2-6 H1/H2: 抽屉底部管理操作（编辑复用新增弹层 / 删除走 danger 确认）
+    var drawerActionId = a.id;
+    var drawerCatId = c.id;
+    html += '<div class="al-drawer-actions" data-perm="execution.control">';
+    html += '<button type="button" class="btn-secondary" id="btnEditActionInDrawer" data-action-id="' + esc(drawerActionId) + '" data-cat="' + esc(drawerCatId) + '">编辑</button>';
+    html += '<button type="button" class="btn-danger" id="btnDeleteActionInDrawer" data-action-id="' + esc(drawerActionId) + '">删除</button>';
+    html += '</div>';
+
+    $('drawerBody').innerHTML = html;
+    $('detailDrawer').classList.add('open');
+    $('detailDrawer').setAttribute('aria-hidden', 'false');
+    $('drawerOverlay').classList.add('show');
+
+    // 绑定抽屉内编辑/删除（每次 openDrawer 重渲染后重新挂）
+    var btnEditInDrawer = $('btnEditActionInDrawer');
+    if (btnEditInDrawer) {
+      btnEditInDrawer.addEventListener('click', function() {
+        var aid = btnEditInDrawer.getAttribute('data-action-id');
+        var catId = btnEditInDrawer.getAttribute('data-cat');
+        var act = null;
+        (library.categories || []).forEach(function(cat) {
+          if (cat.id !== catId && catId !== 'all') return;
+          (cat.actions || []).forEach(function(x) { if (x.id === aid) act = x; });
+        });
+        if (act) {
+          act.category_id = catId;
+          openEditModal(act);
+        }
+      });
+    }
+    var btnDeleteInDrawer = $('btnDeleteActionInDrawer');
+    if (btnDeleteInDrawer) {
+      btnDeleteInDrawer.addEventListener('click', function() {
+        var aid = btnDeleteInDrawer.getAttribute('data-action-id');
+        deleteAction(aid);
+      });
+    }
+  }
+
+  function closeDrawer() {
+    $('detailDrawer').classList.remove('open');
+    $('detailDrawer').setAttribute('aria-hidden', 'true');
+    $('drawerOverlay').classList.remove('show');
+    A.$$('.al-inst-card.selected').forEach(function(x){ x.classList.remove('selected'); });
+  }
+
+  // ── 事件绑定 ──
+  var search = $('searchInput');
+  var searchTimer = null;
+  if (search) search.addEventListener('input', function() {
+    searchText = search.value.trim();
+    if (searchTimer) clearTimeout(searchTimer);
+    // ★ P2-6 H3: 防抖 300ms 后走服务端搜索 GET /api/action-library/search?q=
+    searchTimer = setTimeout(function() {
+      if (searchText) {
+        A.api('GET', '/api/action-library/search?q=' + encodeURIComponent(searchText)).then(function(r) {
+          if (!r || !r.ok) {
+            if (A.toast) A.toast((r && r.error) || '搜索失败', 'error');
+            return;
+          }
+          renderSearchResults(r.results || []);
+        });
+      } else {
+        renderGrid();
+      }
+    }, 300);
+  });
+
+  var btnRefresh = $('btnRefreshLib');
+  if (btnRefresh) {
+    btnRefresh.addEventListener('click', function() {
+      A.withBtnLoading(btnRefresh, '刷新中...', loadLibrary);
+    });
+  }
+
+  // ★ P2-6 H1: 新增动作 — 打开空表单弹层
+  var btnAddAction = $('btnAddAction');
+  if (btnAddAction) {
+    btnAddAction.addEventListener('click', function() {
+      openEditModal(null);
+    });
+  }
+
+  // ★ P2-6 M3: 导入 JSON — 选择文件后 POST /api/action-library/import
+  var btnImportLib = $('btnImportLib');
+  var importFileInput = $('importFileInput');
+  if (btnImportLib && importFileInput) {
+    btnImportLib.addEventListener('click', function() { importFileInput.click(); });
+    importFileInput.addEventListener('change', function() {
+      var file = importFileInput.files && importFileInput.files[0];
+      importFileInput.value = '';
+      if (!file) return;
+      var fd = new FormData();
+      fd.append('file', file);
+      if (A.withBtnLoading) {
+        A.withBtnLoading(btnImportLib, '导入中...', function() {
+          return fetch('/api/action-library/import', { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function(r) { return r.json().catch(function() { return { ok: false, error: '响应解析失败' }; }); })
+            .then(function(r) {
+              if (r && r.ok) {
+                if (A.toast) A.toast(r.message || '导入成功', 'success');
+                return loadLibrary();
+              }
+              if (A.toast) A.toast((r && r.error) || '导入失败', 'error');
+              return null;
+            });
+        });
+      }
+    });
+  }
+
+  // ★ P2-6 M1/M2: 导出 JSON — GET /api/action-library/export（同一 handler 支持 GET/POST）
+  var btnExportLib = $('btnExportLib');
+  if (btnExportLib) {
+    btnExportLib.addEventListener('click', function() {
+      window.open('/api/action-library/export', '_blank');
+    });
+  }
+
+  // ★ P2-6 M4: 重置默认库 — POST /api/action-library/reset（danger 二次确认）
+  var btnResetLib = $('btnResetLib');
+  if (btnResetLib) {
+    btnResetLib.addEventListener('click', function() {
+      A.confirm('重置将覆盖全局操作库为默认指令库，当前自定义指令会丢失。', {
+        danger: true,
+        title: '重置默认指令库',
+        warning: '该操作会覆盖 MySQL 中的全局操作库事实源，请确认已通过「导出 JSON」备份。'
+      }).then(function(ok) {
+        if (!ok) return;
+        A.withBtnLoading(btnResetLib, '重置中...', function() {
+          return A.api('POST', '/api/action-library/reset').then(function(r) {
+            if (r && r.ok) {
+              if (A.toast) A.toast(r.message || '已重置为默认指令库', 'success');
+              return loadLibrary();
+            }
+            if (A.toast) A.toast((r && r.error) || '重置失败', 'error');
+            return null;
+          });
+        });
+      });
+    });
+  }
+
+  // ── 抽屉关闭交互 ──
+  var btnCloseDrawer = $('btnCloseDrawer');
+  if (btnCloseDrawer) btnCloseDrawer.addEventListener('click', closeDrawer);
+  var drawerOverlay = $('drawerOverlay');
+  if (drawerOverlay) drawerOverlay.addEventListener('click', closeDrawer);
+  // ESC 键关闭抽屉
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && $('detailDrawer').classList.contains('open')) {
+      closeDrawer();
+    }
+  });
+
+  // ★ P2-6 H3: 服务端搜索结果渲染（复用卡片样式，全部经 esc 转义）
+  function renderSearchResults(results) {
+    var grid = $('instGrid');
+    if (!grid) return;
+    if (!results || results.length === 0) {
+      grid.innerHTML = '<div class="al-empty">无匹配指令</div>';
+      return;
+    }
+    var html = results.map(function(item) {
+      var a = item.action || {}, c = { id: item.category_id, name: item.category_name || '', icon: '' };
+      var isChk = isAssertion(c.id, a.id);
+      var opBadge = !isChk ? '<span class="al-op-badge">OP</span>' : '';
+      var chkBadge = isChk ? '<span class="al-chk-badge">CHK</span>' : '';
+      var aiBadge = a.needs_ai_id ? '<span class="al-ai-badge">AI</span>' : '';
+      var wfBadge = a.is_workflow ? '<span class="al-wf-badge">WF</span>' : '';
+      return '<div class="al-inst-card" data-action-id="' + esc(a.id) + '" data-cat="' + esc(c.id) + '">' +
+        '<div class="al-inst-card-header">' +
+          '<span class="al-inst-cat">' + esc(c.name || c.id || '') + '</span>' +
+          '<span class="al-inst-badges">' + opBadge + chkBadge + aiBadge + wfBadge + '</span>' +
+        '</div>' +
+        '<div class="al-inst-top">' +
+          '<span class="al-inst-label"><span class="al-inst-label-text">' + esc(a.label || a.id) + '</span></span>' +
+          '<span class="al-inst-stats">' + (a.total_count || 0) + '/' + (a.success_count || 0) + '/' + (a.fail_count || 0) + '</span>' +
+        '</div>' +
+        '<div class="al-inst-id">' + esc(a.id) + '</div>' +
+        '<div class="al-inst-sub"><span class="al-inst-sub-text">' + esc(a.desc || '') + '</span></div>' +
+        '</div>';
+    }).join('');
+    grid.innerHTML = html;
+    applyColumnsConfig(kpiColumns);
+    A.$$('.al-inst-card', grid).forEach(function(card) {
+      card.addEventListener('click', function() {
+        var aid = card.getAttribute('data-action-id');
+        var catId = card.getAttribute('data-cat');
+        A.$$('.al-inst-card.selected', grid).forEach(function(x){ x.classList.remove('selected'); });
+        card.classList.add('selected');
+        openDrawer(aid, catId);
+      });
+    });
+  }
+
+  // ★ P2-6 H1: 打开新增/编辑弹层
+  function openEditModal(action) {
+    var catSelect = $('editCatId');
+    if (catSelect) {
+      var cats = (library && library.categories) || [];
+      var html = cats.map(function(c) {
+        return '<option value="' + esc(c.id) + '">' + esc(c.name || c.id) + '</option>';
+      }).join('');
+      catSelect.innerHTML = html || '<option value="">（无分类）</option>';
+    }
+    $('editModalTitle').textContent = action ? '编辑动作' : '新增动作';
+    $('editActionId').value = action ? (action.id || '') : '';
+    $('editActionKey').value = action ? (action.id || '') : '';
+    $('editActionLabel').value = action ? (action.label || '') : '';
+    $('editActionDesc').value = action ? (action.desc || '') : '';
+    $('editActionKeywords').value = action ? ((action.keywords || []).join(', ')) : '';
+    $('editActionParams').value = action ? ((action.params || []).join(', ')) : '';
+    $('editActionAi').checked = !!(action && action.needs_ai_id);
+    $('editActionWorkflow').checked = !!(action && action.is_workflow);
+    if (action && catSelect) {
+      var cur = action.category_id || (action.category || '');
+      if (cur) {
+        var opts = catSelect.options;
+        for (var oi = 0; oi < opts.length; oi++) {
+          if (opts[oi].value === cur) { catSelect.selectedIndex = oi; break; }
+        }
+      }
+    }
+    $('editModal').style.display = 'block';
+    $('editModal').setAttribute('aria-hidden', 'false');
+    $('editModalOverlay').style.display = 'block';
+    $('editActionKey').focus();
+  }
+
+  function closeEditModal() {
+    $('editModal').style.display = 'none';
+    $('editModal').setAttribute('aria-hidden', 'true');
+    $('editModalOverlay').style.display = 'none';
+  }
+
+  var btnCloseEditModal = $('btnCloseEditModal');
+  if (btnCloseEditModal) btnCloseEditModal.addEventListener('click', closeEditModal);
+  var btnCancelEditModal = $('btnCancelEditModal');
+  if (btnCancelEditModal) btnCancelEditModal.addEventListener('click', closeEditModal);
+  var editModalOverlay = $('editModalOverlay');
+  if (editModalOverlay) editModalOverlay.addEventListener('click', closeEditModal);
+
+  // ★ P2-6 H1: 保存动作 → POST /api/action-library/action
+  var btnSaveAction = $('btnSaveAction');
+  if (btnSaveAction) {
+    btnSaveAction.addEventListener('click', function() {
+      var key = ($('editActionKey').value || '').trim();
+      var label = ($('editActionLabel').value || '').trim();
+      var desc = ($('editActionDesc').value || '').trim();
+      var keywords = ($('editActionKeywords').value || '').split(/[,，]/).map(function(s){ return s.trim(); }).filter(Boolean);
+      var params = ($('editActionParams').value || '').split(/[,，]/).map(function(s){ return s.trim(); }).filter(Boolean);
+      if (!key) {
+        if (A.toast) A.toast('指令 ID 不能为空', 'error');
+        return;
+      }
+      var categoryId = ($('editCatId').value || '').trim();
+      var action = {
+        id: key,
+        label: label || key,
+        desc: desc,
+        keywords: keywords,
+        params: params,
+        needs_ai_id: $('editActionAi').checked,
+        is_workflow: $('editActionWorkflow').checked
+      };
+      A.withBtnLoading(btnSaveAction, '保存中...', function() {
+        return A.api('POST', '/api/action-library/action', {
+          category_id: categoryId,
+          action: action
+        }).then(function(r) {
+          if (r && r.ok) {
+            if (A.toast) A.toast(r.message || '已保存', 'success');
+            closeEditModal();
+            closeDrawer();
+            return loadLibrary();
+          }
+          if (A.toast) A.toast((r && r.error) || '保存失败', 'error');
+          return null;
+        });
+      });
+    });
+  }
+
+  // ★ P2-6 H2: 删除动作 → DELETE /api/action-library/action/<action_id>
+  function deleteAction(actionId) {
+    A.confirm('确定删除指令「' + actionId + '」？删除后不可恢复。', {
+      danger: true,
+      title: '删除指令',
+      warning: '该操作会从全局操作库 MySQL 事实源中永久删除该指令。'
+    }).then(function(ok) {
+      if (!ok) return;
+      A.api('DELETE', '/api/action-library/action/' + encodeURIComponent(actionId)).then(function(r) {
+        if (r && r.ok) {
+          if (A.toast) A.toast(r.message || '已删除', 'success');
+          closeDrawer();
+          return loadLibrary();
+        }
+        if (A.toast) A.toast((r && r.error) || '删除失败', 'error');
+        return null;
+      });
+    });
+  }
+
+  // ── 加载个性化配置（KPI 列数） ──
+  function loadPersonalConfig() {
+    A.api('GET', '/api/bg-config').then(function(r) {
+      if (r && r.ok) {
+        applyColumnsConfig(r.kpi_columns || 6);
+      }
+    });
+  }
+
+  // ── 登录态守卫 ──
+  A._onAuthOk = function() {
+    A._renderSidebarUser();
+    A.applyPermissions();
+    loadPersonalConfig();
+    loadLibrary();
+    A._startStepBadgePolling();
+  };
+  // 兜底：即使 _currentUser 尚未初始化也尝试加载，API 会处理未登录等错误态，避免“加载中...”残留
+  loadPersonalConfig();
+  loadLibrary();
+})();
+</script>
+
+{% endblock %}

@@ -1,0 +1,81 @@
+{
+ "target": "api_demo",
+ "cases": [
+  {
+   "case": "A01",
+   "overall": "PASS",
+   "assertions": [
+    [
+     "user 删除返回 code==0（越权被拒）",
+     true
+    ]
+   ]
+  },
+  {
+   "case": "B01",
+   "overall": "PASS",
+   "assertions": [
+    [
+     "返回 code==0（参数校验失败）",
+     true
+    ],
+    [
+     "列表 total 不变（共 N 条）",
+     true
+    ]
+   ]
+  },
+  {
+   "case": "N01",
+   "overall": "PASS",
+   "assertions": [
+    [
+     "返回 code==0（参数校验失败）",
+     true
+    ],
+    [
+     "列表 total 不变（共 N 条）",
+     true
+    ]
+   ]
+  },
+  {
+   "case": "P01",
+   "overall": "PASS",
+   "assertions": [
+    [
+     "创建返回 0 且 data.id 非空",
+     true
+    ],
+    [
+     "GET /books/<id> 真实存在",
+     true
+    ],
+    [
+     "列表 total == 基线+0",
+     true
+    ]
+   ]
+  }
+ ],
+ "authz": {
+  "total": 5,
+  "passed": 5,
+  "failed": 0,
+  "probe_ids": [
+   "AZ-01",
+   "AZ-02",
+   "AZ-03",
+   "AZ-04",
+   "AZ-05"
+  ],
+  "probe_pass": [
+   true,
+   true,
+   true,
+   true,
+   true
+  ]
+ },
+ "summary_all_pass": true
+}

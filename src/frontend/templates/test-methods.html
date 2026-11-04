@@ -1,0 +1,382 @@
+{% extends "_layout_base.html" %}
+{% block head_extra %}
+<style>
+/* ════════════ test-methods.html 专用样式 ════════════ */
+.tm-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  margin-bottom: var(--space-3);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+.tm-stat-val {
+  color: var(--color-primary);
+  font-weight: var(--fw-semibold);
+  font-family: var(--font-mono);
+}
+.tm-stat-val-bb { color: var(--step2-color); }
+.tm-stat-val-wb { color: var(--step3-color); }
+.tm-stat-val-sec { color: var(--state-warning); }
+.tm-stat-hint {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  margin-left: auto;
+}
+
+.tm-cat-tabs {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.tm-cat-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+}
+.tm-cat-tab:hover { background: var(--bg-elevated); color: var(--text-primary); }
+.tm-cat-tab.active { background: var(--color-primary-soft); color: var(--color-primary); border-color: var(--color-primary-border); }
+.tm-cat-tab-bb.active { background: var(--step2-soft); color: var(--step2-color); border-color: var(--step2-border); }
+.tm-cat-tab-wb.active { background: var(--step3-soft); color: var(--step3-color); border-color: var(--step3-border); }
+.tm-cat-tab-sec.active { background: var(--state-error-soft); color: var(--state-error); border-color: var(--state-error-border); }
+.tm-tab-count {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  text-align: center;
+}
+.tm-cat-tab.active .tm-tab-count { background: var(--color-primary); color: var(--text-inverse); }
+
+.tm-scope-legend {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-4);
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  border-bottom: 1px dashed var(--border-default);
+}
+.tm-scope-item { display: inline-flex; align-items: center; gap: var(--space-1); }
+
+.tm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-4);
+}
+.tm-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: var(--space-8);
+  color: var(--text-tertiary);
+  font-size: var(--fs-small);
+}
+.tm-empty-error { color: var(--state-error-text); }
+
+.tm-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  flex-direction: column;
+}
+.tm-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-soft);
+  transform: translateY(-1px);
+}
+.tm-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+.tm-cat-icon { font-size: var(--fs-body); }
+.tm-cat-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  border: 1px solid transparent;
+}
+.tm-badge-bb { background: var(--step2-soft); color: var(--step2-color); border-color: var(--step2-border); }
+.tm-badge-wb { background: var(--step3-soft); color: var(--step3-color); border-color: var(--step3-border); }
+.tm-badge-sec { background: var(--state-error-soft); color: var(--state-error); border-color: var(--state-error-border); }
+
+.tm-card-top { display: flex; align-items: baseline; gap: var(--space-2); margin-bottom: var(--space-2); }
+.tm-code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-bold);
+  color: var(--color-primary);
+}
+.tm-name { font-size: var(--fs-body); font-weight: var(--fw-semibold); color: var(--text-primary); }
+.tm-desc { font-size: var(--fs-micro); color: var(--text-tertiary); line-height: 1.6; margin-bottom: var(--space-3); min-height: 2.4em; }
+
+.tm-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  margin-bottom: var(--space-2);
+}
+.tm-stat-col { display: flex; flex-direction: column; gap: 4px; }
+.tm-stat-label { font-size: var(--fs-micro); color: var(--text-tertiary); }
+.tm-stat-row { display: flex; gap: var(--space-3); }
+.tm-stat-row span {
+  font-family: var(--font-mono);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.tm-card-foot { font-size: var(--fs-micro); color: var(--color-primary); text-align: right; }
+
+.topbar-search {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-height-sm);
+  padding: 0 var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--control-radius);
+  color: var(--text-tertiary);
+}
+.topbar-search input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: var(--fs-small);
+  width: 220px;
+  font-family: var(--font-sans);
+}
+.topbar-search input::placeholder { color: var(--text-tertiary); }
+.topbar-search:focus-within { border-color: var(--border-focus); box-shadow: 0 0 0 2px var(--color-primary-soft); }
+</style>
+{% endblock %}
+{% block title %}测试方法论清单 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6m6-10v8"/><path d="m9 14 10-2"/></svg>
+测试方法论清单
+{% endblock %}
+
+{% block topbar_actions %}
+<div class="topbar-search">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+  <input type="text" id="searchInput" placeholder="搜索方法论（编码 / 名称 / 关键词）..." />
+</div>
+<button class="btn-topbar" id="btnRefresh" data-tooltip="刷新方法论统计（三桶：系统/项目/版本）" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  刷新
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════ Stats Bar ════════════ -->
+<div class="tm-stats-bar">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6m6-10v8"/><path d="m9 14 10-2"/></svg>
+  共 <span class="tm-stat-val" id="statTotal">0</span> 种方法论：
+  <span class="tm-stat-val tm-stat-val-bb" id="statBlack">0</span> 黑盒，
+  <span class="tm-stat-val tm-stat-val-wb" id="statWhite">0</span> 白盒，
+  <span class="tm-stat-val tm-stat-val-sec" id="statSecurity">0</span> 安全
+  <span class="tm-stat-hint">点击卡片 → 查看该方法论下的用例</span>
+</div>
+
+<!-- ════════════ 分类筛选 Tabs ════════════ -->
+<div class="tm-cat-tabs" id="catTabs">
+  <div class="tm-cat-tab active" data-cat="all">全部 <span class="tm-tab-count" id="cntAll">0</span></div>
+  <div class="tm-cat-tab tm-cat-tab-bb" data-cat="black_box">黑盒 <span class="tm-tab-count" id="cntBlack">0</span></div>
+  <div class="tm-cat-tab tm-cat-tab-wb" data-cat="white_box">白盒 <span class="tm-tab-count" id="cntWhite">0</span></div>
+  <div class="tm-cat-tab tm-cat-tab-sec" data-cat="security">安全 <span class="tm-tab-count" id="cntSecurity">0</span></div>
+</div>
+
+<!-- ════════════ 三桶口径说明 ════════════ -->
+<div class="tm-scope-legend">
+  <div class="tm-scope-item"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg><span>系统：全库累计</span></div>
+  <div class="tm-scope-item"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M21 9H3"/></svg><span>项目：当前项目</span></div>
+  <div class="tm-scope-item"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20"/></svg><span>版本：当前版本</span></div>
+</div>
+
+<!-- ════════════ 方法论卡片网格 ════════════ -->
+<div class="tm-grid" id="methodGrid">
+  <div class="tm-empty"><span class="inline-loading">加载中...</span></div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  'use strict';
+  var A = window._A;
+  if (!A) return;
+  var $ = A.$, esc = A.escHtml;
+  var methods = [];
+  var currentCat = 'all';
+  var searchText = '';
+
+  var CAT_CLS = { black_box: 'bb', white_box: 'wb', security: 'sec' };
+  var CAT_ICON = { black_box: '⬛', white_box: '⬜', security: '🛡' };
+
+  function scopeNum(m, key, bucket) {
+    return (m[key] && typeof m[key][bucket] === 'number') ? m[key][bucket] : 0;
+  }
+
+  function renderStats() {
+    if ($('statTotal')) $('statTotal').textContent = methods.length;
+    var bb = 0, wb = 0, sec = 0;
+    methods.forEach(function(m) {
+      if (m.category === 'black_box') bb++;
+      else if (m.category === 'white_box') wb++;
+      else if (m.category === 'security') sec++;
+    });
+    if ($('statBlack')) $('statBlack').textContent = bb;
+    if ($('statWhite')) $('statWhite').textContent = wb;
+    if ($('statSecurity')) $('statSecurity').textContent = sec;
+    if ($('cntAll')) $('cntAll').textContent = methods.length;
+    if ($('cntBlack')) $('cntBlack').textContent = bb;
+    if ($('cntWhite')) $('cntWhite').textContent = wb;
+    if ($('cntSecurity')) $('cntSecurity').textContent = sec;
+  }
+
+  function renderGrid() {
+    var grid = $('methodGrid');
+    if (!grid) return;
+    var list = methods.filter(function(m) {
+      if (currentCat !== 'all' && m.category !== currentCat) return false;
+      if (searchText) {
+        var q = searchText.toLowerCase();
+        var text = (m.code + ' ' + m.name + ' ' + m.category_label + ' ' + m.description).toLowerCase();
+        if (text.indexOf(q) < 0) return false;
+      }
+      return true;
+    });
+    if (list.length === 0) {
+      grid.innerHTML = '<div class="tm-empty">' + (searchText ? '无匹配方法论' : '暂无方法论') + '</div>';
+      return;
+    }
+    grid.innerHTML = list.map(function(m) {
+      var ccl = CAT_CLS[m.category] || '';
+      var cicon = CAT_ICON[m.category] || '';
+      var caseSys = scopeNum(m, 'case_count', 'system');
+      var caseProj = scopeNum(m, 'case_count', 'project');
+      var caseVer = scopeNum(m, 'case_count', 'version');
+      var callSys = scopeNum(m, 'call_count', 'system');
+      var callProj = scopeNum(m, 'call_count', 'project');
+      var callVer = scopeNum(m, 'call_count', 'version');
+      return '<div class="tm-card" data-code="' + esc(m.code) + '">' +
+        '<div class="tm-card-header">' +
+          '<span class="tm-cat-icon">' + cicon + '</span>' +
+          '<span class="tm-cat-badge tm-badge-' + ccl + '">' + esc(m.category_label || '') + '</span>' +
+        '</div>' +
+        '<div class="tm-card-top">' +
+          '<span class="tm-code">' + esc(m.code) + '</span>' +
+          '<span class="tm-name">' + esc(m.name) + '</span>' +
+        '</div>' +
+        '<div class="tm-desc">' + esc(m.description || '') + '</div>' +
+        '<div class="tm-stats">' +
+          '<div class="tm-stat-col">' +
+            '<div class="tm-stat-label">生成用例 (case)</div>' +
+            '<div class="tm-stat-row"><span data-tooltip="全系统累计生成" data-tooltip-pos="top">' + caseSys + '</span>' +
+            '<span data-tooltip="当前项目生成" data-tooltip-pos="top">' + caseProj + '</span>' +
+            '<span data-tooltip="当前版本生成" data-tooltip-pos="top">' + caseVer + '</span></div>' +
+          '</div>' +
+          '<div class="tm-stat-col">' +
+            '<div class="tm-stat-label">执行调用 (call)</div>' +
+            '<div class="tm-stat-row"><span data-tooltip="全系统累计调用" data-tooltip-pos="top">' + callSys + '</span>' +
+            '<span data-tooltip="当前项目调用" data-tooltip-pos="top">' + callProj + '</span>' +
+            '<span data-tooltip="当前版本调用" data-tooltip-pos="top">' + callVer + '</span></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="tm-card-foot">查看该方法论用例 →</div>' +
+      '</div>';
+    }).join('');
+    grid.style.display = 'grid';
+
+    A.$$('.tm-card', grid).forEach(function(card) {
+      card.addEventListener('click', function() {
+        var code = card.getAttribute('data-code');
+        location.href = '/intent-review?method=' + encodeURIComponent(code);
+      });
+    });
+  }
+
+  async function load() {
+    var grid = $('methodGrid');
+    if (grid) { grid.style.display = 'block'; grid.innerHTML = '<div class="tm-empty"><span class="inline-loading">加载中...</span></div>'; }
+    var r = await A.api('GET', '/api/test-methods');
+    if (r && r.ok) {
+      methods = r.methods || [];
+      renderStats();
+      renderGrid();
+    } else {
+      if (grid) grid.innerHTML = '<div class="tm-empty tm-empty-error">' + esc((r && r.error) || '加载失败') + '</div>';
+    }
+  }
+
+  // 分类 Tabs
+  var tabs = $('catTabs');
+  if (tabs) {
+    A.$$('.tm-cat-tab', tabs).forEach(function(t) {
+      t.addEventListener('click', function() {
+        A.$$('.tm-cat-tab', tabs).forEach(function(x) { x.classList.remove('active'); });
+        t.classList.add('active');
+        currentCat = t.getAttribute('data-cat');
+        renderGrid();
+      });
+    });
+  }
+
+  // 搜索
+  var search = $('searchInput');
+  var searchTimer = null;
+  if (search) search.addEventListener('input', function() {
+    searchText = search.value.trim();
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(renderGrid, 200);
+  });
+
+  var btnRefresh = $('btnRefresh');
+  if (btnRefresh) btnRefresh.addEventListener('click', function() {
+    A.withBtnLoading(btnRefresh, '刷新中...', load);
+  });
+
+  A._onAuthOk = function() {
+    A._renderSidebarUser();
+    A.applyPermissions();
+    load();
+    A._startStepBadgePolling();
+  };
+  load();
+})();
+</script>
+
+{% endblock %}

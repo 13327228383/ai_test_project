@@ -1,0 +1,2073 @@
+﻿{% extends "_layout_base.html" %}
+{% block head_extra %}
+<style>
+/* ════════════ metrics.html 专用样式 ════════════ */
+
+/* 域卡片条 */
+.metrics-domain-strip {
+  display: flex;
+  gap: var(--space-3);
+  overflow-x: auto;
+  /* ★ 修复卡片被压扁：父容器 content-body 为固定高度 flex column，
+     strip 默认 flex-shrink:1 会被后面的详情面板挤占高度，
+     导致卡片塌到 52px、3 行 KPI 溢出。禁止收缩让其高度自适应内容。 */
+  flex-shrink: 0;
+  flex-basis: auto;
+  overflow-y: visible;
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+.metrics-domain-card {
+  min-width: 220px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  flex-shrink: 0;
+}
+.metrics-card-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.metrics-domain-card:hover {
+  border-color: var(--border-hover);
+  transform: translateY(-1px);
+}
+.metrics-domain-card:hover .metrics-card-bar { opacity: 0.5; }
+.metrics-domain-card.active { border-color: var(--color-primary-border); }
+.metrics-domain-card.active .metrics-card-bar { opacity: 1; }
+
+.metrics-card-header {
+  display: flex; align-items: center; gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  min-width: 0;
+}
+.metrics-card-icon {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.metrics-card-title {
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.metrics-card-kpis {
+  display: flex; flex-direction: column;
+  gap: var(--space-2);
+}
+.metrics-card-kpi-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--fs-xs);
+  min-width: 0;
+}
+.metrics-card-kpi-label {
+  color: var(--text-tertiary);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 1 auto;
+}
+.metrics-card-kpi-value {
+  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  flex-shrink: 0;
+}
+.metrics-card-kpi-loading {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  text-align: center;
+  padding: var(--space-2);
+}
+
+/* 详情面板 */
+.metrics-detail-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  /* ★ 高度自适应内容：panel 高度由 header+tabs+body 决定（flex:0 0 auto 主轴=垂直，高度随内容）。
+     ★ 不加 align-self：保持默认 stretch，交叉轴=水平让 panel 宽度撑满父容器全宽，
+       避免详情内容被左右压缩成一坨。父容器 content-body 已 overflow-y:auto，
+       总内容超高时由整页滚动承接。 */
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--space-5);
+}
+.metrics-detail-header {
+  padding: var(--space-4) var(--space-5);
+  border-bottom: var(--surface-border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.metrics-detail-header-left {
+  display: flex; align-items: center; gap: var(--space-3);
+}
+.metrics-detail-icon {
+  width: 32px; height: 32px;
+  border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--step2-soft); color: var(--step2-color);
+}
+.metrics-detail-title {
+  font-size: var(--fs-h2);
+  font-weight: 600;
+}
+.metrics-detail-sub {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+}
+.metrics-detail-meta {
+  display: flex; align-items: center; gap: var(--space-2);
+}
+.meta-label { font-size: var(--fs-micro); color: var(--text-tertiary); }
+.meta-time { font-size: var(--fs-xs); color: var(--text-secondary); font-family: var(--font-mono); }
+
+.metrics-detail-tabs {
+  display: flex; align-items: center; gap: var(--space-1);
+  padding: 0 var(--space-5);
+  border-bottom: var(--surface-border);
+}
+.metrics-tab {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  margin-bottom: -1px;
+}
+.metrics-tab:hover { color: var(--text-primary); }
+.metrics-tab.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  font-weight: 500;
+}
+
+.metrics-detail-body { padding: var(--space-5); flex: 0 0 auto; }
+.metrics-tab-pane { display: none; }
+.metrics-tab-pane.active { display: block; }
+
+/* KPI 网格 */
+.metrics-kpi-grid {
+  display: grid;
+  gap: var(--space-4);
+  overflow: hidden;
+}
+.metrics-kpi-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  position: relative;
+  transition: all 0.15s;
+  display: flex;
+  flex-direction: column;
+  min-height: 120px;
+  overflow: hidden;
+  min-width: 0;
+}
+.metrics-kpi-card:hover { border-color: var(--border-hover); }
+.metrics-kpi-top {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  min-width: 0;
+}
+.metrics-kpi-label {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  font-weight: 500;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 1 auto;
+}
+.metrics-kpi-value {
+  font-size: var(--fs-hero);
+  font-weight: 700;
+  font-family: var(--font-mono);
+  line-height: 1.2;
+  margin-bottom: var(--space-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.metrics-kpi-sub {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.metrics-kpi-bar {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--bg-base);
+  overflow: hidden;
+}
+.metrics-kpi-bar-fill {
+  height: 100%; width: 100%;
+  opacity: 0.4;
+  transition: width 0.6s ease;
+}
+.metrics-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: var(--space-8);
+  color: var(--text-tertiary);
+  font-size: var(--fs-small);
+}
+@media (max-width: 1200px) {
+  .metrics-kpi-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 860px) {
+  .metrics-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 520px) {
+  .metrics-kpi-grid { grid-template-columns: 1fr; }
+}
+
+/* 原始数据 */
+.metrics-raw-box {
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  color: var(--text-secondary);
+  overflow-x: auto;
+  max-height: 480px;
+  overflow-y: auto;
+  white-space: pre;
+}
+
+/* 日志 */
+.metrics-log-section { margin-top: var(--space-5); }
+.metrics-log-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+.metrics-log-title {
+  display: flex; align-items: center; gap: var(--space-2);
+  font-size: var(--fs-h3);
+  font-weight: 600;
+}
+.metrics-log-meta { font-size: var(--fs-xs); color: var(--text-tertiary); }
+.metrics-log-box {
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.metrics-log-toolbar {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-elevated);
+  border-bottom: var(--surface-border);
+}
+.metrics-dot {
+  width: 8px; height: 8px; border-radius: var(--radius-full);
+}
+.metrics-dot-r { background: var(--state-error); }
+.metrics-dot-y { background: var(--state-warning); }
+.metrics-dot-g { background: var(--state-success); }
+.metrics-toolbar-label {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  margin-left: var(--space-2);
+  font-family: var(--font-mono);
+}
+.metrics-log-content {
+  padding: var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: 1.8;
+  color: var(--text-secondary);
+  /* ★ 高度自适应内容：日志内容少（如仅一行）时容器自然压缩，
+     内容多到超过 max-height 时才出现内部滚动，避免固定高度造成的空白。 */
+  max-height: 55vh;
+  overflow-y: auto;
+}
+.metrics-log-line {
+  display: flex; gap: var(--space-3);
+  padding: 1px 0;
+}
+.log-ts { color: var(--text-tertiary); white-space: nowrap; flex-shrink: 0; }
+.log-level {
+  font-weight: 600;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-xs);
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-size: 10px;
+  line-height: 18px;
+}
+.log-level.info { color: var(--state-info-text); background: var(--state-info-soft); }
+.log-level.warn { color: var(--state-warning-text); background: var(--state-warning-soft); }
+.log-level.ok   { color: var(--state-success-text); background: var(--state-success-soft); }
+.log-level.err  { color: var(--state-error-text); background: var(--state-error-soft); }
+.log-msg { flex: 1; min-width: 0; word-break: break-all; }
+.log-msg-empty { color: var(--text-tertiary); }
+
+/* 响应式：flex 自动换行已自带自适应 */
+
+/* ★ KPI 卡片点击直达问题点（2026-07-15） */
+.metrics-kpi-card.kpi-clickable {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.metrics-kpi-card.kpi-clickable:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-primary);
+}
+.metrics-kpi-card.kpi-clickable:active {
+  transform: translateY(0);
+}
+
+/* critical 级别徽章 */
+.badge-critical {
+  background: var(--state-error-soft);
+  color: var(--state-error-text);
+  font-weight: 700;
+}
+
+/* CDP 错误列表弹窗 */
+.cdp-error-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--bg-overlay);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cdp-error-dialog {
+  background: var(--bg-card);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 640px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px var(--bg-overlay);
+}
+.cdp-error-dialog-header {
+  padding: 16px 20px;
+  font-size: 16px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--state-error-text);
+}
+.cdp-error-dialog-body {
+  padding: 12px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+.cdp-error-item {
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  background: var(--state-error-soft);
+  border-left: 3px solid var(--state-error);
+}
+.cdp-error-item-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.cdp-error-item-idx {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.cdp-error-item-type {
+  font-weight: 600;
+  color: var(--state-error-text);
+  font-size: 13px;
+}
+.cdp-error-item-jump {
+  margin-left: auto;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: 12px;
+  text-decoration: underline;
+}
+.cdp-error-item-jump:hover {
+  opacity: 0.8;
+}
+.cdp-error-item-msg {
+  font-size: 12px;
+  color: var(--text-primary);
+  word-break: break-all;
+  line-height: 1.5;
+}
+.cdp-error-dialog-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-color);
+  text-align: right;
+}
+.cdp-error-dialog-footer .btn-close-error-dialog {
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+}
+.cdp-error-dialog-footer .btn-close-error-dialog:hover {
+  background: var(--bg-hover);
+}
+
+/* ★ SSE 告警 Toast 增强样式 */
+.toast.toast-alert {
+  border-left: 4px solid var(--state-error);
+  cursor: pointer;
+}
+.toast.toast-alert:hover {
+  opacity: 0.9;
+}
+
+/* ════════════ Token 成本 Tab（P2-6 H16/H17/H18） ════════════ */
+.tok-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.tok-kpi-card {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  background: var(--bg-elevated);
+}
+.tok-kpi-label {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  margin-bottom: 4px;
+}
+.tok-kpi-value {
+  font-size: var(--fs-h4);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+.tok-section-title {
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  font-weight: var(--fw-semibold);
+  margin: 16px 0 8px;
+}
+.tok-table-wrap {
+  overflow-x: auto;
+}
+.tok-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-small);
+}
+.tok-table th, .tok-table td {
+  border: 1px solid var(--border-default);
+  padding: 7px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+.tok-table th {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-weight: var(--fw-semibold);
+}
+.tok-mono {
+  font-family: var(--font-mono);
+}
+.tok-empty {
+  text-align: center;
+  color: var(--text-tertiary);
+  padding: 16px;
+}
+
+/* ════════════ 统一 KPI tab（原独立 kpi-overview 页样式迁移，全部走 design token） ════════════ */
+/* 状态胶囊 .kpi-mm-tag.{open,closed,fixing} 为 app-design.css 全局共享类，此处不重复声明颜色 */
+.kpi-info-bar { display:flex; gap:32px; padding:var(--space-4) var(--space-6); background:var(--bg-surface); border:1px solid var(--border-default); border-radius:var(--radius-md); margin-bottom:var(--space-4); flex-wrap:wrap; }
+.kpi-info-item { display:flex; flex-direction:column; gap:var(--space-1); }
+.kpi-info-label { font-size:var(--fs-small); color:var(--text-secondary); }
+.kpi-info-value { font-size:var(--fs-h3); font-weight:var(--fw-semibold); color:var(--text-primary); }
+.kpi-info-mono { font-family:var(--font-mono); font-size:var(--fs-small); color:var(--text-secondary); }
+.kpi-card-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:var(--space-3); margin-bottom:var(--space-4); }
+.kpi-card { background:var(--bg-surface); border:1px solid var(--border-default); border-radius:var(--radius-lg); padding:var(--space-4); box-shadow:var(--surface-shadow-card); }
+.kpi-card-value { font-size:26px; font-weight:var(--fw-bold); font-family:var(--font-mono); color:var(--text-primary); }
+.kpi-card-label { font-size:var(--fs-small); color:var(--text-secondary); margin-top:var(--space-1); }
+.kpi-card-source { font-size:var(--fs-xs); color:var(--text-tertiary); margin-top:var(--space-2); font-family:var(--font-mono); }
+.kpi-card-value.good { color:var(--state-success); }
+.kpi-card-value.bad { color:var(--state-error); }
+.kpi-card-value.warn { color:var(--state-warning); }
+.kpi-card-value.no-data { color:var(--text-tertiary); font-weight:var(--fw-regular); font-size:20px; }
+.kpi-chart-row { display:grid; grid-template-columns:1fr 1.6fr; gap:var(--space-4); }
+@media (max-width: 900px) { .kpi-chart-row { grid-template-columns:1fr; } }
+.kpi-chart-card { background:var(--bg-surface); border:1px solid var(--border-default); border-radius:var(--radius-lg); padding:var(--space-4); }
+.kpi-chart-card-separated { margin-top: var(--space-4); }
+.kpi-chart-title { font-size:var(--fs-small); font-weight:var(--fw-semibold); color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:var(--space-3); }
+.kpi-empty { padding:var(--space-5); text-align:center; color:var(--text-tertiary); font-size:var(--fs-small); }
+.kpi-mm-table { width:100%; border-collapse:collapse; font-size:var(--fs-small); }
+.kpi-mm-table th, .kpi-mm-table td { padding:var(--space-2) var(--space-3); border-bottom:1px solid var(--border-default); text-align:left; }
+.kpi-mm-table th { color:var(--text-tertiary); font-weight:var(--fw-medium); }
+</style>
+{% endblock %}
+{% block title %}深度指标中心 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/></svg>
+深度指标中心
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnRefreshMetrics" data-perm="execution.step5">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  刷新
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════ LAYER 1: 域卡片条 ════════════ -->
+<div class="metrics-domain-strip" id="domainStrip">
+  <!-- JS 渲染 8 个域卡片 -->
+</div>
+
+<!-- ════════════ LAYER 2: 详情面板 ════════════ -->
+<div class="metrics-detail-panel" id="detailPanel">
+  <div class="metrics-detail-header">
+    <div class="metrics-detail-header-left">
+      <div class="metrics-detail-icon" id="detailIcon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </div>
+      <div>
+        <div class="metrics-detail-title tooltip-wide" id="detailTitle" data-tooltip="详情面板标题&#10;描述：当前选中域的名称（由 JS 动态设置）&#10;大小影响：标识当前查看的指标域" data-tooltip-pos="right">加载中...</div>
+        <div class="metrics-detail-sub tooltip-wide" id="detailSub" data-tooltip="详情面板副标题&#10;描述：当前选中域的描述信息（由 JS 动态设置）&#10;大小影响：概括该域涵盖的指标范围" data-tooltip-pos="right">—</div>
+      </div>
+    </div>
+    <div class="metrics-detail-meta">
+      <span class="meta-label tooltip-wide" data-tooltip="最后刷新&#10;描述：指标数据最近一次拉取的时间戳（generated_at）&#10;大小影响：值越旧说明数据越滞后，建议点击刷新" data-tooltip-pos="bottom">最后刷新</span>
+      <span class="meta-time" id="detailTime">—</span>
+    </div>
+  </div>
+
+  <div class="metrics-detail-tabs">
+    <div class="metrics-tab active tooltip-wide" data-tab="kpi" data-tooltip="KPI 总览&#10;描述：当前域所有指标卡片的可视化网格视图&#10;大小影响：直观展示各项指标当前值与状态徽章" data-tooltip-pos="bottom">KPI 总览</div>
+    <div class="metrics-tab tooltip-wide" data-tab="raw" data-tooltip="原始数据&#10;描述：当前域后端返回的 JSON 原始数据（格式化展示）&#10;大小影响：用于排查指标异常时核对底层字段" data-tooltip-pos="bottom">原始数据</div>
+    <div class="metrics-tab tooltip-wide" data-tab="token" data-tooltip="Token 成本&#10;描述：会话级统计 + 历史 Dashboard + Phase 级用量明细&#10;大小影响：成本可见性，定位烧钱环节" data-tooltip-pos="bottom">Token 成本</div>
+    <div class="metrics-tab tooltip-wide" data-tab="unified" data-tooltip="统一 KPI&#10;描述：全项目统一指标（13 项指标卡 + 状态分布 + 趋势折线 + 台账不符明细）&#10;大小影响：全域指标主题唯一视图（原独立 /kpi-overview 页并入）" data-tooltip-pos="bottom">统一 KPI</div>
+  </div>
+
+  <div class="metrics-detail-body">
+    <!-- KPI 总览 tab -->
+    <div class="metrics-tab-pane active" id="tabKpi">
+      <div class="metrics-kpi-grid" id="kpiGrid">
+        <div class="metrics-empty">暂无数据</div>
+      </div>
+    </div>
+    <!-- 原始数据 tab -->
+    <div class="metrics-tab-pane" id="tabRaw">
+      <pre class="metrics-raw-box" id="rawBox">—</pre>
+    </div>
+    <!-- Token 成本 tab（P2-6 H16/H17/H18） -->
+    <div class="metrics-tab-pane" id="tabToken">
+      <div class="tok-kpi-row">
+        <div class="tok-kpi-card"><div class="tok-kpi-label">总 Token（含历史）</div><div class="tok-kpi-value" id="tokTotalTokens">-</div></div>
+        <div class="tok-kpi-card"><div class="tok-kpi-label">本次会话输入</div><div class="tok-kpi-value" id="tokSessionInput">-</div></div>
+        <div class="tok-kpi-card"><div class="tok-kpi-label">本次会话输出</div><div class="tok-kpi-value" id="tokSessionOutput">-</div></div>
+        <div class="tok-kpi-card"><div class="tok-kpi-label">总成本（CNY）</div><div class="tok-kpi-value" id="tokTotalCost">-</div></div>
+        <div class="tok-kpi-card"><div class="tok-kpi-label">当前模型</div><div class="tok-kpi-value" id="tokModel">-</div></div>
+      </div>
+      <div class="tok-section-title">历史 Dashboard（最近 20 个 Run）</div>
+      <div class="tok-table-wrap">
+        <table class="tok-table">
+          <thead><tr><th>Run ID</th><th>模型</th><th>输入 Tokens</th><th>输出 Tokens</th><th>总计</th><th>费用估算($)</th></tr></thead>
+          <tbody id="tokDashboardBody"><tr><td colspan="6" class="tok-empty">加载中...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="tok-section-title">Phase 级用量明细（按 caller_name 归类）</div>
+      <div class="tok-table-wrap">
+        <table class="tok-table">
+          <thead><tr><th>Phase</th><th>Prompt Tokens</th><th>Completion Tokens</th><th>总计</th><th>费用($)</th><th>调用方数</th></tr></thead>
+          <tbody id="tokPhaseBody"><tr><td colspan="6" class="tok-empty">加载中...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <!-- 统一 KPI tab（原独立 /kpi-overview 页并入，复用 kpi-overview.js 渲染，数据 GET /api/kpi/overview） -->
+    <div class="metrics-tab-pane" id="tabUnified">
+      <div class="kpi-info-bar">
+        <div class="kpi-info-item">
+          <span class="kpi-info-label">项目</span>
+          <span class="kpi-info-value" id="kpiProject">-</span>
+        </div>
+        <div class="kpi-info-item">
+          <span class="kpi-info-label">最近运行</span>
+          <span class="kpi-info-value kpi-info-mono" id="kpiRunId">-</span>
+        </div>
+        <div class="kpi-info-item">
+          <span class="kpi-info-label">数据源</span>
+          <span class="kpi-info-value kpi-info-mono" id="kpiSources">-</span>
+        </div>
+      </div>
+
+      <!-- 指标卡片（renderCards） -->
+      <div class="kpi-card-grid" id="kpiCards"></div>
+
+      <!-- 状态分布 + 趋势折线 -->
+      <div class="kpi-chart-row">
+        <div class="kpi-chart-card">
+          <div class="kpi-chart-title">状态分布</div>
+          <div id="kpiDistribution"></div>
+        </div>
+        <div class="kpi-chart-card">
+          <div class="kpi-chart-title">趋势（通过率 / 覆盖率 / 假绿率，近 10 次运行）</div>
+          <div id="kpiTrend"></div>
+        </div>
+      </div>
+
+      <!-- 台账不符明细 -->
+      <div class="kpi-chart-card kpi-chart-card-separated">
+        <div class="kpi-chart-title">台账不符明细（ledger mismatch）</div>
+        <div id="kpiLedgerMismatches">
+          <div class="kpi-empty">暂无数据</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ LAYER 3: AI 决策日志 ════════════ -->
+<div class="metrics-log-section">
+  <div class="metrics-log-header">
+    <div class="metrics-log-title tooltip-wide" data-tooltip="智能决策日志&#10;描述：最近 50 条 智能引擎决策日志，按时间倒序展示&#10;大小影响：实时反映 智能决策过程，用于追踪异常决策与执行链路" data-tooltip-pos="bottom">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      AI 决策日志
+    </div>
+    <div class="metrics-log-meta tooltip-wide" data-tooltip="日志元信息&#10;描述：当前日志展示数量与流模式说明&#10;大小影响：标识日志展示窗口大小与更新策略" data-tooltip-pos="bottom">最近 50 条 / 实时流</div>
+  </div>
+  <div class="metrics-log-box">
+    <div class="metrics-log-toolbar">
+      <div class="metrics-dot metrics-dot-r"></div>
+      <div class="metrics-dot metrics-dot-y"></div>
+      <div class="metrics-dot metrics-dot-g"></div>
+      <span class="metrics-toolbar-label tooltip-wide" data-tooltip="日志文件名&#10;描述：智能引擎决策日志的输出文件标识&#10;大小影响：参考值，用于日志归档与检索" data-tooltip-pos="right">ai-engine-decision.log</span>
+    </div>
+    <div class="metrics-log-content" id="logContent">
+      <div class="metrics-log-line"><span class="log-msg-empty">等待日志...</span></div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<!-- T05/P2-1：KPI 单一定义源（阈值、单位、取值路径集中在 metrics-def.js） -->
+<script src="{{ static_ver('metrics-def.js') }}"></script>
+<!-- ★ KPI 总览并入：统一 KPI 渲染/加载函数（跨 metrics 页复用，供「统一 KPI」tab 调用） -->
+<script src="{{ static_ver('kpi-overview.js') }}"></script>
+<script>
+(function() {
+  'use strict';
+  var A = window._A;
+  if (!A) return;
+  var $ = A.$, api = A.api, escHtml = A.escHtml, escAttr = A.escAttr;
+  var MD = window.MetricsDef || null;
+
+  // ── 域定义（8 个） ──
+  var DOMAINS = [
+    {
+      key: 'ai-health', title: 'AI引擎健康', accent: 'purple', icon: 'brain',
+      sub: 'Flaky / 幻觉 / 深度检查 / 规则告警 / 建模质量',
+      render: function(d) {
+        var ai = d.ai_overall || {};
+        var cards = [];
+
+        var flaky = ai.flaky || {};
+        // T05/P2-1：同名 KPI 走单一定义源（原本页只有 <5 两档，dashboard 是 <5/5-15/≥15 三档，此处统一）
+        cards.push(mdCard('flaky_rate', d,
+          'Flaky 用例 ' + (flaky.count || 0) + ' / 总 ' + (flaky.total || 0),
+          'var(--color-primary)'));
+
+        var hallu = ai.hallucination || {};
+        var halluRate = hallu.rate != null ? hallu.rate : null;
+        cards.push(mkCard('幻觉率', halluRate != null ? halluRate.toFixed(2) + '%' : '—',
+          'API不一致 ' + (hallu.api_mismatch || 0) + ' / UI缺失 ' + (hallu.ui_element_missing || 0) + ' / 枚举无效 ' + (hallu.enum_invalid || 0),
+          halluRate == null ? 'neutral' : (halluRate > 10 ? 'error' : 'success'),
+          'var(--state-error)',
+'幻觉率&#10;是什么：幻觉率&#10;怎么算：(接口不一致 + 界面缺失 + 枚举无效) / 总用例数 × 100%（数据源：ai_overall.hallucination.rate）&#10;大小意义：&gt;10% 异常，&lt;10% 正常'));
+
+        cards.push(mkCard('受影响用例', hallu.total_cases || 0,
+          'Step3 总用例基数',
+          'info', 'var(--step3-color)',
+'受影响用例&#10;是什么：受影响用例&#10;怎么算：受幻觉影响的第3步用例总数（数据源：ai_overall.hallucination.total_cases）&#10;大小意义：值越大影响范围越广，需结合幻觉率评估'));
+
+        // 健康度汇总
+        var h = d.health || {};
+        cards.push(mkCard('健康度评分', h.overall_score != null ? h.overall_score : '—',
+          '置信度 ' + (h.confidence != null ? h.confidence : '—'),
+          h.overall_score == null ? 'neutral' : (h.overall_score >= 80 ? 'success' : (h.overall_score >= 60 ? 'warning' : 'error')),
+          'var(--state-success)',
+'健康度评分&#10;是什么：健康度评分&#10;怎么算：综合 不稳定率 + 幻觉率的健康度评分（0-100）（数据源：health.overall_score）&#10;大小意义：≥80 正常，60-80 警告，&lt;60 异常'));
+
+        cards.push(mkCard('执行次数', h.run_count != null ? h.run_count : '—',
+          'Run ID: ' + (h.run_id || '—'),
+          'info', 'var(--step4-color)',
+'执行次数&#10;是什么：执行次数&#10;怎么算：当前运行的第4步执行总次数（数据源：health.run_count）&#10;大小意义：参考值，结合 运行编号 追踪执行历史'));
+
+        // deep_check
+        var dc = ai.deep_check || {};
+        cards.push(mkCard('AI深度检查', dc.count != null ? dc.count : '—',
+          dc.rate != null ? '占比 ' + dc.rate.toFixed(2) + '%' : '—',
+          dc.count == null || dc.count === 0 ? 'success' : 'warning',
+          'var(--state-info)',
+'AI深度检查&#10;是什么：AI深度检查&#10;怎么算：智能深度检查发现的问题数（数据源：ai_overall.deep_check.count）&#10;大小意义：0为正常，>0需关注AI深层问题'));
+
+        // rule_check
+        var rc = ai.rule_check || {};
+        cards.push(mkCard('规则告警', rc.count != null ? rc.count : '—',
+          rc.rate != null ? '占比 ' + rc.rate.toFixed(2) + '%' : '—',
+          rc.count == null || rc.count === 0 ? 'success' : 'warning',
+          'var(--state-warning)',
+'规则告警&#10;是什么：规则告警&#10;怎么算：规则校验告警数（数据源：ai_overall.rule_check.count）&#10;大小意义：0为正常，>0需关注规则违反'));
+
+        // case_quality
+        var cq = ai.case_quality || {};
+        var lowRate = cq.low_quality_rate != null ? cq.low_quality_rate : null;
+        cards.push(mkCard('建模质量均值', cq.avg_score != null ? cq.avg_score : '—',
+          '生成 ' + (cq.generated_count || 0) + ' / 低质量 ' + (cq.low_quality_count || 0),
+          lowRate == null ? 'neutral' : (lowRate < 10 ? 'success' : 'warning'),
+          'var(--step2-color)',
+'建模质量均值&#10;是什么：建模质量均值&#10;怎么算：第3步用例建模平均质量分（0-100）（数据源：ai_overall.case_quality.avg_score）&#10;大小意义：低质量率<10%正常，≥10%需关注'));
+
+        return cards;
+      }
+    },
+    {
+      key: 'fusion', title: '融合架构', accent: 'blue', icon: 'layers',
+      sub: 'Tool-mode / Recipe缓存 / 并行执行 / 原子回滚 / AI兜底 / 增量重生 / Token消耗',
+      render: function(d) {
+        var f = d.fusion || {};
+        var h = d.h4_new_metrics || {};
+        var cards = [];
+        cards.push(mkCard('Tool-mode 使用率', f.tool_mode_rate != null ? f.tool_mode_rate.toFixed(2) + '%' : '—',
+          '工具模式调用占比', 'info', 'var(--step4-color)',
+'Tool-mode 使用率&#10;是什么：Tool-mode 使用率&#10;怎么算：工具模式调用次数 / 智能总调用次数 × 100%（数据源：fusion.tool_mode_rate）&#10;大小意义：监控值，反映工具模式启用程度'));
+        cards.push(mkCard('Recipe 命中率', f.recipe_hit_rate != null ? f.recipe_hit_rate.toFixed(2) + '%' : '—',
+          '操作缓存命中率', f.recipe_hit_rate == null ? 'neutral' : (f.recipe_hit_rate >= 80 ? 'success' : 'warning'),
+          'var(--color-primary)',
+'Recipe 命中率&#10;是什么：Recipe 命中率&#10;怎么算：缓存命中次数 / (缓存命中 + 缓存未命中) × 100%（数据源：fusion.recipe_hit_rate）&#10;大小意义：≥80% 正常，&lt;80% 需丰富操作指令库'));
+        cards.push(mkCard('原子回滚次数', f.rollback_count != null ? f.rollback_count : '—',
+          'Step4 失败回滚统计', f.rollback_count == null ? 'neutral' : (f.rollback_count === 0 ? 'success' : 'warning'),
+          'var(--state-warning)',
+'原子回滚次数&#10;是什么：原子回滚次数&#10;怎么算：第4步失败后原子回滚次数（数据源：fusion.rollback_count）&#10;大小意义：0 为正常，&gt;0 需关注失败回滚场景'));
+        cards.push(mkCard('工具平均耗时', f.avg_tool_ms != null ? f.avg_tool_ms + ' ms' : '—',
+          'AI 调用工具平均延迟', 'info', 'var(--step2-color)',
+'工具平均耗时&#10;是什么：工具平均耗时&#10;怎么算：智能调用工具的平均延迟毫秒数（数据源：fusion.avg_tool_ms）&#10;大小意义：值越低工具响应越快，需结合阈值告警'));
+        cards.push(mkCard('AI loop 使用率', f.ai_loop_usage_rate != null ? f.ai_loop_usage_rate.toFixed(2) + '%' : '—',
+          '查表未命中走AI兜底占比', f.ai_loop_usage_rate == null ? 'neutral' : (f.ai_loop_usage_rate <= 30 ? 'success' : 'warning'),
+          'var(--state-info)',
+'AI loop 使用率&#10;是什么：AI loop 使用率&#10;怎么算：智能兜底进入数 / (查表命中 + 智能兜底进入) × 100%（数据源：fusion.ai_loop_usage_rate）&#10;大小意义：≤30% 正常（操作库覆盖好），>30% 需丰富操作指令库'));
+        // T05/P2-1：同名 KPI 走单一定义源
+        cards.push(mdCard('ai_loop_pass_rate', d, 'AI兜底决策使用例通过率', 'var(--color-primary)'));
+        cards.push(mkCard('AI Token消耗', f.ai_token_total != null ? f.ai_token_total.toLocaleString() : '—',
+          'Prompt ' + (f.ai_token_prompt || 0).toLocaleString() + ' / Completion ' + (f.ai_token_completion || 0).toLocaleString(),
+          'info', 'var(--step3-color)',
+'AI Token消耗&#10;是什么：AI Token消耗&#10;怎么算：智能调用总令牌消耗（提示词+补全）（数据源：fusion.ai_token_total）&#10;大小意义：监控值，反映智能调用的令牌成本'));
+
+        // ── parallel_exec ──
+        var pe = h.parallel_exec;
+        if (pe && pe.throughput) {
+          var _maxP = pe.max_parallel ? pe.max_parallel.value : 0;
+          var _thru = pe.throughput.value;
+          var _pDet = pe.throughput.details || {};
+          var _passed = pe.passed ? pe.passed.value : 0;
+          var _failed = pe.failed ? pe.failed.value : 0;
+          var _elapsed = _pDet.elapsed_sec || 0;
+          cards.push(mkCard('并行吞吐量', _thru != null ? _thru.toFixed(1) + ' 用例/秒' : '—',
+            '并发 ' + _maxP + ' / 通过 ' + _passed + ' / 失败 ' + _failed + ' / 耗时 ' + _elapsed.toFixed(1) + 's',
+            'info', 'var(--step4-color)',
+'并行吞吐量&#10;是什么：并行吞吐量&#10;怎么算：总用例数 / 总耗时（数据源：h4_new_metrics.parallel_exec.throughput）&#10;大小意义：值越高执行效率越好'));
+        } else {
+          cards.push(mkCard('并行吞吐量', '—', '暂无并行执行数据', 'neutral', 'var(--step4-color)',
+'并行吞吐量&#10;是什么：并行吞吐量&#10;怎么算：总用例数 / 总耗时（数据源：h4_new_metrics.parallel_exec.throughput）&#10;大小意义：暂无数据'));
+        }
+
+        // ── incremental_regen ──
+        var ir = h.incremental_regen;
+        if (ir && ir.success_rate) {
+          var _isr = ir.success_rate;
+          var _sRate = _isr.value;
+          var _iDet = _isr.details || _isr;
+          cards.push(mkCard('增量重生成功率', _sRate != null ? _sRate.toFixed(2) + '%' : '—',
+            '成功 ' + (_iDet.success || 0) + ' / 失败 ' + (_iDet.failed || 0) + ' / 总 ' + (_iDet.total || 0),
+            _sRate == null ? 'neutral' : (_sRate >= 90 ? 'success' : (_sRate >= 70 ? 'warning' : 'error')),
+            'var(--state-success)',
+'增量重生成功率&#10;是什么：增量重生成功率&#10;怎么算：增量重生成功数 / 总重生数 × 100%（数据源：h4_new_metrics.incremental_regen.success_rate）&#10;大小意义：≥90% 正常，70-90% 警告，&lt;70% 异常'));
+        } else {
+          cards.push(mkCard('增量重生成功率', '—', '暂无增量重生产生', 'neutral', 'var(--state-success)',
+'增量重生成功率&#10;是什么：增量重生成功率&#10;怎么算：增量重生成功数 / 总重生数 × 100%（数据源：h4_new_metrics.incremental_regen.success_rate）&#10;大小意义：暂无数据'));
+        }
+
+        return cards;
+      }
+    },
+    {
+      key: 'plugins', title: 'Step4插件', accent: 'cyan', icon: 'puzzle',
+      sub: '插件拦截 / 自愈 / 首屏 / 守卫 / 三轨校验 / 复杂度',
+      render: function(d) {
+        var p = d.step4_plugins || {};
+        var cards = [];
+        cards.push(mkCard('GroundTruth 拦截率', p.gt_intercept_rate != null ? p.gt_intercept_rate.toFixed(2) + '%' : '—',
+          'GT 总数 ' + (p.gt_total || 0), p.gt_intercept_rate == null ? 'neutral' : (p.gt_intercept_rate >= 90 ? 'success' : 'warning'),
+          'var(--step1-color)',
+'GroundTruth 拦截率&#10;是什么：GroundTruth 拦截率&#10;怎么算：基准事实拦截违规数 / 基准事实总数 × 100%（数据源：step4_plugins.gt_intercept_rate）&#10;大小意义：≥90% 正常，&lt;90% 需关注拦截覆盖'));
+        cards.push(mkCard('Self-Heal 成功率', p.self_heal_success_rate != null ? p.self_heal_success_rate.toFixed(2) + '%' : '—',
+          '自愈总次数 ' + (p.self_heal_total || 0), p.self_heal_success_rate == null ? 'neutral' : (p.self_heal_success_rate >= 80 ? 'success' : 'warning'),
+          'var(--color-primary)',
+'Self-Heal 成功率&#10;是什么：Self-Heal 成功率&#10;怎么算：自愈成功次数 / 自愈总次数 × 100%（数据源：step4_plugins.self_heal_success_rate）&#10;大小意义：≥80% 正常，&lt;80% 需关注自愈策略'));
+        cards.push(mkCard('FCP 平均', p.fcp_avg_ms != null ? p.fcp_avg_ms + ' ms' : '—',
+          'First Contentful Paint', 'info', 'var(--step4-color)',
+'FCP 平均&#10;是什么：FCP 平均&#10;怎么算：首屏内容绘制平均耗时（毫秒）（数据源：step4_plugins.fcp_avg_ms）&#10;大小意义：值越低首屏体验越好，参考性能基线'));
+        var plugins = p.plugins_registered || [];
+        cards.push(mkCard('已注册插件', plugins.length,
+          plugins.map(function(x){return x.name || x;}).slice(0, 5).join(', ') || '—',
+          'info', 'var(--step3-color)',
+'已注册插件&#10;是什么：已注册插件&#10;怎么算：第4步已注册插件实例数（数据源：step4_plugins.plugins_registered.length）&#10;大小意义：参考值，反映 第4步 插件加载情况'));
+        cards.push(mkCard('视觉基线状态', p.visual_baseline_status || 'unknown',
+          'Visual baseline', p.visual_baseline_status === 'ok' ? 'success' : 'warning',
+          'var(--state-warning)',
+'视觉基线状态&#10;是什么：视觉基线状态&#10;怎么算：视觉基线状态值（正常/未知）（数据源：step4_plugins.visual_baseline_status）&#10;大小意义：ok 为正常，其他需关注基线初始化'));
+        cards.push(mkCard('成功用例步骤数', p.avg_step_count != null ? p.avg_step_count : '—',
+          'PASS用例平均步骤数', 'info', 'var(--step3-color)',
+'成功用例步骤数&#10;是什么：成功用例步骤数&#10;怎么算：通过用例的平均步骤数（数据源：step4_plugins.avg_step_count）&#10;大小意义：参考值，反映用例复杂度趋势'));
+        // guard_reject —— T05/P2-1：同名 KPI 走单一定义源
+        cards.push(mdCard('guard_reject_rate', d,
+          '拦截 ' + (p.guard_reject_count || 0) + ' / 尝试 ' + (p.action_attempt_count || 0),
+          'var(--state-error)'));
+        // verification —— T05/P2-1：同名 KPI 走单一定义源
+        cards.push(mdCard('three_track_inconsistency', d,
+          '不一致 ' + (p.verification_disagreement || 0) + ' / 总 ' + (p.verification_total || 0),
+          'var(--state-warning)'));
+        // case_dominance
+        cards.push(mkCard('用例主导度', p.dominance_score != null ? p.dominance_score : '—',
+          'recipe_only ' + (p.recipe_only_pass || 0) + ' / 总 ' + (p.case_total || 0),
+          'info', 'var(--step1-color)',
+'用例主导度&#10;是什么：用例主导度&#10;怎么算：用例主导度评分均值（数据源：step4_plugins.dominance_score）&#10;大小意义：参考值，反映用例对配方缓存的依赖程度'));
+        // recipe_only_pass_rate —— T05/P2-1：同名 KPI 走单一定义源
+        cards.push(mdCard('recipe_only_pass_rate', d, '仅依赖Recipe缓存的用例通过率', 'var(--color-primary)'));
+        // ★ 用例级/步骤级占比 —— T05/P2-1：同名 KPI 走单一定义源（原本页判 ≥80 绿，charts 判 ≥90 绿，此处统一为 ≥90）
+        cards.push(mdCard('case_pass_rate', d,
+          '通过 ' + (p.case_pass_count || 0) + ' / 总计 ' + (p.case_total_count || 0),
+          'var(--color-success)'));
+        cards.push(mdCard('step_pass_rate', d,
+          '通过 ' + (p.step_pass_count || 0) + ' / 总计 ' + (p.step_total_count || 0),
+          'var(--color-info)'));
+        return cards;
+      }
+    },
+    {
+      key: 'p0', title: 'P0治理', accent: 'red', icon: 'shield',
+      sub: 'Harness / Scorecard / Token Budget / Flaky Guard',
+      render: function(d) {
+        var p = d.p0_governance || {};
+        var cards = [];
+        var hg = p.harness || {};
+        cards.push(mkCard('危险拦截', hg.dangerous_intercepts_total || 0,
+          'Tool 限制违规 ' + (hg.tool_limit_violations_total || 0),
+          (hg.dangerous_intercepts_total || 0) === 0 ? 'success' : 'error',
+          'var(--state-error)',
+'危险拦截&#10;是什么：危险拦截&#10;怎么算：P0守卫危险操作拦截总数（数据源：p0_governance.harness.dangerous_intercepts_total）&#10;大小意义：0 为正常，&gt;0 异常需立即排查'));
+        var tokenRatio = hg.token_usage_ratio != null ? (hg.token_usage_ratio > 1 ? hg.token_usage_ratio.toFixed(2) : (hg.token_usage_ratio * 100).toFixed(2)) + '%' : '—';
+        cards.push(mkCard('Token 使用率', tokenRatio,
+          '已用 ' + (hg.token_used_total || 0) + ' / 预算 ' + (hg.token_budget_total || 0),
+          'info', 'var(--step4-color)',
+'Token 使用率&#10;是什么：Token 使用率&#10;怎么算：已用令牌数 / 令牌预算 × 100%（数据源：p0_governance.harness.token_usage_ratio）&#10;大小意义：接近 100% 需扩大预算或裁剪请求'));
+        var sco = p.scorecard || {};
+        cards.push(mkCard('评分均值', sco.avg_score != null ? sco.avg_score : '—',
+          '总评估 ' + (sco.total_evaluations || 0) + ' 次', 'info', 'var(--step2-color)',
+'评分均值&#10;是什么：评分均值&#10;怎么算：评分卡评分平均值（数据源：p0_governance.scorecard.avg_score）&#10;大小意义：参考值，反映质量评估整体水平'));
+        // scorecard 维度分
+        Object.keys(sco).forEach(function(key) {
+          if (key.startsWith('dim_')) {
+            var dimName = key.substring(4);
+            cards.push(mkCard('维度-' + dimName, sco[key] != null ? sco[key] : '—',
+              'Scorecard 维度评分', 'info', 'var(--step2-color)',
+              '维度-' + dimName + '&#10;算法：评分卡 ' + dimName + '维度评分&#10;数据来源：p0_governance.scorecard.' + key + '&#10;大小影响：参考值，反映该维度质量水平'));
+          }
+        });
+        var tb = p.token_budget || {};
+        cards.push(mkCard('Token 截断', tb.truncations_total || 0,
+          '超预算 ' + (tb.budget_exceeded_total || 0) + ' / 压缩 ' + (tb.compressions_total || 0),
+          (tb.truncations_total || 0) === 0 ? 'success' : 'warning',
+          'var(--state-warning)',
+'Token 截断&#10;是什么：Token 截断&#10;怎么算：超预算或压缩导致的令牌截断次数（数据源：p0_governance.token_budget.truncations_total）&#10;大小意义：0 为正常，&gt;0 需关注预算配置'));
+        var fg = p.flaky_guard || {};
+        var fgTotal = (fg.environment_issues||0) + (fg.timing_issues||0) + (fg.data_issues||0) + (fg.ai_hallucination_issues||0);
+        cards.push(mkCard('Flaky Guard 拦截', fgTotal,
+          '环境 ' + (fg.environment_issues||0) + ' / 时序 ' + (fg.timing_issues||0) + ' / 数据 ' + (fg.data_issues||0) + ' / AI幻觉 ' + (fg.ai_hallucination_issues||0),
+          fgTotal === 0 ? 'success' : 'warning', 'var(--color-primary)',
+'Flaky Guard 拦截&#10;是什么：Flaky Guard 拦截&#10;怎么算：环境+时序+数据+智能幻觉四类问题拦截总数（数据源：p0_governance.flaky_guard）&#10;大小意义：0 为正常，&gt;0 需分类排查原因'));
+        return cards;
+      }
+    },
+    {
+      key: 'pipeline-ext', title: '流水线扩展', accent: 'teal', icon: 'branch',
+      sub: 'Step1-5插件 / Step2切片覆盖 / 哈希复用 / Step5补测',
+      render: function(d) {
+        var p = d.pipeline_ext || {};
+        var h = d.h4_new_metrics || {};
+        var cards = [];
+        function plugCnt(label, key, color, tooltip) {
+          var v = p[key];
+          var cnt = v && v.plugins_registered_count != null ? v.plugins_registered_count : null;
+          cards.push(mkCard(label, cnt != null ? cnt : '—',
+            cnt != null ? '已注册实例' : '未初始化',
+            cnt == null ? 'neutral' : (cnt > 0 ? 'success' : 'warning'),
+            color, tooltip));
+        }
+        plugCnt('Step1 数据源', 'step1_datasource', 'var(--step1-color)',
+'Step1 数据源&#10;是什么：Step1 数据源&#10;怎么算：第1步已注册数据源插件实例数&#10;大小意义：&gt;0 正常，=0 流水线将无法拉取数据');
+        plugCnt('Step2 分析器', 'step2_analyzer', 'var(--step2-color)',
+'Step2 分析器&#10;是什么：Step2 分析器&#10;怎么算：第2步已注册分析器插件实例数&#10;大小意义：&gt;0 正常，=0 流水线将无法拆解需求');
+        plugCnt('Step3 生成器', 'step3_generator', 'var(--step3-color)',
+'Step3 生成器&#10;是什么：Step3 生成器&#10;怎么算：第3步已注册生成器插件实例数&#10;大小意义：&gt;0 正常，=0 流水线将无法生成用例');
+        plugCnt('Step5 报告器', 'step5_report', 'var(--step5-color)',
+'Step5 报告器&#10;是什么：Step5 报告器&#10;怎么算：第5步已注册报告器插件实例数&#10;大小意义：&gt;0 正常，=0 流水线将无法生成报告');
+        // Step2 拆解统计
+        var s2 = d.step2_breakdown || {};
+        cards.push(mkCard('Step2 功能数', s2.feature_count != null ? s2.feature_count : '—',
+          '匹配 ' + (s2.matched_count || 0) + ' / 未文档化 ' + (s2.undocumented_count || 0),
+          'info', 'var(--step2-color)',
+'Step2 功能数&#10;是什么：Step2 功能数&#10;怎么算：第2步拆解的功能模块总数&#10;大小意义：参考值，反映需求拆解覆盖面'));
+        cards.push(mkCard('Step2 需求条目', s2.total_reqs != null ? s2.total_reqs : '—',
+          'AI 调用 ' + (s2.ai_calls || 0) + ' 次', 'info', 'var(--step2-color)',
+'Step2 需求条目&#10;是什么：Step2 需求条目&#10;怎么算：第2步拆解的需求条目总数&#10;大小意义：参考值，决定后续 第3步 用例生成规模'));
+        // coverage —— T05/P2-1：同名 KPI 走单一定义源
+        // （原名"双向覆盖率"判 ≥80 绿，dashboard 名"需求覆盖率"提示 ≥90 正常，同一数据源 forward_rate，此处统一）
+        var cov = (d.step2_breakdown || {}).coverage || {};
+        cards.push(mdCard('req_coverage', d,
+          '孤立模块 ' + (cov.orphan_modules || 0) + ' / 未覆盖 ' + (cov.uncovered_sections || 0),
+          'var(--color-primary)'));
+        // confidence —— T05/P2-1：同名 KPI 走单一定义源（原名"置信度均值"，统一为"AI 置信度"）
+        var conf = (d.step2_breakdown || {}).confidence || {};
+        cards.push(mdCard('ai_confidence', d,
+          '高 ' + (conf.high || 0) + ' / 中 ' + (conf.medium || 0) + ' / 低 ' + (conf.low || 0),
+          'var(--step2-color)'));
+        // ★ 规则覆盖率 vs AI覆盖率
+        var ruleRate = (d.step2_breakdown || {}).rule_coverage_rate;
+        cards.push(mkCard('规则覆盖率', ruleRate != null ? ruleRate.toFixed(2) + '%' : '—', '', ruleRate == null ? 'neutral' : (ruleRate >= 50 ? 'success' : 'warning'), 'var(--color-primary)',
+'规则覆盖率&#10;是什么：规则覆盖率&#10;怎么算：规则提取数 / (规则提取+智能提取) × 100%&#10;大小意义：≥50%正常，<50%需关注AI依赖度'));
+        var aiRate = (d.step2_breakdown || {}).ai_coverage_rate;
+        cards.push(mkCard('AI覆盖率', aiRate != null ? aiRate.toFixed(2) + '%' : '—', '', aiRate == null ? 'neutral' : (aiRate <= 50 ? 'success' : 'warning'), 'var(--color-warning)',
+'AI覆盖率&#10;是什么：AI覆盖率&#10;怎么算：智能提取数 / (规则提取+智能提取) × 100%&#10;大小意义：≤50%正常，>50%需关注AI调用成本'));
+
+        // 三级信任分布
+        cards.push(mkCard('L1 显式需求', s2.trust_l1_explicit != null ? s2.trust_l1_explicit : '—',
+          '明确文档化的需求', 'info', 'var(--step2-color)',
+'L1 显式需求&#10;是什么：L1 显式需求&#10;怎么算：三级信任模型中L1显式需求数量&#10;大小意义：参考值，反映需求文档化程度'));
+        cards.push(mkCard('L2 通用隐性需求', s2.trust_l2_implicit_common != null ? s2.trust_l2_implicit_common : '—',
+          '模式库匹配的通用需求', 'info', 'var(--step2-color)',
+'L2 通用隐性需求&#10;是什么：L2 通用隐性需求&#10;怎么算：三级信任模型中L2通用隐性需求数量&#10;大小意义：参考值，反映模式库覆盖情况'));
+        cards.push(mkCard('L3 业务隐性需求', s2.trust_l3_implicit_business != null ? s2.trust_l3_implicit_business : '—',
+          '未匹配模式库的业务需求', 'info', 'var(--step2-color)',
+'L3 业务隐性需求&#10;是什么：L3 业务隐性需求&#10;怎么算：三级信任模型中L3业务隐性需求数量&#10;大小意义：参考值，反映业务需求挖掘深度'));
+
+        // 匹配统计
+        var matchStats = s2.match_stats || {};
+        if (Object.keys(matchStats).length > 0) {
+          cards.push(mkCard('关键词匹配', matchStats.keyword || 0,
+            '关键词匹配命中数', 'info', 'var(--step2-color)',
+'关键词匹配&#10;是什么：关键词匹配&#10;怎么算：第2步关键词匹配命中次数&#10;大小意义：参考值，反映关键词匹配策略效果'));
+          cards.push(mkCard('嵌入匹配', matchStats.embed || 0,
+            '语义嵌入匹配数', 'info', 'var(--step2-color)',
+'嵌入匹配&#10;是什么：嵌入匹配&#10;怎么算：第2步语义嵌入匹配命中次数&#10;大小意义：参考值，反映语义匹配策略效果'));
+          cards.push(mkCard('未文档化', matchStats.undocumented || 0,
+            '未文档化功能数', 'warning', 'var(--step2-color)',
+'未文档化&#10;是什么：未文档化&#10;怎么算：第2步未文档化功能数量&#10;大小意义：>0需关注需求文档完整性'));
+        }
+
+        // 核对统计
+        var verifyStats = s2.verify_stats || {};
+        if (Object.keys(verifyStats).length > 0) {
+          cards.push(mkCard('核对通过', verifyStats.passed || 0,
+            '原文核对通过数', 'success', 'var(--step2-color)',
+'核对通过&#10;是什么：核对通过&#10;怎么算：第2步原文核对通过次数&#10;大小意义：参考值，反映需求提取准确性'));
+          cards.push(mkCard('核对失败', verifyStats.failed || 0,
+            '原文核对失败数', 'error', 'var(--step2-color)',
+'核对失败&#10;是什么：核对失败&#10;怎么算：第2步原文核对失败次数&#10;大小意义：>0需关注需求提取质量'));
+        }
+
+        // 模式库统计
+        var implicitStats = s2.implicit_stats || {};
+        if (Object.keys(implicitStats).length > 0) {
+          cards.push(mkCard('模式库匹配', implicitStats.l2_matched || 0,
+            'L2模式库匹配数', 'info', 'var(--step2-color)',
+'模式库匹配&#10;是什么：模式库匹配&#10;怎么算：模式库匹配补全的隐性需求数量&#10;大小意义：参考值，反映模式库有效性'));
+          cards.push(mkCard('模式库未匹配', implicitStats.l3_unmatched || 0,
+            'L3未匹配数', 'warning', 'var(--step2-color)',
+'模式库未匹配&#10;是什么：模式库未匹配&#10;怎么算：未匹配模式库的业务隐性需求数量&#10;大小意义：>0需丰富模式库'));
+        }
+
+        // 多源统计
+        var multiSourceStats = s2.multi_source_stats || {};
+        if (Object.keys(multiSourceStats).length > 0) {
+          var sourceSummary = [];
+          if (multiSourceStats.dom) sourceSummary.push('DOM:' + multiSourceStats.dom);
+          if (multiSourceStats.figma) sourceSummary.push('Figma:' + multiSourceStats.figma);
+          if (multiSourceStats.requirement) sourceSummary.push('需求:' + multiSourceStats.requirement);
+          if (multiSourceStats.yapi) sourceSummary.push('YAPI:' + multiSourceStats.yapi);
+          cards.push(mkCard('多源提取', multiSourceStats.total || 0,
+            sourceSummary.join(' / ') || '多源功能提取', 'info', 'var(--step2-color)',
+'多源提取&#10;是什么：多源提取&#10;怎么算：多源功能提取总数&#10;大小意义：参考值，反映功能发现来源多样性'));
+        }
+
+        // ── slice_coverage ──
+        var sc = h.slice_coverage;
+        if (sc && sc.coverage_rate) {
+          var _cr = sc.coverage_rate;
+          var _rate = _cr.value;
+          var _det = _cr.details || _cr;
+          cards.push(mkCard('切片覆盖率', _rate != null ? _rate.toFixed(2) + '%' : '—',
+            '覆盖 ' + (_det.covered || 0) + ' / 总 ' + (_det.total || 0) + ' / 未覆盖 ' + (sc.uncovered ? sc.uncovered.value : 0),
+            _rate == null ? 'neutral' : (_rate >= 95 ? 'success' : (_rate >= 80 ? 'warning' : 'error')),
+            'var(--step2-color)',
+'切片覆盖率&#10;是什么：切片覆盖率&#10;怎么算：已覆盖切片数 / 总切片数 × 100%&#10;大小意义：≥95% 正常，80-95% 警告，&lt;80% 异常'));
+        } else {
+          cards.push(mkCard('切片覆盖率', '—', '暂无切片覆盖数据', 'neutral', 'var(--step2-color)',
+'切片覆盖率&#10;是什么：切片覆盖率&#10;怎么算：已覆盖切片数 / 总切片数 × 100%&#10;大小意义：暂无数据'));
+        }
+
+        // ── hash_reuse ──
+        var hu = h.hash_reuse;
+        if (hu && hu.reuse_rate) {
+          var _hru = hu.reuse_rate;
+          var _ruRate = _hru.value;
+          var _ruDet = _hru.details || _hru;
+          cards.push(mkCard('哈希复用率', _ruRate != null ? _ruRate.toFixed(2) + '%' : '—',
+            '复用 ' + (_ruDet.reused || 0) + ' / 总 ' + (_ruDet.total || 0) + ' / 新嵌入 ' + (_ruDet.new_embeddings || 0),
+            _ruRate == null ? 'neutral' : (_ruRate >= 50 ? 'success' : 'info'),
+            'var(--step1-color)',
+'哈希复用率&#10;是什么：哈希复用率&#10;怎么算：检索增强章节哈希命中复用率&#10;大小意义：≥50% 说明增量更新有效，减少嵌入计算'));
+        } else {
+          cards.push(mkCard('哈希复用率', '—', '暂无哈希复用数据', 'neutral', 'var(--step1-color)',
+'哈希复用率&#10;是什么：哈希复用率&#10;怎么算：检索增强章节哈希命中复用率&#10;大小意义：暂无数据'));
+        }
+
+        // ── manual_retest ──
+        var mr = h.manual_retest;
+        if (mr && mr.total) {
+          var _mt = mr.total;
+          var _mTotal = _mt.value;
+          var _mDet = _mt.details || {};
+          var _p0 = mr.p0_count ? mr.p0_count.value : 0;
+          var _p1 = mr.p1_count ? mr.p1_count.value : 0;
+          var _p2 = mr.p2_count ? mr.p2_count.value : 0;
+          var _p3 = mr.p3_count ? mr.p3_count.value : 0;
+          cards.push(mkCard('人工补测建议', _mTotal != null ? _mTotal : '—',
+            'P0 ' + _p0 + ' / P1 ' + _p1 + ' / P2 ' + _p2 + ' / P3 ' + _p3,
+            _mTotal == null ? 'neutral' : (_p0 > 0 ? 'error' : (_p1 > 0 ? 'warning' : 'success')),
+            'var(--state-warning)',
+'人工补测建议&#10;是什么：人工补测建议&#10;怎么算：第5步生成的人工补测建议总数&#10;大小意义：P0>0 需立即补测，P1>0 需优先补测'));
+        } else {
+          cards.push(mkCard('人工补测建议', '—', '暂无补测建议', 'neutral', 'var(--state-warning)',
+'人工补测建议&#10;是什么：人工补测建议&#10;怎么算：第5步生成的人工补测建议总数&#10;大小意义：暂无数据'));
+        }
+
+        return cards;
+      }
+    },
+    {
+      key: 'smart', title: '智能能力', accent: 'pink', icon: 'sparkles',
+      sub: '业务能力 / DOMSizer / 区域树 / 控件命中 / 模糊匹配 / 点击回退 / DOM变化',
+      render: function(d) {
+        var s = d.smart_capabilities || {};
+        var h = d.h4_new_metrics || {};
+        var sum = s.summary || {};
+        var cards = [];
+        cards.push(mkCard('Capability 命中率', sum.capability_hit_rate != null ? sum.capability_hit_rate.toFixed(2) + '%' : '—',
+          '业务能力识别', sum.capability_hit_rate == null ? 'neutral' : (sum.capability_hit_rate >= 70 ? 'success' : 'warning'),
+          'var(--step3-color)',
+'Capability 命中率&#10;是什么：Capability 命中率&#10;怎么算：业务能力识别命中次数 / 总调用次数 × 100%&#10;大小意义：≥70% 正常，&lt;70% 需关注能力库覆盖'));
+        cards.push(mkCard('Fuzzy 命中率', sum.fuzzy_hit_rate != null ? sum.fuzzy_hit_rate.toFixed(2) + '%' : '—',
+          '模糊匹配召回', sum.fuzzy_hit_rate == null ? 'neutral' : (sum.fuzzy_hit_rate >= 70 ? 'success' : 'warning'),
+          'var(--color-primary)',
+'Fuzzy 命中率&#10;是什么：Fuzzy 命中率&#10;怎么算：模糊匹配命中次数 / 总调用次数 × 100%&#10;大小意义：≥70% 正常，&lt;70% 需关注模糊匹配策略'));
+        cards.push(mkCard('DOM 平均 limit', sum.avg_limit != null ? sum.avg_limit : '—',
+          'DOMSizer 限流值', 'info', 'var(--step4-color)',
+'DOM 平均 limit&#10;是什么：DOM 平均 limit&#10;怎么算：文档限流器平均限流值&#10;大小意义：参考值，影响 文档对象 抓取规模'));
+        cards.push(mkCard('区域平均数', sum.avg_regions != null ? sum.avg_regions : '—',
+          'Region Tree 划分', 'info', 'var(--step2-color)',
+'区域平均数&#10;是什么：区域平均数&#10;怎么算：区域树划分平均区域数&#10;大小意义：参考值，反映页面分区域策略效果'));
+        cards.push(mkCard('活跃插件数', sum.total_plugins_active != null ? sum.total_plugins_active : '—',
+          '4 个智能插件中已运行', 'info', 'var(--step1-color)',
+'活跃插件数&#10;是什么：活跃插件数&#10;怎么算：4个智能插件中已运行数量&#10;大小意义：参考值，反映智能能力插件启用情况'));
+
+        // capability 详细指标
+        var cap = s.capability || {};
+        if (cap.total_calls != null) {
+          cards.push(mkCard('Capability 总调用', cap.total_calls,
+            '业务能力识别总次数', 'info', 'var(--step3-color)',
+'Capability 总调用&#10;是什么：Capability 总调用&#10;怎么算：业务能力识别总调用次数&#10;大小意义：参考值，反映业务能力识别使用频率'));
+        }
+        if (cap.hit_count != null) {
+          cards.push(mkCard('Capability 命中数', cap.hit_count,
+            '业务能力识别命中次数', 'info', 'var(--step3-color)',
+'Capability 命中数&#10;是什么：Capability 命中数&#10;怎么算：业务能力识别命中次数&#10;大小意义：参考值，结合命中率评估能力库效果'));
+        }
+
+        // dom_sizer 详细指标
+        var ds = s.dom_sizer || {};
+        if (ds.total_calls != null) {
+          cards.push(mkCard('DOM Sizer 总调用', ds.total_calls,
+            'DOM 限流总次数', 'info', 'var(--step4-color)',
+'DOM Sizer 总调用&#10;是什么：DOM Sizer 总调用&#10;怎么算：文档限流器限流总调用次数&#10;大小意义：参考值，反映 文档对象 处理使用频率'));
+        }
+        if (ds.compact_count != null || ds.normal_count != null || ds.full_count != null) {
+          var distStr = '紧凑:' + (ds.compact_count || 0) + ' / 标准:' + (ds.normal_count || 0) + ' / 完整:' + (ds.full_count || 0);
+          cards.push(mkCard('DOM Sizer 分布', ds.compact_count + ds.normal_count + ds.full_count,
+            distStr, 'info', 'var(--step4-color)',
+'DOM Sizer 分布&#10;是什么：DOM Sizer 分布&#10;怎么算：紧凑/标准/完整三档限流分布&#10;大小意义：参考值，反映 文档对象 处理策略分布'));
+        }
+
+        // region_tree 详细指标
+        var rt = s.region_tree || {};
+        if (rt.total_calls != null) {
+          cards.push(mkCard('Region Tree 总调用', rt.total_calls,
+            '区域树划分总次数', 'info', 'var(--step2-color)',
+'Region Tree 总调用&#10;是什么：Region Tree 总调用&#10;怎么算：区域树划分总调用次数&#10;大小意义：参考值，反映区域划分使用频率'));
+        }
+        if (rt.max_regions != null) {
+          cards.push(mkCard('Region Tree 最大区域数', rt.max_regions,
+            '单次划分最大区域数', 'info', 'var(--step2-color)',
+'Region Tree 最大区域数&#10;是什么：Region Tree 最大区域数&#10;怎么算：单次划分最大区域数&#10;大小意义：参考值，反映页面复杂度'));
+        }
+        if (rt.avg_elements != null) {
+          cards.push(mkCard('Region Tree 平均元素数', rt.avg_elements,
+            '每区域平均元素数', 'info', 'var(--step2-color)',
+'Region Tree 平均元素数&#10;是什么：Region Tree 平均元素数&#10;怎么算：每区域平均元素数&#10;大小意义：参考值，反映区域粒度'));
+        }
+        if (rt.dominant_regions && rt.dominant_regions.length > 0) {
+          var topRegion = rt.dominant_regions[0];
+          cards.push(mkCard('Region Tree 优势区域', escHtml(topRegion[0] || ''),
+            '出现 ' + (topRegion[1] || 0) + ' 次', 'info', 'var(--step2-color)',
+'Region Tree 优势区域&#10;是什么：Region Tree 优势区域&#10;怎么算：出现次数最多的区域&#10;大小意义：参考值，反映页面主要交互区域'));
+        }
+
+        // fuzzy_match 详细指标
+        var fm = s.fuzzy_match || {};
+        if (fm.total_calls != null) {
+          cards.push(mkCard('Fuzzy 总调用', fm.total_calls,
+            '模糊匹配总次数', 'info', 'var(--color-primary)',
+'Fuzzy 总调用&#10;是什么：Fuzzy 总调用&#10;怎么算：模糊匹配总调用次数&#10;大小意义：参考值，反映模糊匹配使用频率'));
+        }
+        if (fm.hit_count != null) {
+          cards.push(mkCard('Fuzzy 命中数', fm.hit_count,
+            '模糊匹配命中次数', 'info', 'var(--color-primary)',
+'Fuzzy 命中数&#10;是什么：Fuzzy 命中数&#10;怎么算：模糊匹配命中次数&#10;大小意义：参考值，结合命中率评估模糊匹配效果'));
+        }
+        if (fm.avg_hit_score != null) {
+          cards.push(mkCard('Fuzzy 平均命中分', fm.avg_hit_score,
+            '模糊匹配平均得分', 'info', 'var(--color-primary)',
+'Fuzzy 平均命中分&#10;是什么：Fuzzy 平均命中分&#10;怎么算：模糊匹配命中时的平均得分&#10;大小意义：参考值，反映模糊匹配质量'));
+        }
+
+        // click_fallback
+        var cf = (d.smart_capabilities || {}).click_fallback;
+        if (cf) {
+          cards.push(mkCard('点击回退命中', cf.hit_rate != null ? cf.hit_rate.toFixed(2) + '%' : '—',
+            '命中 ' + (cf.hits || 0) + ' / 总 ' + (cf.total || 0),
+            cf.hit_rate == null ? 'neutral' : (cf.hit_rate >= 70 ? 'success' : 'warning'),
+            'var(--state-info)',
+'点击回退命中&#10;是什么：点击回退命中&#10;怎么算：五级点击回退策略命中率&#10;大小意义：≥70%正常，<70%需关注元素定位策略'));
+        }
+        // dom_diff
+        var dd = (d.smart_capabilities || {}).dom_diff;
+        if (dd) {
+          cards.push(mkCard('DOM变化率', dd.change_rate != null ? dd.change_rate.toFixed(2) + '%' : '—',
+            '变化 ' + (dd.changed || 0) + ' / 不变 ' + (dd.unchanged || 0),
+            'info', 'var(--step3-color)',
+'DOM变化率&#10;是什么：DOM变化率&#10;怎么算：动作前后文档对象变化比率&#10;大小意义：参考值，反映操作对页面结构的影响程度'));
+        }
+        // top hint
+        var topHint = sum.top_capability_hint;
+        if (topHint && Array.isArray(topHint) && topHint.length > 0) {
+          cards.push(mkCard('Top Capability', escHtml(topHint[0][0] || ''),
+              '命中 ' + (topHint[0][1] || 0) + ' 次', 'info', 'var(--step3-color)',
+'Top Capability&#10;是什么：Top Capability&#10;怎么算：命中次数最多的业务能力&#10;大小意义：参考值，反映主要业务能力识别分布'));
+        }
+
+        // ── control_type ──
+        var ct = h.control_type;
+        if (ct && ct.hit_rate) {
+          var _hr = ct.hit_rate;
+          var _hRate = _hr.value;
+          var _hDet = _hr.details || _hr;
+          var _hitCounts = _hDet.hit_counts || {};
+          var _topHits = Object.keys(_hitCounts).sort(function(a,b){return _hitCounts[b]-_hitCounts[a];}).slice(0,3);
+          var _hitStr = _topHits.map(function(k){return k+':'+_hitCounts[k];}).join(' ');
+          cards.push(mkCard('控件命中率', _hRate != null ? _hRate.toFixed(2) + '%' : '—',
+            '总调用 ' + (_hDet.total_calls || (ct.total_calls ? ct.total_calls.value : 0)) + (_hitStr ? ' / ' + _hitStr : ''),
+            _hRate == null ? 'neutral' : (_hRate >= 80 ? 'success' : 'warning'),
+            'var(--step3-color)',
+'控件命中率&#10;是什么：控件命中率&#10;怎么算：非默认控件命中次数 / 总调用次数 × 100%&#10;大小意义：≥80% 正常，&lt;80% 需丰富控件识别规则'));
+        } else {
+          cards.push(mkCard('控件命中率', '—', '暂无控件命中数据', 'neutral', 'var(--step3-color)',
+'控件命中率&#10;是什么：控件命中率&#10;怎么算：非默认控件命中次数 / 总调用次数 × 100%&#10;大小意义：暂无数据'));
+        }
+
+        return cards;
+      }
+    },
+    {
+      key: 'runtime', title: '系统运行时', accent: 'amber', icon: 'server',
+      sub: '进程 / 内存 / CPU / 线程 / 运行时长',
+      render: function(d) {
+        var s = d.system || {};
+        var cards = [];
+        cards.push(mkCard('PID', s.pid || '—', '进程 ID', 'info', 'var(--step4-color)',
+'PID&#10;是什么：PID&#10;怎么算：系统进程ID&#10;大小意义：参考值，用于追踪系统进程'));
+        cards.push(mkCard('内存 RSS', s.process_rss_mb != null ? s.process_rss_mb + ' MB' : '—',
+          'VMS ' + (s.process_vms_mb != null ? s.process_vms_mb + ' MB' : '—'),
+          'info', 'var(--step2-color)',
+'内存 RSS&#10;是什么：内存 RSS&#10;怎么算：进程常驻内存大小（MB）&#10;大小意义：值越高内存占用越大，需关注内存泄漏'));
+        cards.push(mkCard('CPU 占用', s.cpu_percent != null ? s.cpu_percent.toFixed(2) + '%' : '—',
+          '进程 CPU 利用率', s.cpu_percent == null ? 'neutral' : (s.cpu_percent < 60 ? 'success' : (s.cpu_percent < 90 ? 'warning' : 'error')),
+          'var(--state-warning)',
+'CPU 占用&#10;是什么：CPU 占用&#10;怎么算：进程处理器利用率百分比&#10;大小意义：&lt;60% 正常，60-90% 警告，&gt;90% 异常'));
+        cards.push(mkCard('线程数', s.thread_count != null ? s.thread_count : '—',
+          '进程线程总数', 'info', 'var(--step1-color)',
+'线程数&#10;是什么：线程数&#10;怎么算：进程线程总数&#10;大小意义：参考值，过高需关注线程创建情况'));
+        cards.push(mkCard('运行时长', fmtUptime(s.uptime_seconds),
+          '进程启动至今', 'success', 'var(--state-success)',
+'运行时长&#10;是什么：运行时长&#10;怎么算：进程启动至今的运行时间&#10;大小意义：参考值，反映系统持续运行时间'));
+        cards.push(mkCard('Python', escHtml(s.python_version || '—'),
+          escHtml(s.platform || ''), 'info', 'var(--step3-color)',
+'Python&#10;是什么：Python&#10;怎么算：Python版本与平台信息&#10;大小意义：参考值，运行环境信息'));
+        return cards;
+      }
+    },
+    {
+      key: 'blue-red', title: '蓝红对抗', accent: 'orange', icon: 'swords',
+      sub: '共识级别 / 仲裁判决 / 视角覆盖 / 蓝队视角 / 红队通过率 / 仲裁质量',
+      render: function(d) {
+        var br = d.blue_red || {};
+        var cards = [];
+
+        // Step2 蓝红对抗指标
+        var s2 = br.step2 || {};
+        if (s2.has_data) {
+          // 共识级别分布
+          var consensus = s2.consensus || {};
+          var consensusTotal = (consensus.HIGHEST || 0) + (consensus.HIGH || 0) + (consensus.MEDIUM || 0) + (consensus.LOW || 0) + (consensus.SUPPLEMENTARY || 0);
+          if (consensusTotal > 0) {
+            cards.push(mkCard('共识级别分布', consensusTotal,
+              '最高:' + (consensus.HIGHEST || 0) + ' / 高:' + (consensus.HIGH || 0) + ' / 中:' + (consensus.MEDIUM || 0),
+              'info', 'var(--state-warning)',
+'共识级别分布&#10;是什么：共识级别分布&#10;怎么算：第2步需求共识级别分布（最高/高/中/低/补充）&#10;大小意义：参考值，反映需求共识程度'));
+          }
+
+          // 仲裁判决分布
+          var verdicts = s2.verdicts || {};
+          var verdictsTotal = (verdicts.approved || 0) + (verdicts.revised || 0) + (verdicts.rejected || 0) + (verdicts.supplementary || 0);
+          if (verdictsTotal > 0) {
+            var approvedRate = verdicts.approved ? ((verdicts.approved / verdictsTotal) * 100).toFixed(2) : 0;
+            cards.push(mkCard('仲裁通过率', approvedRate + '%',
+              '通过:' + (verdicts.approved || 0) + ' / 修订:' + (verdicts.revised || 0) + ' / 拒绝:' + (verdicts.rejected || 0),
+              approvedRate >= 80 ? 'success' : 'warning', 'var(--state-warning)',
+'仲裁通过率&#10;是什么：仲裁通过率&#10;怎么算：仲裁通过数 / 总判决数 × 100%&#10;大小意义：≥80% 正常，&lt;80% 需关注需求质量'));
+          }
+
+          // 视角覆盖
+          var perspective = s2.perspective_coverage || {};
+          var perspectiveTotal = (perspective['1_perspective'] || 0) + (perspective['2_perspectives'] || 0) + (perspective['3_perspectives'] || 0);
+          if (perspectiveTotal > 0) {
+            var tripleCoverageRate = perspective['3_perspectives'] ? ((perspective['3_perspectives'] / perspectiveTotal) * 100).toFixed(2) : 0;
+            cards.push(mkCard('三视角覆盖率', tripleCoverageRate + '%',
+              '1视角:' + (perspective['1_perspective'] || 0) + ' / 2视角:' + (perspective['2_perspectives'] || 0) + ' / 3视角:' + (perspective['3_perspectives'] || 0),
+              tripleCoverageRate >= 70 ? 'success' : 'warning', 'var(--state-warning)',
+'三视角覆盖率&#10;是什么：三视角覆盖率&#10;怎么算：三视角覆盖需求数 / 总需求数 × 100%&#10;大小意义：≥70% 正常，&lt;70% 需丰富视角覆盖'));
+          }
+
+          // 需求总数
+          if (s2.total_requirements > 0) {
+            cards.push(mkCard('对抗需求数', s2.total_requirements,
+              '参与蓝红对抗的需求总数', 'info', 'var(--state-warning)',
+'对抗需求数&#10;是什么：对抗需求数&#10;怎么算：参与蓝红对抗的需求总数&#10;大小意义：参考值，反映对抗覆盖范围'));
+          }
+        }
+
+        // Step3 蓝红对抗指标
+        var s3 = br.step3 || {};
+        if (s3.has_data) {
+          // 蓝队视角分布
+          var blueTeam = s3.blue_team || {};
+          var blueTotal = (blueTeam.functional || 0) + (blueTeam.security || 0) + (blueTeam.integration || 0);
+          if (blueTotal > 0) {
+            cards.push(mkCard('蓝队视角分布', blueTotal,
+              '功能:' + (blueTeam.functional || 0) + ' / 安全:' + (blueTeam.security || 0) + ' / 集成:' + (blueTeam.integration || 0),
+              'info', 'var(--color-primary)',
+'蓝队视角分布&#10;是什么：蓝队视角分布&#10;怎么算：蓝队三视角用例分布（功能/安全/集成）&#10;大小意义：参考值，反映视角均衡性'));
+          }
+
+          // 红队通过率
+          if (s3.red_team_pass_rate != null) {
+            var passRate = (s3.red_team_pass_rate * 100).toFixed(2);
+            cards.push(mkCard('红队通过率', passRate + '%',
+              '红队评审通过占比',
+              passRate >= 80 ? 'success' : 'warning', 'var(--state-error)',
+'红队通过率&#10;是什么：红队通过率&#10;怎么算：红队评审通过占比&#10;大小意义：≥80% 正常，&lt;80% 需关注用例质量'));
+          }
+
+          // 仲裁质量分
+          if (s3.arbiter_quality_score != null) {
+            var qualityScore = s3.arbiter_quality_score.toFixed(2);
+            cards.push(mkCard('仲裁质量分', qualityScore,
+              '仲裁综合质量评分',
+              qualityScore >= 0.8 ? 'success' : 'warning', 'var(--state-warning)',
+'仲裁质量分&#10;是什么：仲裁质量分&#10;怎么算：仲裁综合质量评分&#10;大小意义：≥0.8 正常，&lt;0.8 需关注仲裁质量'));
+          }
+
+          // 用例总数
+          if (s3.total_cases > 0) {
+            cards.push(mkCard('对抗用例数', s3.total_cases,
+              '参与蓝红对抗的用例总数', 'info', 'var(--color-primary)',
+'对抗用例数&#10;是什么：对抗用例数&#10;怎么算：参与蓝红对抗的用例总数&#10;大小意义：参考值，反映对抗覆盖范围'));
+          }
+        }
+
+        // 无数据提示
+        if (!br.has_data) {
+          cards.push(mkCard('蓝红对抗', '—',
+            '尚未运行蓝红对抗流程', 'neutral', 'var(--text-tertiary)',
+'蓝红对抗&#10;是什么：蓝红对抗&#10;怎么算：蓝红对抗指标尚未生成&#10;大小意义：需先执行蓝红对抗流程'));
+        }
+
+        return cards;
+      }
+    },
+    {
+      key: 'cdp-browser', title: 'CDP浏览器', accent: 'indigo', icon: 'monitor',
+      sub: '客户端浏览器模式的连接/执行/错误/耗时指标',
+      render: function(d) {
+        var c = d.cdp_browser || {};
+        var cards = [];
+        // ★ 后端告警等级（优先于前端硬编码阈值）
+        var alerts = (d.alerts && d.alerts.cdp_browser && d.alerts.cdp_browser.fields) || {};
+        function alertBadge(field, fallback) {
+          var a = alerts[field];
+          return a ? a.level : fallback;
+        }
+
+        // 无数据提示
+        if (c.note && c.attach_count === 0) {
+          cards.push(mkCard('CDP浏览器', '—',
+            c.note, 'neutral', 'var(--text-tertiary)',
+'客户端浏览器指标&#10;是什么：客户端浏览器指标&#10;怎么算：尚未使用客户端浏览器模式执行测试&#10;大小意义：需在第4步勾选"使用我的浏览器"并执行'));
+          return cards;
+        }
+
+        // 连接成功率（点击跳转日志面板）
+        var attachTotal = (c.attach_count || 0);
+        var attachSuccess = (c.attach_success || 0);
+        var attachRate = attachTotal > 0 ? Math.round(100 * attachSuccess / attachTotal) : null;
+        cards.push(mkCard(
+          '连接成功率',
+          attachRate != null ? attachRate + '%' : '—',
+          '成功 ' + attachSuccess + ' / ' + attachTotal + ' 次',
+          alertBadge('attach_success_rate', attachRate == null ? 'neutral' : (attachRate >= 90 ? 'success' : (attachRate >= 50 ? 'warning' : 'error'))),
+          'var(--step4-color)',
+'CDP连接成功率&#10;是什么：CDP连接成功率&#10;怎么算：连接成功次数 / 连接总次数 × 100%&#10;大小意义：低于90%需检查客户端网络/防火墙',
+          {type: 'log'}
+        ));
+
+        // 平均连接耗时
+        cards.push(mkCard(
+          '平均连接耗时',
+          c.connect_duration_ms_avg != null ? c.connect_duration_ms_avg + 'ms' : '—',
+          '最大 ' + (c.connect_duration_ms_max || '—') + 'ms',
+          alertBadge('connect_duration_ms_avg', 'info'),
+          'var(--step4-color)',
+'CDP连接耗时&#10;是什么：CDP连接耗时&#10;怎么算：所有成功连接耗时的平均值（毫秒）&#10;大小意义：>1000ms 需检查网络延迟',
+          {type: 'log'}
+        ));
+
+        // 用例通过率（点击跳转流水线页）
+        var caseTotal = (c.case_executed || 0);
+        var casePassed = (c.case_passed || 0);
+        var passRate = c.pass_rate;
+        cards.push(mkCard(
+          '用例通过率',
+          passRate != null ? passRate + '%' : '—',
+          '通过 ' + casePassed + ' / ' + caseTotal + ' 条',
+          alertBadge('pass_rate', passRate == null ? 'neutral' : (passRate >= 80 ? 'success' : (passRate >= 50 ? 'warning' : 'error'))),
+          'var(--step4-color)',
+'CDP模式用例通过率&#10;是什么：CDP模式用例通过率&#10;怎么算：客户端浏览器模式下通过用例数 / 已执行用例数 × 100%&#10;大小意义：对比服务端模式可评估客户端环境差异',
+          {type: 'url', url: '/pipeline'}
+        ));
+
+        // 平均执行耗时
+        cards.push(mkCard(
+          '平均执行耗时',
+          c.exec_duration_ms_avg != null ? c.exec_duration_ms_avg + 'ms' : '—',
+          '最大 ' + (c.exec_duration_ms_max || '—') + 'ms',
+          alertBadge('exec_duration_ms_avg', 'info'),
+          'var(--step4-color)',
+'CDP模式单用例执行耗时&#10;是什么：CDP模式单用例执行耗时&#10;怎么算：客户端浏览器模式单用例执行耗时（毫秒）&#10;大小意义：对比服务端模式可评估客户端浏览器开销',
+          {type: 'url', url: '/pipeline'}
+        ));
+
+        // 断开次数
+        cards.push(mkCard(
+          '断开次数',
+          c.detach_count || 0,
+          'CDP 连接断开总数',
+          'neutral', 'var(--text-secondary)',
+'CDP断开次数&#10;是什么：CDP断开次数&#10;怎么算：客户端浏览器连接断开总次数&#10;大小意义：应与 attach_count 大致相等'
+        ));
+
+        // 错误数（点击展开错误列表弹窗）
+        var errCount = c.error_count || 0;
+        cards.push(mkCard(
+          '错误数',
+          errCount,
+          errCount > 0 ? '最近: ' + ((c.errors || [])[0] || {}).error_type : '无错误',
+          alertBadge('error_count', errCount === 0 ? 'success' : 'error'),
+          errCount === 0 ? 'var(--state-success)' : 'var(--state-error)',
+'CDP模式执行错误数&#10;是什么：CDP模式执行错误数&#10;怎么算：客户端浏览器模式执行错误总次数&#10;大小意义：>0 需查看错误详情排查',
+          errCount > 0 ? {type: 'errors'} : null
+        ));
+
+        // Action 总数
+        cards.push(mkCard(
+          'Action总数',
+          c.action_count_total || 0,
+          '执行的浏览器操作指令总数',
+          'info', 'var(--text-secondary)',
+'CDP模式Action执行总数&#10;是什么：CDP模式Action执行总数&#10;怎么算：执行的浏览器操作指令总数&#10;大小意义：反映测试覆盖的操作量'
+        ));
+
+        // 截图总量
+        var ssTotal = c.screenshot_size_total || 0;
+        var ssKB = ssTotal > 0 ? Math.round(ssTotal / 1024) : 0;
+        cards.push(mkCard(
+          '截图总量',
+          ssTotal > 0 ? ssKB + 'KB' : '—',
+          '证据收集的截图总大小',
+          'neutral', 'var(--text-tertiary)',
+'CDP模式截图证据总量&#10;是什么：CDP模式截图证据总量&#10;怎么算：证据收集的截图总大小&#10;大小意义：反映证据收集完整度'
+        ));
+
+        return cards;
+      }
+    }
+  ];
+
+  function mkCard(label, value, sub, badge, color, tooltip, jump) {
+    var badgeCls = {'success':'badge-success','warning':'badge-warning','error':'badge-error','critical':'badge-critical','info':'badge-info','neutral':'badge-neutral'}[badge||'neutral'];
+    var badgeText = {'success':'正常','warning':'关注','error':'异常','critical':'严重','info':'监控','neutral':'—'}[badge||'neutral'];
+    return {
+      label: label, value: value, sub: sub,
+      badge: badgeText, badgeCls: badgeCls, color: color || 'var(--text-primary)',
+      tooltip: tooltip || '',
+      jump: jump || null  // {type: 'case'|'log'|'errors'|'url', id: 'xxx', url: '...'}
+    };
+  }
+
+  /**
+   * T05/P2-1：按 KPI 单一定义源构造卡片（同名 KPI 专用）。
+   * 展示名 / 单位 / 小数位 / 健康度阈值 / tooltip 文案全部来自 metrics-def.js，
+   * 本模板不再自带任何阈值数字，从而与 dashboard.html、charts.html 口径完全一致。
+   * @param {string} key    metrics-def.js 中登记的 KPI key
+   * @param {object} data   /api/metrics-summary 完整响应体
+   * @param {string} sub    卡片副标题（分子/分母等页面特有明细，非口径内容）
+   * @param {string} color  数值主色（沿用本页既有配色令牌）
+   * @returns {object}      与 mkCard 同结构的卡片对象
+   */
+  function mdCard(key, data, sub, color) {
+    if (!MD) return mkCard(key, '—', sub || '', 'neutral', color, '');
+    var r = MD.render(key, data, null);
+    var tip = r.desc ? String(r.desc).replace(/\n/g, '&#10;') : '';
+    return mkCard(r.label, r.text, sub || '', r.state, color, tip);
+  }
+
+  function fmtUptime(sec) {
+    if (sec == null || isNaN(sec)) return '—';
+    var d = Math.floor(sec / 86400);
+    var h = Math.floor((sec % 86400) / 3600);
+    var m = Math.floor((sec % 3600) / 60);
+    if (d > 0) return d + '天' + h + '时';
+    if (h > 0) return h + '时' + m + '分';
+    return m + '分';
+  }
+
+  // ── 域图标 SVG ──
+  function domainIcon(name, color) {
+    var map = {
+      brain: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>',
+      layers: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
+      puzzle: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.439 7.85c-.049.322.059.648.289.878l1.568 1.568c.47.47.706 1.087.706 1.704s-.235 1.233-.706 1.704l-1.611 1.611a.98.98 0 0 1-.837.276c-.47-.07-.802-.48-.968-.925a2.501 2.501 0 1 0-3.214 3.214c.446.166.855.497.925.968a.979.979 0 0 1-.276.837l-1.61 1.61a2.404 2.404 0 0 1-1.705.707 2.402 2.402 0 0 1-1.704-.706l-1.568-1.568a1.026 1.026 0 0 0-.877-.29c-.493.074-.84.504-1.02.968a2.5 2.5 0 1 1-3.237-3.237c.464-.18.894-.527.967-1.02a1.026 1.026 0 0 0-.289-.877l-1.568-1.568A2.402 2.402 0 0 1 1.998 12c0-.617.236-1.234.706-1.704L4.23 8.77c.24-.24.581-.353.917-.303.515.077.877.528 1.073 1.01a2.5 2.5 0 1 0 3.259-3.259c-.482-.196-.933-.558-1.01-1.073-.05-.336.062-.676.303-.917l1.525-1.525A2.402 2.402 0 0 1 12 1.998c.617 0 1.234.236 1.704.706l1.568 1.568c.23.23.556.338.877.29.493-.074.84-.504 1.02-.968a2.5 2.5 0 1 1 3.237 3.237c-.464.18-.894.527-.967 1.02Z"/></svg>',
+      shield: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>',
+      branch: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>',
+      sparkles: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>',
+      server: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>',
+      swords: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 12.5-8 8a2.12 2.12 0 1 1-3-3l8-8"/><path d="M 16 16l6-6"/><path d="m8 8 6-6"/><path d="m9.5 14.5 8-8a2.12 2.12 0 1 0-3-3l8 8"/></svg>',
+      'plus-circle': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>',
+      monitor: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>'
+    };
+    return map[name] || '';
+  }
+
+  // 域强调色映射
+  var ACCENT_COLOR = {
+    purple: 'var(--step2-color)', purple_soft: 'var(--step2-soft)',
+    blue:   'var(--step4-color)', blue_soft:   'var(--step4-soft)',
+    cyan:   'var(--step1-color)', cyan_soft:   'var(--step1-soft)',
+    red:    'var(--state-error)', red_soft:    'var(--state-error-soft)',
+    teal:   'var(--color-primary)', teal_soft: 'var(--color-primary-soft)',
+    pink:   'var(--step3-color)', pink_soft:   'var(--step3-soft)',
+    amber:  'var(--state-warning)', amber_soft: 'var(--state-warning-soft)',
+    orange: 'var(--step5-color)', orange_soft: 'var(--step5-soft)',
+    indigo: 'var(--step2-color)', indigo_soft: 'var(--step2-soft)'
+  };
+
+  var _data = null;
+  var _currentDomain = 'ai-health';
+  var _kpiColumns = 6; // ★ KPI每行列数，默认6
+
+  function applyKpiColumnsConfig(cols) {
+    _kpiColumns = cols || 6;
+    // ★ 不足配置列数时自动拉伸占满一行：auto-fit 折叠空轨道
+    var grid = document.getElementById('kpiGrid');
+    if (grid) {
+      grid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(calc(100% / ' + _kpiColumns + '), 1fr))';
+    }
+  }
+
+  function renderDomainStrip() {
+    var strip = $('domainStrip');
+    if (!strip) return;
+    strip.innerHTML = DOMAINS.map(function(dm) {
+      var color = ACCENT_COLOR[dm.accent];
+      var soft = ACCENT_COLOR[dm.accent + '_soft'];
+      var active = dm.key === _currentDomain ? ' active' : '';
+      var domainTip = dm.title + '&#10;是什么：' + dm.sub + '&#10;大小意义：综合反映该域所有指标运行状态';
+      return '<div class="metrics-domain-card' + active + '" data-domain="' + dm.key + '" data-accent="' + dm.accent + '">' +
+        '<div class="metrics-card-bar" style="background:' + color + ';"></div>' +
+        '<div class="metrics-card-header">' +
+          '<div class="metrics-card-icon" style="background:' + soft + ';color:' + color + ';">' + domainIcon(dm.icon, color) + '</div>' +
+          '<div class="metrics-card-title tooltip-wide" data-tooltip="' + domainTip + '" data-tooltip-pos="bottom">' + escHtml(dm.title) + '</div>' +
+        '</div>' +
+        '<div class="metrics-card-kpis" id="domainKpi-' + dm.key + '"><div class="metrics-card-kpi-loading">加载中...</div></div>' +
+      '</div>';
+    }).join('');
+
+    // 绑定点击
+    A.$$('.metrics-domain-card', strip).forEach(function(card) {
+      card.addEventListener('click', function() {
+        var key = card.getAttribute('data-domain');
+        selectDomain(key);
+      });
+    });
+  }
+
+  function renderDomainKpis() {
+    if (!_data) return;
+    DOMAINS.forEach(function(dm) {
+      var el = $('domainKpi-' + dm.key);
+      if (!el) return;
+      try {
+        var cards = dm.render(_data) || [];
+        if (cards.length === 0) {
+          el.innerHTML = '<div class="metrics-card-kpi-loading">暂无数据</div>';
+          return;
+        }
+        // ★ 按label ASCII排序
+        cards.sort(function(a, b) {
+          return (a.label || '').localeCompare(b.label || '', 'en', {sensitivity: 'base'});
+        });
+        el.innerHTML = cards.slice(0, 3).map(function(c) {
+          var tipAttr = c.tooltip ? ' data-tooltip="' + escAttr(c.tooltip) + '" data-tooltip-pos="right"' : '';
+          var labelCls = 'metrics-card-kpi-label' + (c.tooltip ? ' tooltip-wide' : '');
+          return '<div class="metrics-card-kpi-row">' +
+            '<span class="' + labelCls + '"' + tipAttr + '>' + escHtml(c.label) + '</span>' +
+            '<span class="metrics-card-kpi-value" style="color:' + (ACCENT_COLOR[dm.accent] || 'var(--text-primary)') + ';">' + escHtml(String(c.value)) + '</span>' +
+          '</div>';
+        }).join('');
+      } catch (e) {
+        el.innerHTML = '<div class="metrics-card-kpi-loading">渲染异常</div>';
+      }
+    });
+  }
+
+  function selectDomain(key) {
+    _currentDomain = key;
+    A.$$('.metrics-domain-card').forEach(function(c) {
+      c.classList.toggle('active', c.getAttribute('data-domain') === key);
+    });
+    renderDetail();
+  }
+
+  function renderDetail() {
+    if (!_data) return;
+    var dm = DOMAINS.filter(function(x){return x.key === _currentDomain;})[0];
+    if (!dm) return;
+    var color = ACCENT_COLOR[dm.accent];
+    var soft = ACCENT_COLOR[dm.accent + '_soft'];
+
+    var iconEl = $('detailIcon');
+    if (iconEl) {
+      iconEl.style.background = soft;
+      iconEl.style.color = color;
+      iconEl.innerHTML = domainIcon(dm.icon, color);
+    }
+    $('detailTitle').textContent = dm.title;
+    $('detailSub').textContent = dm.sub;
+    $('detailTime').textContent = _data.generated_at || '—';
+
+    // KPI 网格
+    var grid = $('kpiGrid');
+    if (!grid) return;
+    try {
+      var cards = dm.render(_data) || [];
+      if (cards.length === 0) {
+        grid.innerHTML = '<div class="metrics-empty">暂无数据</div>';
+      } else {
+        // ★ 按labelASCII排序
+        cards.sort(function(a, b) {
+          return (a.label || '').localeCompare(b.label || '', 'en', {sensitivity: 'base'});
+        });
+        // ★ 获取当前版本标识
+        var vTag = A._currentVersion ? ' ' + A._currentVersion : '';
+        grid.innerHTML = cards.map(function(c) {
+          var tipAttr = c.tooltip ? ' data-tooltip="' + escAttr(c.tooltip) + '" data-tooltip-pos="right"' : '';
+          var labelCls = 'metrics-kpi-label' + (c.tooltip ? ' tooltip-wide' : '');
+          // ★ jump 属性：支持卡片点击直达问题点
+          var jumpAttr = '';
+          var clickCls = '';
+          if (c.jump) {
+            jumpAttr = ' data-jump-type="' + escAttr(c.jump.type || '') + '" data-jump-id="' + escAttr(c.jump.id || '') + '" data-jump-url="' + escAttr(c.jump.url || '') + '"';
+            clickCls = ' kpi-clickable';
+          }
+          return '<div class="metrics-kpi-card' + clickCls + '"' + jumpAttr + '>' +
+            '<div class="metrics-kpi-top">' +
+              '<span class="' + labelCls + '"' + tipAttr + '>' + escHtml(c.label) + '</span>' +
+              '<span class="badge ' + c.badgeCls + '">' + c.badge + '</span>' +
+            '</div>' +
+            '<div class="metrics-kpi-value" style="color:' + c.color + ';">' + escHtml(String(c.value)) + '</div>' +
+            '<div class="metrics-kpi-sub">' + escHtml(c.sub) + escHtml(vTag) + '</div>' +
+            '<div class="metrics-kpi-bar"><div class="metrics-kpi-bar-fill" style="background:' + c.color + ';"></div></div>' +
+          '</div>';
+        }).join('');
+        // ★ 渲染后应用KPI列数配置（不足时占满一行）
+        applyKpiColumnsConfig(_kpiColumns);
+      }
+    } catch (e) {
+      grid.innerHTML = '<div class="metrics-empty">渲染异常: ' + escHtml(e.message || '') + '</div>';
+    }
+
+    // 原始数据
+    var raw = $('rawBox');
+    if (raw) {
+      var section = _data[dm.key === 'ai-health' ? 'ai_overall' : dm.key === 'plugins' ? 'step4_plugins' : dm.key === 'pipeline-ext' ? 'pipeline_ext' : dm.key === 'p0' ? 'p0_governance' : dm.key === 'smart' ? 'smart_capabilities' : dm.key === 'runtime' ? 'system' : dm.key === 'blue-red' ? 'blue_red' : dm.key === 'cdp-browser' ? 'cdp_browser' : dm.key] || {};
+      // 同时附带 step2_breakdown / health 给 pipeline-ext / ai-health
+      if (dm.key === 'pipeline-ext') section = { pipeline_ext: _data.pipeline_ext, step2_breakdown: _data.step2_breakdown };
+      if (dm.key === 'ai-health') section = { ai_overall: _data.ai_overall, health: _data.health };
+      raw.textContent = JSON.stringify(section, null, 2);
+    }
+  }
+
+  function renderLogs(logs) {
+    var box = $('logContent');
+    if (!box) return;
+    if (!logs || logs.length === 0) {
+      box.innerHTML = '<div class="metrics-log-line"><span class="log-msg-empty">暂无日志</span></div>';
+      return;
+    }
+    var html = logs.slice(-50).reverse().map(function(l) {
+      var ts = l.ts || l.time || '';
+      var text = l.text || l.message || '';
+      var lvl = 'info';
+      if (/error|err|fail|exception/i.test(text)) lvl = 'err';
+      else if (/warn/i.test(text)) lvl = 'warn';
+      else if (/ok|pass|success/i.test(text)) lvl = 'ok';
+      ts = String(ts).replace(/^\d{4}-\d{2}-\d{2}T?/, '').replace(/\.\d+Z?$/, '').replace(' ', ' ').slice(0, 8);
+      return '<div class="metrics-log-line">' +
+        '<span class="log-ts">' + escHtml(ts) + '</span>' +
+        '<span class="log-level ' + lvl + '">' + lvl.toUpperCase() + '</span>' +
+        '<span class="log-msg">' + escHtml(text) + '</span>' +
+      '</div>';
+    }).join('');
+    box.innerHTML = html;
+  }
+
+  async function loadMetrics() {
+    var d = await api('GET', '/api/metrics-summary');
+    if (!d || d.error || !d.ok) {
+      A.toast('指标数据加载失败：' + (d && d.error || '未知错误'), 'error');
+      return;
+    }
+    _data = d;
+    renderDomainKpis();
+    renderDetail();
+    // ★ 应用KPI列数配置
+    applyKpiColumnsConfig(_kpiColumns);
+  }
+
+  async function loadLogs() {
+    var d = await api('GET', '/api/log-history');
+    if (Array.isArray(d)) {
+      renderLogs(d);
+    }
+  }
+
+  // tab 切换
+  A.$$('.metrics-tab').forEach(function(t) {
+    t.addEventListener('click', function() {
+      A.$$('.metrics-tab').forEach(function(x){x.classList.remove('active');});
+      t.classList.add('active');
+      var tab = t.getAttribute('data-tab');
+      $('tabKpi').classList.toggle('active', tab === 'kpi');
+      $('tabRaw').classList.toggle('active', tab === 'raw');
+      $('tabToken').classList.toggle('active', tab === 'token');
+      $('tabUnified').classList.toggle('active', tab === 'unified');
+      if (tab === 'token') {
+        loadTokenStats();
+        loadTokenDashboard();
+        loadTokenPhases();
+      }
+      // ★ KPI 总览并入：首次激活「统一 KPI」tab 时加载一次（内部缓存，重复切换不重新请求）
+      if (tab === 'unified' && window._loadUnifiedKpi) {
+        window._loadUnifiedKpi($('tabUnified'));
+      }
+    });
+  });
+
+  // ★ P2-6 H18: GET /api/token-stats（会话级统计 KPI）
+  function loadTokenStats() {
+    A.api('GET', '/api/token-stats').then(function(r) {
+      if (!r || !r.ok) {
+        var errText = (r && r.error) || '加载失败';
+        ['tokTotalTokens', 'tokSessionInput', 'tokSessionOutput', 'tokTotalCost', 'tokModel'].forEach(function(id) {
+          var el = $(id);
+          if (el) el.textContent = '—';
+        });
+        return;
+      }
+      var cur = r.cur || {};
+      var total = r.total || {};
+      var setVal = function(id, v) {
+        var el = $(id);
+        if (el) el.textContent = v == null ? '-' : String(v);
+      };
+      setVal('tokTotalTokens', (total.input_tokens || 0) + (total.output_tokens || 0));
+      setVal('tokSessionInput', cur.input_tokens || 0);
+      setVal('tokSessionOutput', cur.output_tokens || 0);
+      setVal('tokTotalCost', (total.cost_cny != null ? total.cost_cny : '-') + ' ¥');
+      setVal('tokModel', r.model || '-');
+    });
+  }
+
+  // ★ P2-6 H16: GET /api/token-dashboard（历史 Run 表格）
+  function loadTokenDashboard() {
+    var body = $('tokDashboardBody');
+    if (!body) return;
+    body.innerHTML = '<tr><td colspan="6" class="tok-empty">加载中...</td></tr>';
+    A.api('GET', '/api/token-dashboard').then(function(r) {
+      if (!r || !r.ok) {
+        body.innerHTML = '<tr><td colspan="6" class="tok-empty">' + esc((r && r.error) || '加载失败') + '</td></tr>';
+        return;
+      }
+      var runs = r.runs || [];
+      if (runs.length === 0) {
+        body.innerHTML = '<tr><td colspan="6" class="tok-empty">暂无历史数据（执行流水线后生成）</td></tr>';
+        return;
+      }
+      var html = runs.map(function(x) {
+        return '<tr>' +
+          '<td class="tok-mono">' + esc(x.run_id || '-') + '</td>' +
+          '<td>' + esc(x.model || '-') + '</td>' +
+          '<td>' + (x.input_tokens || 0).toLocaleString() + '</td>' +
+          '<td>' + (x.output_tokens || 0).toLocaleString() + '</td>' +
+          '<td>' + (x.total_tokens || 0).toLocaleString() + '</td>' +
+          '<td class="tok-mono">' + (x.cost_estimate != null ? x.cost_estimate.toFixed(6) : '-') + '</td>' +
+          '</tr>';
+      }).join('');
+      body.innerHTML = html;
+    });
+  }
+
+  // ★ P2-6 H17: GET /api/token-phase-breakdown（Phase 明细表）
+  function loadTokenPhases() {
+    var body = $('tokPhaseBody');
+    if (!body) return;
+    body.innerHTML = '<tr><td colspan="6" class="tok-empty">加载中...</td></tr>';
+    A.api('GET', '/api/token-phase-breakdown').then(function(r) {
+      if (!r || !r.ok) {
+        body.innerHTML = '<tr><td colspan="6" class="tok-empty">' + esc((r && r.error) || '加载失败') + '</td></tr>';
+        return;
+      }
+      var phases = r.phases || [];
+      if (phases.length === 0) {
+        body.innerHTML = '<tr><td colspan="6" class="tok-empty">' + esc(r.note || '暂无 Phase 级 Token 数据') + '</td></tr>';
+        return;
+      }
+      var html = phases.map(function(p) {
+        return '<tr>' +
+          '<td>' + esc(p.phase || '-') + '</td>' +
+          '<td>' + (p.prompt_tokens || 0).toLocaleString() + '</td>' +
+          '<td>' + (p.completion_tokens || 0).toLocaleString() + '</td>' +
+          '<td>' + (p.total_tokens || 0).toLocaleString() + '</td>' +
+          '<td class="tok-mono">' + (p.cost_usd != null ? p.cost_usd.toFixed(6) : '-') + '</td>' +
+          '<td>' + (p.calls || 0) + '</td>' +
+          '</tr>';
+      }).join('');
+      body.innerHTML = html;
+    });
+  }
+
+  // 刷新按钮
+  var btn = $('btnRefreshMetrics');
+  if (btn) btn.addEventListener('click', function() {
+    // 并行加载指标和日志，减少等待时间
+    Promise.all([loadMetrics(), loadLogs()]);
+  });
+
+  // ★ KPI 卡片点击直达问题点（事件委托，支持动态渲染）
+  document.addEventListener('click', function(e) {
+    var card = e.target.closest('.metrics-kpi-card.kpi-clickable');
+    if (!card) return;
+    var jumpType = card.getAttribute('data-jump-type');
+    var jumpId = card.getAttribute('data-jump-id');
+    var jumpUrl = card.getAttribute('data-jump-url');
+    if (!jumpType) return;
+
+    if (jumpType === 'case') {
+      // 跳转到用例编辑页
+      window.open('/intent-edit?case_id=' + encodeURIComponent(jumpId), '_blank');
+    } else if (jumpType === 'log') {
+      // 跳转到日志面板
+      window.location.href = '/log-panel';
+    } else if (jumpType === 'errors') {
+      // 展开错误列表弹窗
+      _showCdpErrorsDialog();
+    } else if (jumpType === 'url') {
+      // 跳转到指定 URL
+      window.location.href = jumpUrl || '/pipeline';
+    }
+  });
+
+  // ★ CDP 错误列表弹窗
+  function _showCdpErrorsDialog() {
+    if (!_data || !_data.cdp_browser) return;
+    var errors = _data.cdp_browser.errors || [];
+    if (errors.length === 0) {
+      A.toast('暂无错误详情', 'info');
+      return;
+    }
+    var html = '<div class="cdp-error-dialog">' +
+      '<div class="cdp-error-dialog-header">CDP 执行错误列表（' + errors.length + ' 条）</div>' +
+      '<div class="cdp-error-dialog-body">' +
+      errors.map(function(e, i) {
+        return '<div class="cdp-error-item" data-case-id="' + escAttr(e.case_id || '') + '">' +
+          '<div class="cdp-error-item-top">' +
+            '<span class="cdp-error-item-idx">#' + (i + 1) + '</span>' +
+            '<span class="cdp-error-item-type">' + escHtml(e.error_type || '未知') + '</span>' +
+            '<span class="cdp-error-item-jump" data-case-id="' + escAttr(e.case_id || '') + '">查看用例 →</span>' +
+          '</div>' +
+          '<div class="cdp-error-item-msg">' + escHtml(e.error_message || '') + '</div>' +
+        '</div>';
+      }).join('') +
+      '</div>' +
+      '<div class="cdp-error-dialog-footer"><button class="btn-close-error-dialog">关闭</button></div>' +
+    '</div>';
+    var overlay = document.createElement('div');
+    overlay.className = 'cdp-error-overlay';
+    overlay.innerHTML = html;
+    document.body.appendChild(overlay);
+
+    // 关闭按钮
+    overlay.querySelector('.btn-close-error-dialog').addEventListener('click', function() {
+      document.body.removeChild(overlay);
+    });
+    overlay.addEventListener('click', function(ev) {
+      if (ev.target === overlay) document.body.removeChild(overlay);
+    });
+    // 错误项点击跳转用例
+    overlay.querySelectorAll('.cdp-error-item-jump').forEach(function(el) {
+      el.addEventListener('click', function() {
+        var cid = this.getAttribute('data-case-id');
+        if (cid) {
+          document.body.removeChild(overlay);
+          window.open('/intent-edit?case_id=' + encodeURIComponent(cid), '_blank');
+        }
+      });
+    });
+  }
+
+  // ★ SSE 告警订阅：识别 _alert 字段，展示 Toast + 可点击跳转
+  // ★ 修复：加最大重连次数 + 指数退避 + 显式 close + 页面清理
+  var _alertEventSource = null;
+  var _alertSseReconnectCount = 0;
+  var _alertSseMaxReconnect = 3;
+  var _alertSseReconnectTimer = null;
+
+  function _startAlertSSE() {
+    if (_alertEventSource) return;
+    try {
+      _alertEventSource = new EventSource('/api/log-stream');
+      _alertEventSource.onopen = function() { _alertSseReconnectCount = 0; };
+      _alertEventSource.onmessage = function(ev) {
+        try {
+          var data = JSON.parse(ev.data);
+          var logText = data.log || '';
+          // 识别结构化告警 JSON
+          if (logText.indexOf('"_alert"') >= 0 || logText.indexOf('_alert') >= 0) {
+            var alert = JSON.parse(logText);
+            if (alert && alert._alert === true) {
+              _showAlertToast(alert);
+            }
+          }
+        } catch (e) {
+          // 非 JSON 日志，忽略
+        }
+      };
+      _alertEventSource.onerror = function() {
+        // ★ 修复：显式 close 屏蔽浏览器原生无限重连
+        try { _alertEventSource.close(); } catch(e2) {}
+        _alertEventSource = null;
+        // ★ 修复：最多重连 3 次，线性退避 1s/2s/3s
+        if (_alertSseReconnectCount < _alertSseMaxReconnect) {
+          _alertSseReconnectCount++;
+          var delay = 1000 * _alertSseReconnectCount;
+          _alertSseReconnectTimer = setTimeout(function() {
+            _alertSseReconnectTimer = null;
+            _startAlertSSE();
+          }, delay);
+        }
+      };
+    } catch (e) {
+      // SSE 不支持或启动失败，静默
+    }
+  }
+
+  function _cleanupAlertSSE() {
+    if (_alertSseReconnectTimer) {
+      clearTimeout(_alertSseReconnectTimer);
+      _alertSseReconnectTimer = null;
+    }
+    if (_alertEventSource) {
+      try { _alertEventSource.close(); } catch(e) {}
+      _alertEventSource = null;
+    }
+  }
+
+  function _showAlertToast(alert) {
+    var msg = alert.message || alert.error_type || '告警';
+    var caseId = alert.case_id || '';
+    var jumpUrl = alert.jump_url || (caseId ? '/intent-edit?case_id=' + encodeURIComponent(caseId) : '');
+
+    // 使用 A.toast 显示，但增强为可点击
+    if (A.toast) {
+      A.toast('⚠ CDP用例失败: ' + msg.substring(0, 60), 'error');
+    }
+
+    // 额外：在页面顶部显示可点击的告警条
+    var banner = document.createElement('div');
+    banner.className = 'cdp-alert-banner';
+    banner.innerHTML = '<span class="cdp-alert-banner-icon">⚠</span>' +
+      '<span class="cdp-alert-banner-msg">CDP 用例执行失败: ' + escHtml(msg.substring(0, 80)) + '</span>' +
+      (jumpUrl ? '<span class="cdp-alert-banner-action">查看详情 →</span>' : '') +
+      '<span class="cdp-alert-banner-close">✕</span>';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:var(--state-error);color:var(--text-on-color);padding:10px 20px;display:flex;align-items:center;gap:12px;z-index:10001;font-size:13px;box-shadow:0 2px 8px var(--bg-overlay);';
+    document.body.appendChild(banner);
+
+    // 点击跳转
+    if (jumpUrl) {
+      banner.querySelector('.cdp-alert-banner-action').style.cssText = 'cursor:pointer;text-decoration:underline;margin-left:auto;';
+      banner.querySelector('.cdp-alert-banner-action').addEventListener('click', function() {
+        window.open(jumpUrl, '_blank');
+        document.body.removeChild(banner);
+      });
+    }
+    // 关闭按钮
+    banner.querySelector('.cdp-alert-banner-close').style.cssText = 'cursor:pointer;margin-left:' + (jumpUrl ? '12px' : 'auto') + ';font-size:16px;';
+    banner.querySelector('.cdp-alert-banner-close').addEventListener('click', function() {
+      document.body.removeChild(banner);
+    });
+    // 5秒后自动消失
+    setTimeout(function() {
+      if (banner.parentNode) document.body.removeChild(banner);
+    }, 8000);
+  }
+
+  // 登录态守卫
+  A._onAuthOk = function() {
+    A._renderSidebarUser();
+    A.applyPermissions();
+    renderDomainStrip();
+    // 并行加载指标和日志，减少等待时间
+    Promise.all([loadMetrics(), loadLogs()]);
+    // ★ 加载KPI列数配置
+    A.api('GET', '/api/bg-config').then(function(r) {
+      if (r && r.ok && r.kpi_columns) {
+        _kpiColumns = r.kpi_columns;
+        applyKpiColumnsConfig(_kpiColumns);
+      }
+    });
+    A._startStepBadgePolling();
+    // ★ 启动 SSE 告警订阅
+    _startAlertSSE();
+  };
+  // ★ 修复：页面切换/关闭时清理 SSE 连接，防止连接泄漏
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) { _cleanupAlertSSE(); }
+  });
+  document.addEventListener('pagehide', _cleanupAlertSSE);
+  document.addEventListener('beforeunload', _cleanupAlertSSE);
+  // ★ 修复：导航点击时立即清理（不等 visibilitychange）
+  document.addEventListener('click', function(e) {
+    try {
+      var link = e.target.closest('a');
+      if (link && link.href) { _cleanupAlertSSE(); }
+    } catch(ex) {}
+  });
+  if (A._currentUser) {
+    renderDomainStrip();
+    // 并行加载指标和日志，减少等待时间
+    Promise.all([loadMetrics(), loadLogs()]);
+    // ★ 加载KPI列数配置
+    A.api('GET', '/api/bg-config').then(function(r) {
+      if (r && r.ok && r.kpi_columns) {
+        _kpiColumns = r.kpi_columns;
+        applyKpiColumnsConfig(_kpiColumns);
+      }
+    });
+  }
+})();
+</script>
+
+{% endblock %}

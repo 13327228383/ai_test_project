@@ -1,0 +1,42 @@
+{
+  "locked_at": "2026-10-04",
+  "description": "前端布局锁 — 8 分区 sidebar (步骤区/审核区/指标区/文档区/日志区/项目区/配置区/用户区)。锁定基线含已承诺的『当前分区手风琴自动展开 + 侧栏交互就绪门 + 折叠态高亮当前分区』增强；2026-10-02 重新祝福：CLS 根因修复后的布局基线（布局锁+悬空属性门+EOL 全过）",
+  "expected_sections": [
+    "步骤区",
+    "审核区",
+    "指标区",
+    "文档区",
+    "日志区",
+    "项目区",
+    "配置区",
+    "用户区"
+  ],
+  "files": {
+    "src/frontend/templates/_layout_base.html": {
+      "sha256": "5053674feea9c3f279647302c6f2c301135a9da0ae9c95df2e0ef39079ea765c",
+      "size": 35288
+    },
+    "src/frontend/static/app-design.css": {
+      "sha256": "4cf20234f105ea620a7a99aba6207ed4b8c70901fb882b3156dbf1a802b0f302",
+      "size": 107278
+    }
+  },
+  "actual_sections": [
+    "步骤区",
+    "审核区",
+    "指标区",
+    "文档区",
+    "日志区",
+    "项目区",
+    "配置区",
+    "用户区"
+  ],
+  "section_count": 8,
+  "attr_gate_allowlist": [],
+  "attr_gate_policy": "根元素(html / :root / body)上的 data-* 属性门必须存在写入点（setAttribute / toggleAttribute / dataset.x= / 模板静态属性），否则 verify_lock.py 判定失败。白名单仅用于确由外部或第三方设置的属性，加入前须注明理由。",
+  "note_2026_09_20": "通用修复：切换功能区卡顿/无反应/UI 混乱。变更点：① _layout_base.html 在 CSS 之前同步恢复个性化配置快照（消除首帧后全页换皮重排）；② app-design.css 增加侧栏交互就绪门 html[data-sb-ready]、当前分区标题高亮、步骤徽标禁止换行（消除步骤区加载后长高 64px 把菜单整体推走）。分区数量/名称未变。",
+  "note_2026_09_20_check": "verify_lock.py 新增第 3 项检查『悬空属性门』：起因是 app-design.css 长期存在 html:not([data-sb-ready=\"1\"]) 门而全仓库无任何代码设置 data-sb-ready → 规则恒成立 → 菜单永久 pointer-events:none（表现为『切换功能区点了没反应』），且因缺乏显式痕迹被反复『修复』仍复发。自测 src/frontend/selftest_verify_lock.py（8 单元场景 + 真实历史回归）。",
+  "hash_mode": "normalized-lf",
+  "hash_mode_note": "锁指纹按内容换行归一化(CRLF→LF)后的 sha256 计算，size 为归一化字节数。原因：仓库存 LF、Windows 工作区因 core.autocrlf=true 为 CRLF，若按字节级比对则 Linux CI 必然误报 HASH MISMATCH。",
+  "note_2026_09_21": "异步区域空间预留契约：新增 [data-async=...] min-height 规则与 --async-h-* 变量（根因修复 CLS，见 logs/_um_cls_trace_out.json），哈希相应更新。"
+}

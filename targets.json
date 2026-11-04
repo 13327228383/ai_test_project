@@ -1,0 +1,47 @@
+{
+  "api_demo": {
+    "kind": "API",
+    "port": 8010,
+    "description": "Flask REST 靶子：token 鉴权 / CRUD / 参数校验(400) / 业务边界(404/403) / 统一错误码",
+    "python": "target_systems/hospital_sut/.venv/Scripts/python.exe",
+    "script": "examples/api_demo/e2e_pipeline.py",
+    "cwd": ".",
+    "health_url": "http://127.0.0.1:8010/health",
+    "report": "e2e-test-report-2026-08-10/api_demo_report.html",
+    "enabled": true
+  },
+  "spa_demo": {
+    "kind": "SPA",
+    "port": 8020,
+    "description": "纯静态 SPA 靶子：hash 客户端路由 / 前端渲染 / 表单校验 / localStorage 状态 / 动态 DOM",
+    "python": "target_systems/hospital_sut/.venv/Scripts/python.exe",
+    "script": "examples/spa_demo/e2e_pipeline.py",
+    "cwd": ".",
+    "health_url": "http://127.0.0.1:8020/",
+    "report": "e2e-test-report-2026-08-10/spa_demo_report.html",
+    "enabled": true
+  },
+  "promo_demo": {
+    "kind": "Web",
+    "port": 8030,
+    "description": "云书阁电商演示商城：故意注入3个真实缺陷（超卖/优惠券门槛/越权IDOR），用于推广与验收素材",
+    "python": "target_systems/hospital_sut/.venv/Scripts/python.exe",
+    "script": "examples/promo_demo/e2e_pipeline.py",
+    "cwd": ".",
+    "health_url": "http://127.0.0.1:8030/health",
+    "report": "e2e-test-report-2026-08-29/promo_demo_report.html",
+    "enabled": true
+  },
+  "smartshop": {
+    "kind": "Admin",
+    "port": 8000,
+    "description": "SmartShop Django Admin：38 操作 × 22 断言 × 12 方法 × 6 模型（重型靶子，需独立环境）",
+    "python": "",
+    "script": "examples/smartshop/e2e_pipeline.py",
+    "cwd": ".",
+    "health_url": "http://localhost:8000/admin/",
+    "report": "e2e-test-report/SmartShop_report.html",
+    "enabled": false,
+    "unavailable_reason": "依赖 Django(projecthub.settings) + MySQL，当前环境未安装 Django 且无 projecthub 工程，无法在本环境启动"
+  }
+}

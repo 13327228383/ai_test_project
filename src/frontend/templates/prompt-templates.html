@@ -1,0 +1,976 @@
+{% extends "_layout_base.html" %}
+{% block title %}Prompt 模板管理 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+Prompt 模板管理
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnNewPrompt" data-role="admin" data-tooltip="新增自定义模板" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  新增
+</button>
+<button class="btn-topbar" id="btnReloadPrompts" data-role="admin" data-tooltip="刷新模板列表" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  刷新
+</button>
+<button class="btn-topbar" id="btnReseedPrompts" data-role="admin" data-tooltip="重新初始化缺失的种子模板" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+  重建种子
+</button>
+{% endblock %}
+
+{% block content %}
+
+<div class="pt-info-bar">
+  <div class="pt-info-item">
+    <span class="pt-info-label">配置层级</span>
+    <span class="pt-info-value pt-info-warn">系统级 · DB 唯一事实源</span>
+  </div>
+  <div class="pt-info-item">
+    <span class="pt-info-label">模板总数</span>
+    <span class="pt-info-value" id="ptCount">0</span>
+  </div>
+  <div class="pt-info-item">
+    <span class="pt-info-label">种子模板</span>
+    <span class="pt-info-value" id="ptSeedCount">0</span>
+  </div>
+</div>
+
+<!-- ★ P2-6 H38-H40/H42-H45: 同义词 Tab（全局 / 项目覆盖） -->
+<div class="pt-tab-nav" id="ptTabNav">
+  <div class="pt-tab-item active" data-pt-tab="prompts">Prompt 模板</div>
+  <div class="pt-tab-item" data-pt-tab="synonyms">全局同义词</div>
+  <div class="pt-tab-item" data-pt-tab="overrides">本项目覆盖</div>
+</div>
+
+<div class="pt-tab-pane" id="ptPane-prompts">
+<div class="pt-table-wrap">
+  <table class="pt-table" id="ptTable">
+    <thead>
+      <tr>
+        <th class="pt-col-16">模板名称</th>
+        <th class="pt-col-10">分类</th>
+        <th class="pt-col-20">描述</th>
+        <th>模板内容预览</th>
+        <th class="pt-col-8">状态</th>
+        <th class="pt-col-8">类型</th>
+        <th class="pt-col-12">更新时间</th>
+        <th class="pt-col-14">操作</th>
+      </tr>
+    </thead>
+    <tbody id="ptBody">
+      <tr><td colspan="8" class="pt-empty">加载中...</td></tr>
+    </tbody>
+  </table>
+</div>
+</div>
+
+<!-- 全局同义词（H42/H43/H44/H45） -->
+<div class="pt-tab-pane pt-hidden" id="ptPane-synonyms">
+  <div class="pt-table-toolbar">
+    <button class="btn-topbar" id="btnAddSynonym" type="button">新增同义词</button>
+    <button class="btn-topbar" id="btnBatchSynonyms" type="button">批量导入</button>
+  </div>
+  <div class="pt-table-wrap">
+    <table class="pt-table">
+      <thead>
+        <tr>
+          <th class="pt-col-24">核心词</th>
+          <th>同义词组（逗号分隔）</th>
+          <th class="pt-col-16">操作</th>
+        </tr>
+      </thead>
+      <tbody id="synonymBody">
+        <tr><td colspan="3" class="pt-empty">加载中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="pt-batch-box pt-hidden" id="batchSynonymBox">
+    <textarea id="batchSynonymText" class="pt-batch-textarea" placeholder="每行：核心词=同义词1,同义词2&#10;例如：创建=新增,添加,建立"></textarea>
+    <div class="pt-batch-actions">
+      <button class="btn-topbar" id="btnBatchSynonymConfirm" type="button">导入</button>
+      <button class="btn-topbar" id="btnBatchSynonymCancel" type="button">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 本项目同义词覆盖（H38/H39/H40） -->
+<div class="pt-tab-pane pt-hidden" id="ptPane-overrides">
+  <div class="pt-table-toolbar">
+    <button class="btn-topbar" id="btnAddOverride" type="button">新增覆盖</button>
+  </div>
+  <div class="pt-table-wrap">
+    <table class="pt-table">
+      <thead>
+        <tr>
+          <th class="pt-col-24">核心词</th>
+          <th>覆盖同义词组</th>
+          <th class="pt-col-20">更新时间</th>
+          <th class="pt-col-16">操作</th>
+        </tr>
+      </thead>
+      <tbody id="overrideBody">
+        <tr><td colspan="4" class="pt-empty">加载中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 新增/编辑同义词弹层（全局 + 覆盖共用） -->
+<div class="pt-modal-mask pt-hidden" id="synModalMask"></div>
+<div class="pt-modal pt-hidden" id="synModal">
+  <div class="pt-modal-header">
+    <span class="pt-modal-title" id="synModalTitle">新增同义词</span>
+    <button class="pt-modal-close" id="synModalClose" type="button" aria-label="关闭">✕</button>
+  </div>
+  <div class="pt-modal-body">
+    <input type="hidden" id="synEditId" />
+    <input type="hidden" id="synEditMode" value="global" />
+    <div class="pt-form-row">
+      <label class="pt-form-label">核心词</label>
+      <input type="text" id="synCoreWord" class="pt-form-input" maxlength="128" placeholder="如 创建" />
+    </div>
+    <div class="pt-form-row">
+      <label class="pt-form-label">同义词组（逗号分隔）</label>
+      <input type="text" id="synGroup" class="pt-form-input" placeholder="如 新增,添加,建立" />
+    </div>
+  </div>
+  <div class="pt-modal-footer">
+    <button class="btn-secondary" id="synModalCancel" type="button">取消</button>
+    <button class="btn-primary" id="synModalSave" type="button">保存</button>
+  </div>
+</div>
+
+<div class="pt-modal-mask pt-hidden" id="ptModalMask">
+  <div class="pt-modal">
+    <div class="pt-modal-header">
+      <span class="pt-modal-title" id="ptModalTitle">模板详情</span>
+      <button class="pt-modal-close" id="ptModalClose" data-tooltip="关闭" data-tooltip-pos="left">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="pt-modal-body">
+      <div class="pt-field">
+        <label class="pt-field-label" for="ptInputName">模板名称</label>
+        <input type="text" id="ptInputName" class="pt-field-input" placeholder="如 my_custom_prompt" autocomplete="off" />
+        <span class="pt-field-hint">全局唯一，作为模板主键。种子模板不可修改名称。</span>
+      </div>
+      <div class="pt-field">
+        <label class="pt-field-label" for="ptInputCategory">分类</label>
+        <input type="text" id="ptInputCategory" class="pt-field-input" placeholder="如 Step2 需求拆解 / 自定义" autocomplete="off" />
+      </div>
+      <div class="pt-field">
+        <label class="pt-field-label" for="ptInputDesc">描述</label>
+        <input type="text" id="ptInputDesc" class="pt-field-input" placeholder="模板用途描述" autocomplete="off" />
+      </div>
+      <div class="pt-field pt-field-grow">
+        <label class="pt-field-label" for="ptInputText">模板内容</label>
+        <textarea id="ptInputText" class="pt-field-textarea" rows="12" placeholder="输入 Prompt 模板正文（支持 {{变量}} 占位符，运行时由流水线注入）"></textarea>
+        <span class="pt-field-hint">支持 {{占位符}} 语法（mustache 风格），运行时由流水线注入上下文。JSON 花括号无需转义。</span>
+      </div>
+      <div class="pt-field pt-field-inline">
+        <label class="pt-field-label" for="ptInputEnabled">启用状态</label>
+        <input type="checkbox" id="ptInputEnabled" class="pt-field-input" />
+        <span class="pt-field-hint">关闭后该模板不会被流水线加载。</span>
+      </div>
+    </div>
+    <div class="pt-modal-footer">
+      <button class="pt-btn-ghost" id="ptBtnCancel">取消</button>
+      <button class="pt-btn-primary" id="ptBtnSave">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        保存
+      </button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block head_extra %}
+<style>
+.pt-info-bar {
+  display: flex; gap: 32px;
+  padding: 16px 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--state-warning);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+.pt-info-item { display: flex; flex-direction: column; gap: 4px; }
+.pt-info-label { font-size: var(--fs-small); color: var(--text-secondary); }
+.pt-info-value { font-size: var(--fs-h3); font-weight: var(--fw-semibold); color: var(--text-primary); font-family: var(--font-mono); }
+.pt-info-warn { color: var(--state-warning-text); font-size: var(--fs-small); }
+.pt-col-8 { width: 8%; }
+.pt-col-10 { width: 10%; }
+.pt-col-12 { width: 12%; }
+.pt-col-14 { width: 14%; }
+.pt-col-16 { width: 16%; }
+.pt-col-20 { width: 20%; }
+.pt-col-24 { width: 24%; }
+.pt-hidden { display: none; }
+/* ★ 根因修复：压过 .pt-modal-mask/.pt-modal 等后续同类选择器的 display。
+     用同源更高特异性(0,2,0)而非 !important，避免 JS 内联 display 失效。 */
+.pt-hidden.pt-hidden { display: none; }
+
+.pt-table-wrap {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: auto;
+}
+.pt-table { width: 100%; border-collapse: collapse; font-size: var(--fs-small); border: 1px solid var(--text-tertiary); }
+.pt-table thead th {
+  text-align: left; padding: 12px 16px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-weight: var(--fw-medium);
+  border-bottom: 1px solid var(--text-tertiary);
+  border-right: 1px solid var(--text-tertiary);
+  white-space: nowrap;
+}
+.pt-table thead th:last-child { border-right: none; }
+.pt-table tbody td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--text-tertiary);
+  border-right: 1px solid var(--text-tertiary);
+  color: var(--text-primary);
+  vertical-align: top;
+}
+.pt-table tbody td:last-child { border-right: none; }
+.pt-table tbody tr:last-child td { border-bottom: none; }
+.pt-table tbody tr:hover { background: var(--bg-base); }
+.pt-empty { text-align: center; color: var(--text-tertiary); padding: 48px !important; }
+.pt-name { font-family: var(--font-mono); font-weight: var(--fw-medium); color: var(--color-primary); word-break: break-all; }
+.pt-category { font-size: var(--fs-micro); color: var(--text-secondary); }
+.pt-desc { font-size: var(--fs-micro); color: var(--text-tertiary); }
+.pt-seed-tag {
+  display: inline-block; margin-left: 4px;
+  padding: 1px 6px; border-radius: var(--radius-xs);
+  font-size: 11px; font-weight: var(--fw-medium);
+  background: var(--state-warning-soft);
+  color: var(--state-warning-text);
+  vertical-align: middle;
+}
+.pt-custom-tag {
+  display: inline-block; margin-left: 4px;
+  padding: 1px 6px; border-radius: var(--radius-xs);
+  font-size: 11px; font-weight: var(--fw-medium);
+  background: var(--bg-base);
+  color: var(--text-tertiary);
+  vertical-align: middle;
+}
+.pt-preview {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  font-size: var(--fs-micro);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 72px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  line-clamp: 3;
+}
+.pt-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 10px; border-radius: var(--radius-xs);
+  font-size: var(--fs-micro); font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+.pt-badge-on { background: var(--state-success-soft); color: var(--state-success-text); }
+.pt-badge-off { background: var(--bg-base); color: var(--text-tertiary); }
+.pt-updated { font-family: var(--font-mono); font-size: var(--fs-micro); color: var(--text-tertiary); white-space: nowrap; }
+.pt-actions { display: flex; gap: 6px; white-space: nowrap; flex-wrap: wrap; }
+.pt-action-btn {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--fs-micro);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.pt-action-btn:hover { background: var(--bg-base); color: var(--text-primary); border-color: var(--color-primary); }
+.pt-action-btn.pt-action-del:hover { color: var(--state-danger-text); border-color: var(--state-danger-text); }
+.pt-action-btn.pt-action-restore:hover { color: var(--state-warning-text); border-color: var(--state-warning-text); }
+.pt-action-btn svg { flex-shrink: 0; }
+
+.pt-modal-mask {
+  position: fixed; inset: 0;
+  background: var(--bg-overlay);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+.pt-modal {
+  width: 720px; max-width: 92vw; max-height: 88vh;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--surface-shadow-float);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.pt-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+}
+.pt-modal-title { font-size: var(--fs-h3); font-weight: var(--fw-semibold); color: var(--text-primary); }
+.pt-modal-close {
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text-tertiary); padding: 4px; border-radius: var(--radius-sm);
+  display: inline-flex; align-items: center;
+}
+.pt-modal-close:hover { background: var(--bg-base); color: var(--text-primary); }
+.pt-modal-body { padding: 20px; overflow: hidden; flex: 1; display: flex; flex-direction: column; gap: 14px; }
+.pt-field { display: flex; flex-direction: column; gap: 6px; }
+.pt-field-grow { flex: 1; min-height: 0; }
+.pt-field-grow .pt-field-textarea { flex: 0 0 auto; min-height: 120px; overflow: auto !important; resize: vertical; }
+.pt-field-inline { flex-direction: row; align-items: center; gap: 10px; }
+.pt-field-label { font-size: var(--fs-small); color: var(--text-secondary); font-weight: var(--fw-medium); }
+.pt-field-input {
+  padding: 8px 12px; background: var(--bg-base);
+  border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+  color: var(--text-primary); font-size: var(--fs-small); font-family: var(--font-mono);
+  transition: border-color 0.15s;
+}
+.pt-field-input:focus { outline: none; border-color: var(--color-primary); }
+.pt-field-input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--color-primary); }
+.pt-field-input:disabled { background: var(--bg-elevated); color: var(--text-tertiary); cursor: not-allowed; }
+.pt-field-textarea {
+  padding: 10px 12px; background: var(--bg-base);
+  border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+  color: var(--text-primary); font-size: var(--fs-small); font-family: var(--font-mono);
+  resize: vertical; min-height: 200px; line-height: 1.5;
+  overflow: auto; white-space: pre-wrap;
+  transition: border-color 0.15s;
+}
+.pt-field-textarea:focus { outline: none; border-color: var(--color-primary); }
+.pt-field-textarea:disabled {
+  background: var(--bg-elevated); color: var(--text-primary);
+  resize: none; cursor: default;
+}
+.pt-field-hint { font-size: var(--fs-micro); color: var(--text-tertiary); }
+.pt-modal-footer {
+  display: flex; align-items: center; justify-content: flex-end; gap: 12px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+}
+.pt-btn-ghost {
+  padding: 8px 16px; background: transparent; color: var(--text-secondary);
+  border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+  font-size: var(--fs-small); cursor: pointer; white-space: nowrap;
+}
+.pt-btn-ghost:hover { background: var(--bg-base); color: var(--text-primary); }
+.pt-btn-primary {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; background: var(--color-primary); color: var(--text-inverse);
+  border: none; border-radius: var(--radius-sm);
+  font-size: var(--fs-small); font-weight: var(--fw-medium); cursor: pointer; white-space: nowrap;
+}
+.pt-btn-primary:hover { background: var(--color-primary-hover); }
+
+/* ════════════ 同义词 Tab（P2-6 H38-H40/H42-H45） ════════════ */
+.pt-tab-nav {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--border-default);
+  margin-bottom: var(--space-3);
+}
+.pt-tab-item {
+  padding: 8px 14px;
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  user-select: none;
+}
+.pt-tab-item:hover { color: var(--text-primary); }
+.pt-tab-item.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  font-weight: var(--fw-semibold);
+}
+.pt-tab-pane { min-height: 120px; }
+/* ★ 统一布局(2026-09-05)：显式的 Tab 内容填满剩余高度消除底部空白（隐藏的兄弟 Tab/模态不占位） */
+.pt-tab-pane:not(.pt-hidden){flex:1;min-height:0;display:flex;flex-direction:column;}
+.pt-tab-pane:not(.pt-hidden) > .pt-table-wrap{flex:1;min-height:0;}
+.pt-table-toolbar {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.pt-override-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: var(--fs-micro);
+  color: var(--state-warning-text);
+  background: var(--state-warning-soft);
+  border: 1px solid var(--state-warning);
+  border-radius: 4px;
+}
+.pt-batch-box {
+  margin-top: var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  background: var(--bg-elevated);
+}
+.pt-batch-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 140px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  padding: 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  resize: vertical;
+}
+.pt-batch-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.pt-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--space-3);
+}
+.pt-form-label {
+  font-size: var(--fs-micro);
+  color: var(--text-secondary);
+}
+.pt-form-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: var(--fs-body);
+}
+.pt-form-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--color-primary-soft);
+}
+.pt-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-default);
+}
+.pt-modal-footer .btn-primary,
+.pt-modal-footer .btn-secondary {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+.pt-modal-footer .btn-primary {
+  background: var(--color-primary);
+  border: 1px solid transparent;
+  color: var(--text-on-color);
+}
+.pt-modal-footer .btn-secondary {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  'use strict';
+  var A = window._A;
+  if (!A) return;
+  var $ = A.$, esc = A.escHtml;
+
+  var prompts = [];
+  var editMode = 'view'; // view / edit / new
+
+  async function loadPrompts() {
+    var body = $('ptBody');
+    if (body) body.innerHTML = '<tr><td colspan="8" class="pt-empty">加载中...</td></tr>';
+    var r = await A.api('GET', '/api/admin/prompts');
+    if (!r || r.error) {
+      if (body) body.innerHTML = '<tr><td colspan="8" class="pt-empty">' + esc((r && r.error) || '加载失败') + '</td></tr>';
+      return;
+    }
+    var list = r.items || r.prompts || r.data || r.list || [];
+    if (!Array.isArray(list)) list = [];
+    prompts = list;
+    if ($('ptCount')) $('ptCount').textContent = prompts.length;
+    if ($('ptSeedCount')) $('ptSeedCount').textContent = prompts.filter(function(p){return p.is_seed === 1;}).length;
+    renderTable();
+  }
+
+  function renderTable() {
+    var body = $('ptBody');
+    if (!body) return;
+    if (prompts.length === 0) {
+      body.innerHTML = '<tr><td colspan="8" class="pt-empty">暂无模板，点击右上角「新增」创建</td></tr>';
+      return;
+    }
+    body.innerHTML = prompts.map(function(p) {
+      var name = p.name || '';
+      var text = p.template_text || '';
+      var category = p.category || '';
+      var desc = p.description || '';
+      var isSeed = p.is_seed === 1;
+      var hasSeedDefault = p.has_seed_default === true;
+      var enabled = (p.enabled === true || p.enabled === 1);
+      var updated = p.updated_at || '';
+      var preview = text.length > 200 ? text.slice(0, 200) + '…' : text;
+      var tipText = text.length > 500 ? text.slice(0, 500) + '…' : text;
+      var actions = '';
+      // 编辑按钮（种子和自定义都可编辑）
+      actions += '<button class="pt-action-btn" data-act="edit" data-name="' + esc(name) + '"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>编辑</button>';
+      // 恢复默认按钮（有种子默认值的模板可恢复）
+      if (hasSeedDefault) {
+        actions += '<button class="pt-action-btn pt-action-restore" data-act="restore" data-name="' + esc(name) + '"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>恢复默认</button>';
+      }
+      // 删除按钮（无种子默认值的模板可删除）
+      if (!hasSeedDefault) {
+        actions += '<button class="pt-action-btn pt-action-del" data-act="del" data-name="' + esc(name) + '"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>删除</button>';
+      }
+      return '<tr>'
+        + '<td><span class="pt-name">' + esc(name) + '</span></td>'
+        + '<td><span class="pt-category">' + esc(category || '-') + '</span></td>'
+        + '<td><span class="pt-desc">' + esc(desc || '-') + '</span></td>'
+        + '<td><div class="pt-preview tooltip-wide" data-tooltip="' + esc(tipText || '(空模板)') + '">' + esc(preview || '(空模板)') + '</div></td>'
+        + '<td>' + (enabled
+            ? '<span class="pt-badge pt-badge-on">● 启用</span>'
+            : '<span class="pt-badge pt-badge-off">○ 停用</span>') + '</td>'
+        + '<td>' + (isSeed
+            ? '<span class="pt-seed-tag">种子</span>'
+            : '<span class="pt-custom-tag">自定义</span>') + '</td>'
+        + '<td><span class="pt-updated">' + esc(updated || '-') + '</span></td>'
+        + '<td><div class="pt-actions">' + actions + '</div></td>'
+      + '</tr>';
+    }).join('');
+    bindRowActions();
+  }
+
+  function bindRowActions() {
+    document.querySelectorAll('.pt-action-btn').forEach(function(btn) {
+      // ★ 根因修复：仅显式按钮才可触发行动作。阻止事件冒泡，
+      //   避免由列表行/容器级处理器误判为「点击整行」而再次打开详情，
+      //   也避免一次点击被多路径重复处理导致需关两次。
+      btn.addEventListener('click', function(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        var act = btn.getAttribute('data-act');
+        var name = btn.getAttribute('data-name');
+        if (act === 'edit') openEditModal(name);
+        else if (act === 'del') deletePrompt(name);
+        else if (act === 'restore') restoreDefault(name, btn);
+      });
+    });
+  }
+
+  function openEditModal(name) {
+    var p = findPrompt(name);
+    if (!p) return;
+    editMode = 'edit';
+    var isSeed = p.is_seed === 1;
+    $('ptModalTitle').textContent = (isSeed ? '编辑种子模板：' : '编辑模板：') + name;
+    $('ptInputName').value = name;
+    $('ptInputName').disabled = true; // 编辑时名称不可改
+    $('ptInputCategory').value = p.category || '';
+    $('ptInputCategory').disabled = isSeed; // 种子模板分类不可改
+    $('ptInputDesc').value = p.description || '';
+    $('ptInputDesc').disabled = isSeed; // 种子模板描述不可改
+    $('ptInputText').value = p.template_text || '';
+    $('ptInputText').disabled = false;
+    $('ptInputText').rows = 12;
+    $('ptInputEnabled').checked = !!(p.enabled === true || p.enabled === 1);
+    $('ptInputEnabled').disabled = false;
+    $('ptBtnSave').style.display = '';
+    $('ptModalMask').style.display = 'flex';
+  }
+
+  function openNewModal() {
+    editMode = 'new';
+    $('ptModalTitle').textContent = '新增模板';
+    $('ptInputName').value = '';
+    $('ptInputName').disabled = false;
+    $('ptInputCategory').value = '自定义';
+    $('ptInputCategory').disabled = false;
+    $('ptInputDesc').value = '';
+    $('ptInputDesc').disabled = false;
+    $('ptInputText').value = '';
+    $('ptInputText').disabled = false;
+    $('ptInputText').rows = 12;
+    $('ptInputEnabled').checked = true;
+    $('ptInputEnabled').disabled = false;
+    $('ptBtnSave').style.display = '';
+    $('ptModalMask').style.display = 'flex';
+  }
+
+  function updateCounts() {
+    if ($('ptCount')) $('ptCount').textContent = prompts.length;
+    if ($('ptSeedCount')) $('ptSeedCount').textContent = prompts.filter(function(p){return p.is_seed === 1;}).length;
+  }
+
+  async function savePrompt() {
+    var name = $('ptInputName').value.trim();
+    var text = $('ptInputText').value;
+    var category = $('ptInputCategory').value.trim() || '自定义';
+    var desc = $('ptInputDesc').value.trim();
+    var enabled = $('ptInputEnabled').checked;
+    if (!name) { A.toast('模板名称不能为空', 'error'); return; }
+    if (name.length > 128) { A.toast('模板名称不能超过128字符', 'error'); return; }
+    var btn = $('ptBtnSave');
+    var mode = editMode;
+    A.withBtnLoading(btn, '保存中...', async function() {
+      var r = await A.api('POST', '/api/admin/prompts', {
+        name: name, template_text: text, category: category,
+        description: desc, enabled: enabled
+      });
+      if (r && r.ok) {
+        A.toast('保存成功', 'success');
+        closeModal();
+        if (mode === 'new') {
+          // 新增：追加到末尾，不调整排序
+          prompts.push({
+            name: name, template_text: text, category: category,
+            description: desc, is_seed: 0, has_seed_default: false,
+            enabled: enabled ? 1 : 0, updated_at: ''
+          });
+        } else {
+          // 编辑：原地更新，is_seed 置 0（后端 UPDATE 已同步），has_seed_default 保持不变
+          var existing = findPrompt(name);
+          if (existing) {
+            existing.template_text = text;
+            existing.category = category;
+            existing.description = desc;
+            existing.enabled = enabled ? 1 : 0;
+            existing.is_seed = 0;
+          }
+        }
+        updateCounts();
+        renderTable();
+      } else {
+        A.toast((r && r.error) || '保存失败', 'error');
+      }
+    });
+  }
+
+  async function deletePrompt(name) {
+    if (!(await A.confirm('确认删除模板「' + name + '」？此操作不可撤销。', { danger: true }))) return;
+    var r = await A.api('DELETE', '/api/admin/prompts/' + encodeURIComponent(name));
+    if (r && r.ok) {
+      A.toast('删除成功', 'success');
+      prompts = prompts.filter(function(p) { return p.name !== name; });
+      updateCounts();
+      renderTable();
+    } else {
+      A.toast((r && r.error) || '删除失败', 'error');
+    }
+  }
+
+  async function restoreDefault(name, btn) {
+    if (!(await A.confirm('确认恢复模板「' + name + '」为默认值？当前修改将被覆盖。', { danger: true }))) return;
+    A.withBtnLoading(btn, '恢复中...', async function() {
+      var r = await A.api('POST', '/api/admin/prompts/' + encodeURIComponent(name) + '/restore');
+      if (r && r.ok) {
+        A.toast('恢复默认成功', 'success');
+        loadPrompts();
+      } else {
+        A.toast((r && r.error) || '恢复失败', 'error');
+      }
+    });
+  }
+
+  async function reseedPrompts() {
+    if (!(await A.confirm('确认重新初始化缺失的种子模板？此操作会恢复已删除的种子模板到初始状态。', { danger: true }))) return;
+    var btn = $('btnReseedPrompts');
+    A.withBtnLoading(btn, '重建中...', async function() {
+      var r = await A.api('POST', '/api/admin/prompts/re-seed');
+      if (r && r.ok) {
+        A.toast('已恢复 ' + (r.count || 0) + ' 个种子模板', 'success');
+        loadPrompts();
+      } else {
+        A.toast((r && r.error) || '重建失败', 'error');
+      }
+    });
+  }
+
+  function closeModal() {
+    $('ptModalMask').style.display = 'none';
+  }
+
+  function findPrompt(name) {
+    for (var i = 0; i < prompts.length; i++) {
+      if (prompts[i].name === name) return prompts[i];
+    }
+    return null;
+  }
+
+  // ── ★ P2-6 H42-H45 / H38-H40: 同义词 Tab ──
+  function bindSynonymTabs() {
+    var nav = $('ptTabNav');
+    if (!nav) return;
+    A.$$('.pt-tab-item', nav).forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        var name = tab.getAttribute('data-pt-tab');
+        A.$$('.pt-tab-item', nav).forEach(function(x) { x.classList.remove('active'); });
+        tab.classList.add('active');
+        A.$$('.pt-tab-pane').forEach(function(p) { p.style.display = 'none'; });
+        var pane = $('ptPane-' + name);
+        if (pane) pane.style.display = 'block';
+        if (name === 'synonyms') loadGlobalSynonyms();
+        else if (name === 'overrides') loadSynonymOverrides();
+      });
+    });
+  }
+
+  // ★ H42: GET /api/synonyms
+  function loadGlobalSynonyms() {
+    var body = $('synonymBody');
+    if (!body) return;
+    body.innerHTML = '<tr><td colspan="3" class="pt-empty">加载中...</td></tr>';
+    A.api('GET', '/api/synonyms').then(function(r) {
+      if (!r || r.error) {
+        body.innerHTML = '<tr><td colspan="3" class="pt-empty">' + esc((r && r.error) || '加载失败') + '</td></tr>';
+        return;
+      }
+      var list = r.synonyms || [];
+      if (list.length === 0) {
+        body.innerHTML = '<tr><td colspan="3" class="pt-empty">暂无同义词，点击「新增同义词」创建</td></tr>';
+        return;
+      }
+      body.innerHTML = list.map(function(s) {
+        var grp = s.synonym_group || s.group || '';
+        if (Array.isArray(grp)) grp = grp.join(', ');
+        return '<tr>' +
+          '<td>' + esc(s.core_word) + '</td>' +
+          '<td>' + esc(grp) + '</td>' +
+          '<td><button type="button" class="btn-danger btn-sm" data-syn-id="' + s.id + '" data-syn-word="' + esc(s.core_word) + '">删除</button></td>' +
+          '</tr>';
+      }).join('');
+      // ★ H44: DELETE /api/synonyms/<id>
+      A.$$('[data-syn-id]', body).forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var id = btn.getAttribute('data-syn-id');
+          var word = btn.getAttribute('data-syn-word');
+          A.confirm('确定删除全局同义词「' + word + '」？', { danger: true, title: '删除同义词' }).then(function(ok) {
+            if (!ok) return;
+            A.api('DELETE', '/api/synonyms/' + id).then(function(r) {
+              if (r && r.success) {
+                if (A.toast) A.toast('已删除', 'success');
+                loadGlobalSynonyms();
+              } else {
+                if (A.toast) A.toast((r && r.error) || '删除失败', 'error');
+              }
+            });
+          });
+        });
+      });
+    });
+  }
+
+  // ★ H38: GET /api/project-overrides/synonyms
+  function loadSynonymOverrides() {
+    var body = $('overrideBody');
+    if (!body) return;
+    body.innerHTML = '<tr><td colspan="4" class="pt-empty">加载中...</td></tr>';
+    A.api('GET', '/api/project-overrides/synonyms').then(function(r) {
+      if (!r || !r.ok) {
+        body.innerHTML = '<tr><td colspan="4" class="pt-empty">' + esc((r && r.error) || '加载失败') + '</td></tr>';
+        return;
+      }
+      var items = r.items || [];
+      if (items.length === 0) {
+        body.innerHTML = '<tr><td colspan="4" class="pt-empty">本项目暂无覆盖，点击「新增覆盖」添加</td></tr>';
+        return;
+      }
+      body.innerHTML = items.map(function(it) {
+        var grp = (it.synonyms || []).join(', ');
+        return '<tr>' +
+          '<td>' + esc(it.core_word) + ' <span class="pt-override-badge">覆盖全局</span></td>' +
+          '<td>' + esc(grp) + '</td>' +
+          '<td>' + esc(it.updated_at || '-') + '</td>' +
+          '<td><button type="button" class="btn-danger btn-sm" data-ov-word="' + esc(it.core_word) + '">恢复全局</button></td>' +
+          '</tr>';
+      }).join('');
+      // ★ H40: DELETE /api/project-overrides/synonyms/<core_word>
+      A.$$('[data-ov-word]', body).forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var word = btn.getAttribute('data-ov-word');
+          A.confirm('确定删除本项目对「' + word + '」的覆盖？（恢复为全局同义词）', { danger: true, title: '恢复全局' }).then(function(ok) {
+            if (!ok) return;
+            A.api('DELETE', '/api/project-overrides/synonyms/' + encodeURIComponent(word)).then(function(r) {
+              if (r && r.ok) {
+                if (A.toast) A.toast('已恢复全局', 'success');
+                loadSynonymOverrides();
+              } else {
+                if (A.toast) A.toast((r && r.error) || '操作失败', 'error');
+              }
+            });
+          });
+        });
+      });
+    });
+  }
+
+  // 打开同义词弹层（mode: global / override）
+  function openSynModal(mode, word, group) {
+    $('synEditMode').value = mode || 'global';
+    $('synModalTitle').textContent = mode === 'override' ? '新增项目覆盖' : (word ? '编辑同义词' : '新增同义词');
+    $('synCoreWord').value = word || '';
+    $('synGroup').value = group || '';
+    $('synModal').style.display = 'block';
+    $('synModalMask').style.display = 'block';
+    $('synCoreWord').focus();
+  }
+  function closeSynModal() {
+    $('synModal').style.display = 'none';
+    $('synModalMask').style.display = 'none';
+  }
+
+  function bindSynModal() {
+    var btnAdd = $('btnAddSynonym');
+    if (btnAdd) btnAdd.addEventListener('click', function() { openSynModal('global', '', ''); });
+    var btnAddOv = $('btnAddOverride');
+    if (btnAddOv) btnAddOv.addEventListener('click', function() { openSynModal('override', '', ''); });
+    var btnClose = $('synModalClose');
+    if (btnClose) btnClose.addEventListener('click', closeSynModal);
+    var btnCancel = $('synModalCancel');
+    if (btnCancel) btnCancel.addEventListener('click', closeSynModal);
+    var mask = $('synModalMask');
+    if (mask) mask.addEventListener('click', function(e) { if (e.target === mask) closeSynModal(); });
+    var btnSave = $('synModalSave');
+    if (btnSave) btnSave.addEventListener('click', function() {
+      var mode = $('synEditMode').value;
+      var core = ($('synCoreWord').value || '').trim();
+      var group = ($('synGroup').value || '').trim();
+      if (!core) { if (A.toast) A.toast('核心词不能为空', 'error'); return; }
+      if (!group) { if (A.toast) A.toast('同义词组不能为空', 'error'); return; }
+      // ★ H43: POST /api/synonyms（全局）
+      if (mode === 'global') {
+        A.api('POST', '/api/synonyms', { core_word: core, synonym_group: group }).then(function(r) {
+          if (r && r.success) {
+            if (A.toast) A.toast('已保存', 'success');
+            closeSynModal();
+            loadGlobalSynonyms();
+          } else {
+            if (A.toast) A.toast((r && r.error) || '保存失败', 'error');
+          }
+        });
+      } else {
+        // ★ H39: POST /api/project-overrides/synonyms（项目覆盖，数组）
+        var arr = group.split(/[,，]/).map(function(s){ return s.trim(); }).filter(Boolean);
+        A.api('POST', '/api/project-overrides/synonyms', { core_word: core, synonyms: arr }).then(function(r) {
+          if (r && r.ok) {
+            if (A.toast) A.toast('已保存覆盖', 'success');
+            closeSynModal();
+            loadSynonymOverrides();
+          } else {
+            if (A.toast) A.toast((r && r.error) || '保存失败', 'error');
+          }
+        });
+      }
+    });
+  }
+
+  // ★ H45: POST /api/synonyms/batch（批量导入）
+  function bindBatchSynonyms() {
+    var btnOpen = $('btnBatchSynonyms');
+    var btnConfirm = $('btnBatchSynonymConfirm');
+    var btnCancel = $('btnBatchSynonymCancel');
+    if (btnOpen) btnOpen.addEventListener('click', function() {
+      var box = $('batchSynonymBox');
+      if (box) box.style.display = 'block';
+    });
+    if (btnCancel) btnCancel.addEventListener('click', function() {
+      var box = $('batchSynonymBox');
+      if (box) box.style.display = 'none';
+    });
+    if (btnConfirm) btnConfirm.addEventListener('click', function() {
+      var text = ($('batchSynonymText').value || '').trim();
+      var items = [];
+      text.split(/\n/).forEach(function(line) {
+        line = line.trim();
+        if (!line) return;
+        var eq = line.indexOf('=');
+        var core = eq > 0 ? line.slice(0, eq).trim() : line.trim();
+        var grp = eq > 0 ? line.slice(eq + 1).trim() : '';
+        if (core && grp) items.push({ core_word: core, synonym_group: grp });
+      });
+      if (items.length === 0) {
+        if (A.toast) A.toast('未解析到有效条目（格式：核心词=同义词1,同义词2）', 'warning');
+        return;
+      }
+      A.withBtnLoading(btnConfirm, '导入中...', function() {
+        return A.api('POST', '/api/synonyms/batch', { synonyms: items }).then(function(r) {
+          if (r && r.success) {
+            if (A.toast) A.toast('已导入 ' + (r.imported || items.length) + ' 条', 'success');
+            var box = $('batchSynonymBox');
+            if (box) box.style.display = 'none';
+            $('batchSynonymText').value = '';
+            loadGlobalSynonyms();
+          } else {
+            if (A.toast) A.toast((r && r.error) || '导入失败', 'error');
+          }
+          return null;
+        });
+      });
+    });
+  }
+
+  function bindEvents() {
+    var btnReload = $('btnReloadPrompts');
+    if (btnReload) btnReload.addEventListener('click', function() {
+      A.withBtnLoading(btnReload, '加载中...', loadPrompts);
+    });
+    var btnNew = $('btnNewPrompt');
+    if (btnNew) btnNew.addEventListener('click', openNewModal);
+    var btnClose = $('ptModalClose');
+    if (btnClose) btnClose.addEventListener('click', closeModal);
+    var btnCancel = $('ptBtnCancel');
+    if (btnCancel) btnCancel.addEventListener('click', closeModal);
+    var btnSave = $('ptBtnSave');
+    if (btnSave) btnSave.addEventListener('click', savePrompt);
+    var btnReseed = $('btnReseedPrompts');
+    if (btnReseed) btnReseed.addEventListener('click', reseedPrompts);
+    var mask = $('ptModalMask');
+    if (mask) mask.addEventListener('click', function(e) {
+      if (e.target === mask) closeModal();
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && mask && mask.style.display !== 'none') closeModal();
+    });
+  }
+
+  A._onAuthOk = function() {
+    A._renderSidebarUser();
+    A.applyPermissions();
+    loadPrompts();
+    A._startStepBadgePolling();
+  };
+  if (A._currentUser) { loadPrompts(); }
+  bindEvents();
+  bindSynonymTabs();
+  bindSynModal();
+  bindBatchSynonyms();
+})();
+</script>
+{% endblock %}

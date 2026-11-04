@@ -1,0 +1,2011 @@
+{% extends "_layout_base.html" %}
+{% block head_extra %}
+<style>
+/* ════════════ 导航树页面专属样式 ════════════ */
+
+/* 统计卡片行 */
+.navtree-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.navtree-stat-card {
+  flex: 1 1 160px;
+  min-width: 120px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+.navtree-stat-label {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.navtree-stat-value {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-bold);
+  font-family: var(--font-mono);
+}
+.navtree-stat-value.c1 { color: var(--step1-color); }
+.navtree-stat-value.c2 { color: var(--step2-color); }
+.navtree-stat-value.c3 { color: var(--step3-color); }
+.navtree-stat-value.c4 { color: var(--step4-color); }
+.navtree-stat-value.c5 { color: var(--step5-color); }
+.navtree-stat-sub {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+}
+
+/* 主内容区：双栏（左树图 + 右详情/模块列表/依赖） */
+.navtree-main {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: var(--space-4);
+  min-height: calc(100vh - 220px);
+  height: calc(100vh - 220px);
+}
+@media (max-width: 1100px) {
+  .navtree-main { grid-template-columns: 1fr; }
+}
+
+/* 右侧面板：树形图 */
+.navtree-tree-panel {
+  background: var(--bg-base);
+  border: 1px solid var(--step1-border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: calc(100vh - 220px);
+  height: 100%;
+  position: relative;
+}
+.navtree-tree-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--step1-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--step1-soft) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+.navtree-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--step1-soft);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  color: var(--step1-color);
+  background: var(--bg-overlay);
+}
+.navtree-panel-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+}
+.navtree-tree-body {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  cursor: grab;
+  background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-surface) 100%);
+}
+.navtree-tree-body.navtree-dragging { cursor: grabbing; }
+.navtree-tree-body svg#navTreeSvg {
+  display: block;
+  transform-origin: 0 0;
+  will-change: transform;
+  flex-shrink: 0;
+}
+
+/* 树形节点样式 */
+.navtree-root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-4);
+}
+.navtree-root-node {
+  width: 80px;
+  height: 80px;
+  border-radius: var(--radius-lg);
+  background: var(--color-primary);
+  color: var(--text-on-color);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--fw-bold);
+  box-shadow: 0 4px 16px var(--color-primary-glow);
+}
+.navtree-root-node svg {
+  width: 24px;
+  height: 24px;
+  margin-bottom: 4px;
+}
+.navtree-root-node-text {
+  font-size: var(--fs-small);
+}
+
+/* 模块节点（树干） */
+.navtree-modules-container {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+  flex-wrap: wrap;
+}
+.navtree-module-branch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 120px;
+}
+.navtree-module-connector {
+  width: 2px;
+  height: 24px;
+  background: var(--border-hover);
+}
+.navtree-module-node {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  color: var(--bg-elevated);
+  border: 2px solid;
+  min-width: 100px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.navtree-module-node:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--surface-shadow-float);
+}
+/* 模块颜色（不同模块不同颜色）—— 复用设计令牌调色板，非数据源裸色 */
+.navtree-module-node[data-color="B4C6E7"],
+.navtree-module-dot[data-color="B4C6E7"] { background: var(--step1-color); border-color: var(--step1-border); }
+.navtree-module-node[data-color="FFE699"],
+.navtree-module-dot[data-color="FFE699"] { background: var(--state-warning); border-color: var(--state-warning-border); }
+.navtree-module-node[data-color="C6EFCE"],
+.navtree-module-dot[data-color="C6EFCE"] { background: var(--state-success); border-color: var(--state-success-border); }
+.navtree-module-node[data-color="F4CCCC"],
+.navtree-module-dot[data-color="F4CCCC"] { background: var(--state-error); border-color: var(--state-error-border); }
+.navtree-module-node[data-color="D9D9D9"],
+.navtree-module-dot[data-color="D9D9D9"] { background: var(--text-tertiary); border-color: var(--border-hover); }
+.navtree-module-node[data-color="E2EFDA"],
+.navtree-module-dot[data-color="E2EFDA"] { background: var(--state-success-text); border-color: var(--state-success); }
+.navtree-module-node[data-color="FFF2CC"],
+.navtree-module-dot[data-color="FFF2CC"] { background: var(--state-warning-text); border-color: var(--state-warning); }
+.navtree-module-node[data-color="FFFFFF"],
+.navtree-module-dot[data-color="FFFFFF"] { background: var(--text-on-color); border-color: var(--border-hover); }
+
+/* 功能节点（枝丫） */
+.navtree-functions-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.navtree-function-connector {
+  width: 2px;
+  height: 16px;
+  background: var(--border-hover);
+  margin-left: auto;
+  margin-right: auto;
+}
+.navtree-function-node {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  min-width: 80px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.navtree-function-node:hover {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-border);
+  color: var(--color-primary);
+}
+
+/* 控件节点（树叶） */
+.navtree-controls-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  justify-content: center;
+  max-width: 200px;
+}
+.navtree-control-node {
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  cursor: default;
+}
+
+/* 空状态 */
+.navtree-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-tertiary);
+  gap: var(--space-2);
+}
+.navtree-empty-sub {
+  font-size: var(--fs-xs);
+  opacity: 0.7;
+}
+.navtree-empty-svg {
+  opacity: 0.4;
+}
+
+/* 右侧面板：模块列表 */
+.navtree-info-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.navtree-modules-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3);
+}
+.navtree-module-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.navtree-module-card:hover {
+  border-color: var(--color-primary-border);
+  background: var(--color-primary-soft);
+}
+/* ── 导航树 SVG 交互（可点击/高亮/联动）── */
+.navtree-module-card.navtree-module-active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+.navtree-module-card.navtree-module-flash {
+  animation: navtree-flash 1.2s ease;
+}
+@keyframes navtree-flash {
+  0%   { box-shadow: 0 0 0 0 var(--color-primary-ring); }
+  60%  { box-shadow: 0 0 0 14px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.nav-svg-mod, .nav-svg-func, .nav-svg-root {
+  cursor: pointer;
+  transition: filter .12s;
+}
+.nav-svg-mod:hover, .nav-svg-func:hover, .nav-svg-root:hover {
+  filter: brightness(1.18);
+}
+.nav-svg-mod.nav-svg-mod-active,
+.nav-svg-func.nav-svg-func-active {
+  stroke-width: 2.4;
+}
+.nav-svg-root.nav-svg-root-active > rect {
+  stroke-width: 2.6;
+  filter: brightness(1.12) drop-shadow(0 0 6px var(--step1-color));
+}
+.navtree-module-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+.navtree-module-name {
+  flex: 1;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  color: var(--text-primary);
+}
+.navtree-module-count {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+}
+
+/* 依赖关系面板 */
+.navtree-deps-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3);
+}
+.navtree-dep-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-2);
+  font-size: var(--fs-xs);
+}
+.navtree-dep-from {
+  color: var(--text-primary);
+  font-weight: var(--fw-medium);
+}
+.navtree-dep-arrow {
+  color: var(--text-tertiary);
+}
+.navtree-dep-to {
+  color: var(--step2-color);
+  font-weight: var(--fw-medium);
+}
+.navtree-dep-desc {
+  color: var(--text-tertiary);
+  font-size: var(--fs-micro);
+}
+.navtree-deps-empty {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  text-align: center;
+  padding: var(--space-4);
+}
+
+/* 依赖虚线连接样式（SVG） */
+.navtree-dep-line {
+  stroke: var(--text-tertiary);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 2;
+  fill: none;
+}
+
+/* ════════════ 导航匹配质量（六卡一行，可折叠） ════════════ */
+.navtree-match-top {
+  margin-bottom: var(--space-4);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.navtree-match-top-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-default);
+  cursor: pointer;
+  user-select: none;
+}
+.navtree-match-top-header span:nth-child(2) {
+  font-weight: var(--fw-semibold);
+}
+.navtree-collapse-arrow {
+  transition: transform 0.2s ease;
+  font-size: var(--fs-small);
+  color: var(--text-tertiary);
+}
+.navtree-collapse-state {
+  margin-left: auto;
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+}
+.navtree-match-top.collapsed .navtree-collapse-arrow { transform: rotate(-90deg); }
+.navtree-match-top.collapsed .navtree-match-stats { display: none; }
+/* 六张统计卡一行展示 */
+.navtree-match-stats {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+@media (max-width: 1000px) {
+  .navtree-match-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .navtree-match-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.navtree-match-stat-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+}
+.navtree-match-stat-label {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  margin-bottom: 2px;
+}
+.navtree-match-stat-value {
+  font-size: var(--fs-big);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+.navtree-match-stat-sub {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+}
+.navtree-match-loading,
+.navtree-match-empty {
+  color: var(--text-tertiary);
+  padding: var(--space-3);
+  text-align: center;
+}
+/* 匹配日志区（单列全宽，含人工校准） */
+.navtree-match-section {
+  margin-top: var(--space-4);
+  display: block;
+}
+.navtree-match-col {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  min-width: 0;
+}
+.navtree-match-col .navtree-panel-header { border-bottom-color: var(--border-default); }
+.navtree-logs-body {
+  overflow-x: auto;
+  max-height: calc(100vh - 300px);
+  overflow-y: auto;
+}
+.navtree-logs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-small);
+}
+.navtree-logs-table th,
+.navtree-logs-table td {
+  border: 1px solid var(--border-default);
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: middle;
+}
+.navtree-logs-table th {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-weight: var(--fw-semibold);
+  position: sticky;
+  top: 0;
+}
+.navtree-log-id {
+  font-family: var(--font-mono);
+}
+.navtree-log-req,
+.navtree-log-matched {
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.navtree-log-level {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: var(--fs-micro);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+tr.navtree-log-pending td { background: var(--state-warning-soft); }
+.navtree-logs-count {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  border-top: 1px solid var(--border-default);
+}
+.navtree-cal-done { color: var(--state-success); font-weight: var(--fw-bold); }
+.navtree-cal-btn {
+  background: var(--color-primary);
+  border: 1px solid transparent;
+  color: var(--text-on-color);
+  border-radius: var(--radius-sm);
+  padding: 3px 10px;
+  font-size: var(--fs-micro);
+  cursor: pointer;
+}
+.navtree-cal-btn:hover { opacity: 0.9; }
+.navtree-cal-done {
+  color: var(--state-success);
+  font-weight: var(--fw-semibold);
+}
+
+/* ════════════ 搜索 / 缩放 / 悬停 / 高亮（P2-3 交互增强） ════════════ */
+.navtree-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  padding: 4px 10px;
+  color: var(--text-tertiary);
+  flex: 1;
+  max-width: 320px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.navtree-search:focus-within {
+  border-color: var(--color-primary-border);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+.navtree-search input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--fs-small);
+  min-width: 0;
+}
+.navtree-search-clear {
+  cursor: pointer;
+  font-size: var(--fs-small);
+  padding: 0 2px;
+  color: var(--text-tertiary);
+}
+.navtree-search-clear:hover { color: var(--text-primary); }
+.navtree-zoom {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.navtree-tools-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 8px var(--space-4);
+  background: var(--bg-overlay);
+  border-bottom: 1px solid var(--step1-soft);
+  min-height: 40px;
+}
+.navtree-tool-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.navtree-tool-space { flex: 1; }
+.navtree-zoom-btns { display: flex; gap: 6px; }
+.navtree-icon-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: var(--fs-small);
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .12s;
+}
+.navtree-icon-btn:hover {
+  border-color: var(--color-primary-border);
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+.navtree-hover-tip {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+@media (max-width: 900px) { .navtree-hover-tip { display: none; } }
+.navtree-tool-empty:empty { display: none; }
+
+/* 悬停提示气泡 */
+.navtree-tooltip {
+  position: fixed;
+  z-index: 1200;
+  max-width: 260px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-md);
+  box-shadow: var(--surface-shadow-float);
+  padding: 8px 12px;
+  font-size: var(--fs-xs);
+  color: var(--text-primary);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity .12s, transform .12s;
+  white-space: nowrap;
+}
+.navtree-tooltip.navtree-tooltip-show {
+  opacity: 1;
+  transform: translateY(0);
+}
+.navtree-tooltip-title { font-weight: var(--fw-semibold); color: var(--color-primary); }
+.navtree-tooltip-row { color: var(--text-tertiary); margin-top: 2px; }
+
+/* 搜索命中高亮 */
+.nav-svg-mod.navtree-search-hit,
+.nav-svg-func.navtree-search-hit {
+  stroke-width: 2.6;
+  filter: brightness(1.25) drop-shadow(0 0 4px var(--color-primary-glow));
+}
+.navtree-module-card.navtree-search-hit {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+.navtree-no-hit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-tertiary);
+  font-size: var(--fs-small);
+}
+
+/* 详情面板渲染 */
+.navtree-detail-item {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-default);
+}
+.navtree-detail-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+.navtree-detail-title .navtree-module-dot { width: 10px; height: 10px; }
+.navtree-detail-kv { display: flex; align-items: baseline; gap: 8px; margin: 3px 0; }
+.navtree-detail-kv .k { color: var(--text-tertiary); flex-shrink: 0; width: 52px; font-size: var(--fs-xs); }
+.navtree-detail-kv .v { color: var(--text-secondary); font-size: var(--fs-small); }
+.navtree-func-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  padding: 2px 9px;
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  margin: 3px 4px 3px 0;
+  cursor: pointer;
+  transition: all .12s;
+}
+.navtree-func-chip:hover { border-color: var(--color-primary-border); color: var(--color-primary); background: var(--color-primary-soft); }
+/* 详情面板内静态布局/着色下沉为 class（遵守令牌规范，不写内联样式） */
+.navtree-chip-wrap { margin-top: 4px; }
+.navtree-ctrl-sep { color: var(--text-tertiary); }
+.navtree-module-dot.navtree-dot-root { background: var(--step1-color); }
+.navtree-empty-detail {
+  color: var(--text-tertiary);
+  font-size: var(--fs-small);
+  padding: var(--space-4);
+  text-align: center;
+}
+</style>
+{% endblock %}
+{% block title %}导航树 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+导航树功能清单
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnRefreshNavTree" data-perm="docs.view" data-tooltip="刷新导航树数据" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  刷新
+</button>
+<button class="btn-topbar" id="btnDownloadNavTree" data-perm="docs.export" data-tooltip="下载导航功能清单 Excel" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+  导出 Excel
+</button>
+<a class="btn-topbar" href="/docs" data-tooltip="返回文档中心" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+  文档中心
+</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════ 统计概览（置于顶部） ════════════ -->
+<div class="navtree-stats-row">
+  <div class="navtree-stat-card">
+    <div class="navtree-stat-label">总模块</div>
+    <div class="navtree-stat-value c1" id="statModules">—</div>
+    <div class="navtree-stat-sub">功能模块数</div>
+  </div>
+  <div class="navtree-stat-card">
+    <div class="navtree-stat-label">总页面</div>
+    <div class="navtree-stat-value c2" id="statPages">—</div>
+    <div class="navtree-stat-sub">菜单页面数</div>
+  </div>
+  <div class="navtree-stat-card">
+    <div class="navtree-stat-label">总功能</div>
+    <div class="navtree-stat-value c3" id="statFeatures">—</div>
+    <div class="navtree-stat-sub">页面功能数</div>
+  </div>
+  <div class="navtree-stat-card">
+    <div class="navtree-stat-label">总控件</div>
+    <div class="navtree-stat-value c4" id="statControls">—</div>
+    <div class="navtree-stat-sub">UI 控件数</div>
+  </div>
+  <div class="navtree-stat-card">
+    <div class="navtree-stat-label">依赖关系</div>
+    <div class="navtree-stat-value c5" id="statDependencies">—</div>
+    <div class="navtree-stat-sub">模块依赖数</div>
+  </div>
+</div>
+
+<!-- ════════════ 导航匹配质量（六卡一行，可折叠） ════════════ -->
+<div class="navtree-match-top collapsible">
+  <div class="navtree-match-top-header" id="navMatchToggle">
+    <span class="navtree-collapse-arrow">▾</span>
+    <span>导航匹配质量</span>
+    <span class="navtree-panel-hint">L1/L2/L3 分布 + LLM 成功率（导航匹配可观测）</span>
+    <span class="navtree-collapse-state">收起</span>
+  </div>
+  <div class="navtree-match-stats" id="navMatchStats">
+    <div class="navtree-match-loading">加载中...</div>
+  </div>
+</div>
+
+<!-- ════════════ LAYER 2: 导航树可视化 ════════════ -->
+<div class="navtree-main">
+  <!-- 左侧：树形图（可拖拽/缩放/模糊搜索） -->
+  <div class="navtree-tree-panel navtree-left">
+    <div class="navtree-panel-header navtree-tree-header">
+      <span>导航树结构</span>
+      <div class="navtree-search">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="navTreeSearch" placeholder="模糊搜索模块 / 功能...">
+        <span class="navtree-search-clear" id="navSearchClear" hidden>✕</span>
+      </div>
+      <div class="navtree-zoom" id="navZoomPct">100%</div>
+    </div>
+    <div class="navtree-tools-row">
+      <span class="navtree-tool-hint" id="navMatchCount"></span>
+      <div class="navtree-zoom-btns">
+        <button type="button" class="navtree-icon-btn" id="navZoomOut" data-tooltip="缩小" data-tooltip-pos="top">−</button>
+        <button type="button" class="navtree-icon-btn" id="navZoomIn" data-tooltip="放大" data-tooltip-pos="top">＋</button>
+        <button type="button" class="navtree-icon-btn" id="navZoomReset" data-tooltip="重置缩放" data-tooltip-pos="top">⊡</button>
+      </div>
+      <span class="navtree-tool-hint navtree-tool-space"></span>
+      <span class="navtree-hover-tip">滚轮缩放 · 拖拽平移 · 悬停查看</span>
+    </div>
+    <div class="navtree-tree-body" id="navTreeBody">
+      <div class="navtree-empty" id="navTreeEmpty">
+        <svg class="navtree-empty-svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <div>暂无导航树数据</div>
+        <div class="navtree-empty-sub">请先执行 Step4 完成导航与功能数据采集，以生成统计信息与导航树结构图</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右侧：节点详情 + 模块列表 + 依赖关系 -->
+  <div class="navtree-info-panel navtree-right">
+    <div class="navtree-panel-header">
+      <span>节点详情</span>
+      <span class="navtree-panel-hint">点击树中模块/功能或右侧列表查看</span>
+    </div>
+    <div class="navtree-detail-body" id="navDetailBody">
+      <div class="navtree-detail-empty">点击树中模块或功能查看详情</div>
+    </div>
+
+    <div class="navtree-panel-header mt-4">
+      <span>模块列表</span>
+    </div>
+    <div class="navtree-modules-body" id="navModulesBody">
+      <!-- 模块卡片将动态生成 -->
+    </div>
+
+    <!-- 依赖关系面板 -->
+    <div class="navtree-panel-header mt-4">
+      <span>模块依赖关系</span>
+      <span class="navtree-panel-hint">→ 表示依赖方向</span>
+    </div>
+    <div class="navtree-deps-body" id="navDepsBody">
+      <div class="navtree-deps-empty" id="navDepsEmpty">暂无依赖关系</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ LAYER 3: 匹配日志（P2-6 H32，含人工校准 H31） ════════════ -->
+<div class="navtree-match-section">
+  <div class="navtree-match-col navtree-match-col-logs">
+    <div class="navtree-panel-header">
+      <span>匹配日志</span>
+      <span class="navtree-panel-hint">校准后写入 corrected_menu 供复盘</span>
+    </div>
+    <div class="navtree-logs-body" id="navLogsBox">
+      <table class="navtree-logs-table">
+        <thead><tr><th>ID</th><th>需求/菜单原文</th><th>匹配结果</th><th>层级</th><th>校准状态</th><th>操作</th></tr></thead>
+        <tbody id="navMatchLogsBody"><tr><td colspan="6" class="navtree-match-empty">加载中...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// 导航树页面 JavaScript
+// ═══════════════════════════════════════════════════════════════════
+var A = window._A || {};
+var $ = A.$ || function(id) { return document.getElementById(id); };
+var escHtml = A.escHtml || function(s) { return String(s || '').replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+
+let _navTreeData = null;
+const NAV_LOG_PAGE = 10; // 匹配日志一屏展示条数上限
+
+// ★ 自适应分栏：模块列表 与 模块依赖关系 按内容高度等比例分配纵向空间；
+//   内容相近则均分，一方不足时自动按比例让位给另一方（0.38~0.62 夹取防极端偏移）
+function autoBalanceSections() {
+  const mb = document.getElementById('navModulesBody');
+  const db = document.getElementById('navDepsBody');
+  if (!mb || !db) return;
+  const hasM = !!mb.querySelector('.navtree-module-card');
+  const hasD = !!db.querySelector('.navtree-dep-item');
+  const mh = mb.scrollHeight || 40;
+  const dh = db.scrollHeight || 40;
+  const mg = hasM ? mh : 40;
+  const dg = hasD ? dh : 40;
+  let ratio = mg / (mg + dg);
+  ratio = Math.min(0.62, Math.max(0.38, ratio));
+  mb.style.flexGrow = ratio.toFixed(3);
+  db.style.flexGrow = (1 - ratio).toFixed(3);
+}
+window.addEventListener('resize', function() { autoBalanceSections(); });
+
+// 页面加载时获取导航树数据
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadNavigationTree();
+  loadNavMatchStats();
+  loadNavMatchLogs();
+
+  // 导航匹配质量折叠/展开
+  const mToggle = document.getElementById('navMatchToggle');
+  const mTop = mToggle && mToggle.closest('.navtree-match-top');
+  const mState = mTop && mTop.querySelector('.navtree-collapse-state');
+  if (mToggle && mTop) {
+    mToggle.addEventListener('click', () => {
+      const collapsed = mTop.classList.toggle('collapsed');
+      if (mState) mState.textContent = collapsed ? '展开' : '收起';
+    });
+  }
+
+  // 绑定刷新按钮
+  document.getElementById('btnRefreshNavTree')?.addEventListener('click', async () => {
+    await loadNavigationTree();
+  });
+
+  // 绑定导出按钮
+  document.getElementById('btnDownloadNavTree')?.addEventListener('click', downloadNavTreeExcel);
+});
+
+// ★ P2-6 H33: 匹配统计 — GET /api/nav-match/stats
+async function loadNavMatchStats() {
+  const box = document.getElementById('navMatchStats');
+  if (!box) return;
+  try {
+    const resp = await fetch('/api/nav-match/stats');
+    const data = await resp.json();
+    if (!data.ok || !data.stats) {
+      box.innerHTML = '<div class="navtree-match-empty">' + escHtml((data && data.error) || '加载失败') + '</div>';
+      return;
+    }
+    const s = data.stats;
+    const ld = s.level_dist || {};
+    const l1 = ld.L1 || 0, l2 = ld.L2 || 0, l3 = ld.L3 || 0, none = ld.none || 0;
+    const total = s.total != null ? s.total : (l1 + l2 + l3 + none);
+    const llmRate = s.llm_success_rate != null ? s.llm_success_rate : null;
+    const llmUsed = s.llm_used != null ? s.llm_used : 0;
+    const corrected = s.corrected != null ? s.corrected : 0;
+    function pct(v) { if (v == null) return '—'; if (v > 1) v = v / 100; return (v * 100).toFixed(1) + '%'; }
+    const html =
+      '<div class="navtree-match-stat-card"><div class="navtree-match-stat-label">L1·规则精确</div><div class="navtree-match-stat-value">' + escHtml(String(l1)) + '</div></div>' +
+      '<div class="navtree-match-stat-card"><div class="navtree-match-stat-label">L2·LLM 语义</div><div class="navtree-match-stat-value">' + escHtml(String(l2)) + '</div></div>' +
+      '<div class="navtree-match-stat-card"><div class="navtree-match-stat-label">L3·回退</div><div class="navtree-match-stat-value">' + escHtml(String(l3)) + '</div></div>' +
+      '<div class="navtree-match-stat-card"><div class="navtree-match-stat-label">未命中</div><div class="navtree-match-stat-value">' + escHtml(String(none)) + '</div></div>' +
+      '<div class="navtree-match-stat-card"><div class="navtree-match-stat-label">LLM 成功率</div><div class="navtree-match-stat-value">' + pct(llmRate) + '</div><div class="navtree-match-stat-sub">' + escHtml(String(llmUsed)) + ' 次调用</div></div>' +
+      '<div class="navtree-match-stat-card"><div class="navtree-match-stat-label">已校准</div><div class="navtree-match-stat-value">' + escHtml(String(corrected)) + '</div><div class="navtree-match-stat-sub">共 ' + escHtml(String(total)) + ' 条</div></div>';
+    box.innerHTML = html;
+  } catch (e) {
+    box.innerHTML = '<div class="navtree-match-empty">网络请求失败: ' + escHtml(e.message) + '</div>';
+  }
+}
+
+function navLevelLabel(lv) {
+  const m = String(lv || '').toLowerCase();
+  if (m === 'l1') return 'L1·规则精确';
+  if (m === 'l2') return 'L2·LLM 语义';
+  if (m === 'l3') return 'L3·回退';
+  if (m === 'none') return '未命中';
+  return lv || '—';
+}
+
+// ★ P2-6 H32: 匹配日志 — GET /api/nav-match/logs
+async function loadNavMatchLogs() {
+  const body = document.getElementById('navMatchLogsBody');
+  if (!body) return;
+  body.innerHTML = '<tr><td colspan="6" class="navtree-match-empty">加载中...</td></tr>';
+  try {
+    const resp = await fetch('/api/nav-match/logs?limit=100');
+    const data = await resp.json();
+    if (!data.ok || !data.logs) {
+      body.innerHTML = '<tr><td colspan="6" class="navtree-match-empty">' + escHtml((data && data.error) || '加载失败') + '</td></tr>';
+      return;
+    }
+    const logs = data.logs;
+    const box = document.getElementById('navLogsBox');
+    const oldCount = box ? box.querySelector('.navtree-logs-count') : null;
+    if (oldCount) oldCount.remove();
+    if (!logs || logs.length === 0) {
+      body.innerHTML = '<tr><td colspan="6" class="navtree-match-empty">暂无匹配日志（Step3 导航匹配后生成）</td></tr>';
+      if (box) { const f = document.createElement('div'); f.className = 'navtree-logs-count'; f.textContent = '当前项目暂无导航匹配记录'; box.appendChild(f); }
+      return;
+    }
+    const total = logs.length;
+    const shown = logs.slice(0, NAV_LOG_PAGE);
+    const html = shown.map(function(log) {
+      const id = log.id != null ? log.id : '';
+      const req = log.req_text || '';
+      const matchMenu = log.corrected_menu ? ('✓ ' + log.corrected_menu) : (log.llm_menu || '—');
+      const level = navLevelLabel(log.match_level);
+      const calibrated = (log.calibration_status === 'corrected');
+      const calText = calibrated ? '已校准' : '待校准';
+      const calBtn = calibrated
+        ? '<span class="navtree-cal-done" title="' + escHtml(String(log.corrected_menu || '')) + '">✓</span>'
+        : '<button type="button" class="navtree-cal-btn" data-log-id="' + escHtml(String(id)) + '" data-menu="' + escHtml(log.llm_menu || '') + '">校准</button>';
+      return '<tr class="' + (calibrated ? '' : 'navtree-log-pending') + '">' +
+        '<td class="navtree-log-id">' + escHtml(String(id)) + '</td>' +
+        '<td class="navtree-log-req">' + escHtml(req) + '</td>' +
+        '<td class="navtree-log-matched">' + escHtml(matchMenu) + '</td>' +
+        '<td><span class="navtree-log-level">' + escHtml(level) + '</span></td>' +
+        '<td>' + calText + '</td>' +
+        '<td>' + calBtn + '</td>' +
+        '</tr>';
+    }).join('');
+    body.innerHTML = html;
+    if (total > shown.length && box) {
+      const f = document.createElement('div');
+      f.className = 'navtree-logs-count';
+      f.textContent = '共 ' + total + ' 条，一屏仅展示最新 ' + shown.length + ' 条';
+      box.appendChild(f);
+    }
+    // ★ P2-6 H31: 人工校准 — POST /api/nav-match/calibrate
+    body.querySelectorAll('.navtree-cal-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const logId = Number(btn.getAttribute('data-log-id')) || 0;
+        const menu = btn.getAttribute('data-menu') || '';
+        const corrected = window.prompt('确认/纠正匹配结果（留空表示确认原结果）：', menu || '');
+        if (corrected === null) return;
+        fetch('/api/nav-match/calibrate', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: logId, corrected_menu: corrected })
+        }).then(function(r) { return r.json(); }).then(function(res) {
+          if (res && res.ok) {
+            if (A.toast) A.toast('校准成功', 'success');
+            loadNavMatchLogs();
+            loadNavMatchStats();
+          } else {
+            if (A.toast) A.toast((res && res.message) || '校准失败', 'error');
+          }
+        });
+      });
+    });
+  } catch (e) {
+    body.innerHTML = '<tr><td colspan="6" class="navtree-match-empty">网络请求失败: ' + escHtml(e.message) + '</td></tr>';
+  }
+}
+
+async function loadNavigationTree() {
+  try {
+    const resp = await fetch('/api/navigation-tree/preview');
+    const data = await resp.json();
+
+    if (!data.ok) {
+      showNavTreeError(data.error || '加载失败');
+      return;
+    }
+
+    _navTreeData = data;
+    if (_isNavTreeEmpty(data)) {
+      renderNavTreeEmpty(data);
+      return;
+    }
+    renderNavTreeStats(data.statistics);
+    renderNavTree(data.tree_json, data.modules, data.dependencies);
+    renderModulesList(data.modules, data.statistics);
+    renderDependencies(data.dependencies);
+    requestAnimationFrame(autoBalanceSections);
+
+  } catch (e) {
+    showNavTreeError('网络请求失败: ' + e.message);
+  }
+}
+
+function showNavTreeError(msg) {
+  const emptyEl = document.getElementById('navTreeEmpty');
+  if (emptyEl) {
+    emptyEl.querySelector('.navtree-empty-sub').textContent = msg;
+  }
+}
+
+// ★ 判断当前项目+版本是否没有任何导航树数据（统计为全 0 且模块/树为空）
+function _isNavTreeEmpty(data) {
+  if (!data) return true;
+  const stats = data.statistics || {};
+  const total = (stats.total_modules || 0) + (stats.total_pages || 0) +
+                (stats.total_features || 0) + (stats.total_controls || 0);
+  if (total > 0) return false;
+  if ((data.modules || []).length > 0) return false;
+  if (data.tree_json) {
+    try {
+      const t = JSON.parse(data.tree_json);
+      if (t && t.children && t.children.length > 0) return false;
+    } catch (e) { /* 解析失败按空处理 */ }
+  }
+  return true;
+}
+
+// ★ 无导航树数据时渲染明确空态：统计卡片归 “—”，树/模块区给 Step4 引导
+function renderNavTreeEmpty(data) {
+  ['statModules', 'statPages', 'statFeatures', 'statControls', 'statDependencies'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '—';
+  });
+  const container = document.getElementById('navTreeBody');
+  if (container) {
+    container.innerHTML =
+      '<div class="navtree-empty">' +
+        '<svg class="navtree-empty-svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' +
+        '<div>暂无导航树数据</div>' +
+        '<div class="navtree-empty-sub">请先执行 Step4 完成导航与功能数据采集，以生成统计信息与导航树结构图</div>' +
+      '</div>';
+  }
+  const modulesBody = document.getElementById('navModulesBody');
+  if (modulesBody) modulesBody.innerHTML = '<div class="navtree-deps-empty">暂无模块数据</div>';
+  const depsEmpty = document.getElementById('navDepsEmpty');
+  if (depsEmpty) depsEmpty.style.display = 'block';
+}
+
+function renderNavTreeStats(stats) {
+  document.getElementById('statModules').textContent = stats.total_modules || 0;
+  document.getElementById('statPages').textContent = stats.total_pages || 0;
+  document.getElementById('statFeatures').textContent = stats.total_features || 0;
+  document.getElementById('statControls').textContent = stats.total_controls || 0;
+  const depEl = document.getElementById('statDependencies');
+  if (depEl) depEl.textContent = stats.total_dependencies || 0;
+}
+
+function renderNavTree(treeJson, modules, dependencies) {
+  const container = document.getElementById('navTreeBody');
+  if (!container) return;
+
+  try {
+    const tree = JSON.parse(treeJson);
+    if (!tree || !tree.children || tree.children.length === 0) {
+      container.innerHTML = `
+        <div class="navtree-empty">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          <div>暂无导航树数据</div>
+          <div class="navtree-empty-sub">请先执行 Step4 完成导航与功能数据采集</div>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = '';
+    const svg = buildCircuitTreeSvg(tree, modules, dependencies);
+    container.innerHTML = svg;
+    bindNavTreeClicks(container);
+
+  } catch (e) {
+    container.innerHTML = `
+      <div class="navtree-empty">
+        <div>解析失败</div>
+        <div class="navtree-empty-sub">${escXml(e.message)}</div>
+      </div>
+    `;
+  }
+}
+
+/**
+ * 构建 SVG 径向「树」状图（真正树感）
+ *
+ * 设计（2026-08-31 重写）：
+ *  1) 树感：根「登录」位于底部居中的根节点；一条树干竖直向上到布局“hub”，
+ *     再由 hub 向上扇形散开成多个模块分支 —— 根→树干→枝→叶的标准树形。
+ *  2) 需求围绕模块：每个模块的功能(需求)并非只朝一个方向堆叠，而是按模块
+ *     所占角度扇区，多排向外呈放射状环绕在模块四周（围绕模块、多方向展开）。
+ *  3) 连线为折线/放射线 + 自动避让：各模块占用互不重叠的独立角度扇区，放射线
+ *     在各自扇区内不会相交；模块→模块的依赖关系用正交折线(虚)绘制。
+ *  4) 根节点也可点击，在左栏展示系统入口详情。
+ *  5) 保留 data-tree-* / data-nav-* 属性与 class，供点击/悬停/搜索/缩放联动复用。
+ */
+function buildCircuitTreeSvg(tree, modules, dependencies) {
+  const moduleNodes = (tree.children || []).filter(c => c.type === 'module');
+  const nMod = moduleNodes.length;
+
+  // ── 布局常量（径向「树」：根在底部 → 树干向上 → 模块分叉 → 功能围绕模块）──
+  const HUB_X = 480;                 // 中线
+  const HUB_Y = 470;                 // hub 高度锚点
+  const ROOT_W = 132, ROOT_H = 54;   // 根节点盒
+  const ROOT_HD = 104;               // 根中心 → hub 垂直间隔（树干，缩短使登录更靠近模块分支）
+  const MOD_H = 38;                  // 模块盒高
+  const FUNC_D0B = 80;               // 模块中心向外第一圈功能距离
+  const FUNC_ROW = 54;               // 每多一圈半径增量（围绕模块外扩）
+  const FUNC_H = 24;                 // 功能盒高
+  const CTRL_H = 14;                 // 控件连线抬起高度
+  const MAX_SPAN = 200;              // 最大总扇角(度)，根在底部、模块向上扇形分叉
+  const MOD_GAP = 18;                // 相邻模块盒间角距(度→折换成弧长)
+  const R2D = Math.PI / 180;
+
+  function boxW(mod) { return Math.max(96, String(mod.name || '').length * 14 + 36); }
+  function fBoxW(fn) { return Math.max(80, String(fn || '').length * 11 + 24); }
+
+  // 功能显示短标签：优先取「需求号：」冒号前的部分；否则截断首段，完整描述保留在 tooltip/详情里
+  function funcLabel(name) {
+    const s = String(name || '').trim();
+    if (!s) return '';
+    const ci = s.indexOf('：');
+    if (ci > 0) {
+      const pre = s.slice(0, ci).trim();
+      if (pre.length > 2) return pre;
+    }
+    return s.length > 12 ? s.slice(0, 12) + '…' : s;
+  }
+
+  // ── 自适应模块环半径：放大到模块盒在圆周上不再互相压住为止（放开上界，模块再多也能散开）──
+  let MOD_R = 210;
+  while (true) {
+    let needDeg = 0;
+    moduleNodes.forEach(m => { needDeg += (boxW(m) + MOD_GAP) / (MOD_R * R2D); });
+    if (needDeg <= MAX_SPAN || MOD_R > 6000) break;
+    MOD_R += 40;
+  }
+  // 依据实际所需总角分配扇区（对称于正上方）
+  const SPAN = Math.min(MAX_SPAN,
+    moduleNodes.reduce((a, m) => a + (boxW(m) + MOD_GAP) / (MOD_R * R2D), 0));
+
+  const modColors = TREE_MOD_COLORS;
+  const rootCen = { x: HUB_X, y: HUB_Y + ROOT_HD };
+  const hub = { x: HUB_X, y: HUB_Y };
+
+  function polar(angleDeg, r, about) {
+    const a = angleDeg * R2D;
+    const o = about || hub;
+    return { x: o.x + Math.sin(a) * r, y: o.y - Math.cos(a) * r };
+  }
+
+  // ── 角度分配：每模块独占扇区(按盒宽)，功能在其扇区内围绕模块分圈展开 ──
+  const cols = [];
+  let angCursor = -SPAN / 2; // 最左开始，对称向上
+  moduleNodes.forEach((mod, i) => {
+    const funcs = mod.children || [];
+    const sector = (boxW(mod) + MOD_GAP) / (MOD_R * R2D);    // 该模块扇区宽度(度)
+    const modAng = angCursor + sector / 2;
+    const pos = polar(modAng, MOD_R);
+    // 功能围绕模块多方向分圈展开：短标签压缩盒宽；圈内铺满扇面，单圈单枝时按「左/中/右」
+    // 错开角度，使连接线发散而非平行重叠，从根上消除线条交织。
+    const funcPos = [];
+    const labels = funcs.map(f => funcLabel(String(f.name || '')));
+    const maxW = labels.length ? labels.reduce((a, l) => Math.max(a, fBoxW(l)), 0) : 0;
+    // 单扇区可展开半角：占满模块扇区内侧，不越界撞邻模块
+    const fanHalf = Math.max(6, sector * 0.5 - 3);
+    const angSeq = [-1, 0, 1];                               // 错开方向：左 / 中 / 右 交替
+    let k = 0, row = 0;
+    while (k < funcs.length) {
+      const fr = FUNC_D0B + row * FUNC_ROW;                  // 本圈围绕模块的半径
+      const arc = 2 * fr * R2D * fanHalf;                    // 本圈可在扇面内展开的弧长
+      const perRow = Math.max(1, Math.floor(arc / (maxW + 10)));
+      const rowCount = Math.min(perRow, funcs.length - k);
+      for (let j = 0; j < rowCount; j++) {
+        // 圈内多枝 → 铺满扇面；圈内单枝 → 左右中错开，避免连接线重叠
+        const rel = rowCount > 1
+          ? -fanHalf + 2 * fanHalf * j / (rowCount - 1)
+          : fanHalf * angSeq[row % angSeq.length];
+        const bear = (modAng + rel) * R2D;
+        // 以模块中心为圆心环绕展开（不局限于单一方向）
+        funcPos.push({
+          x: pos.x + Math.sin(bear) * fr,
+          y: pos.y - Math.cos(bear) * fr,
+          ang: modAng + rel, row, func: funcs[k], label: labels[k], ctrls: []
+        });
+        k++;
+      }
+      row++;
+    }
+    cols.push({ mod, funcs, K: funcs.length, sector, modAng, pos, funcPos });
+    angCursor += sector;
+  });
+
+  // ── 通用碰撞消解：无论功能/模块数量多少，把重叠的功能盒沿所属模块径向逐级推出，直至零重叠。
+  //    从根本上杜绝“需求条目重叠 / 模块多时相互压住”，对任意数据量均收敛。──
+  const RESOLVE_GAP = 6;                 // 盒间允许的最小间距
+  const RESOLVE_STEP = 12;               // 每次径向推出步长
+  const hw = f => fBoxW(f.label) / 2, hh = () => FUNC_H / 2;
+  const mhw = c => boxW(c.mod.name) / 2, mhh = () => MOD_H / 2;
+  function overlapped(ax, ay, aw, ah, bx, by, bw, bh) {
+    return Math.abs(ax - bx) < aw + bw + RESOLVE_GAP && Math.abs(ay - by) < ah + bh + RESOLVE_GAP;
+  }
+  for (let it = 0; it < 800; it++) {
+    let moved = false;
+    // 功能 × 功能：跨模块也要查，杜绝相邻模块扇区边界上的切向重叠
+    for (let a = 0; a < cols.length; a++) {
+      for (let b = a; b < cols.length; b++) {
+        const fa = cols[a].funcPos, fb = cols[b].funcPos;
+        for (let i = 0; i < fa.length; i++) {
+          for (let j = 0; j < fb.length; j++) {
+            if (a === b && i >= j) continue;         // 同模块只查 i<j 一次，且不与自己比
+            const A = fa[i], B = fb[j];
+            if (overlapped(A.x, A.y, hw(A), hh(), B.x, B.y, hw(B), hh())) {
+              // 把更靠近板块中心者（A）沿其模块径向推出，避免双向拉扯来回抖动
+              const dx = A.x - cols[a].pos.x, dy = A.y - cols[a].pos.y;
+              const len = Math.max(1, Math.hypot(dx, dy));
+              A.x += dx / len * RESOLVE_STEP; A.y += dy / len * RESOLVE_STEP;
+              moved = true;
+            }
+          }
+        }
+      }
+    }
+    // 功能 × 所在模块盒：避免外圈功能压住模块文字
+    for (let a = 0; a < cols.length; a++) {
+      const C = cols[a];
+      for (const A of C.funcPos) {
+        if (overlapped(A.x, A.y, hw(A), hh(), C.pos.x, C.pos.y, mhw(C), mhh())) {
+          const dx = A.x - C.pos.x, dy = A.y - C.pos.y;
+          const len = Math.max(1, Math.hypot(dx, dy));
+          A.x += dx / len * RESOLVE_STEP; A.y += dy / len * RESOLVE_STEP;
+          moved = true;
+        }
+      }
+    }
+    if (!moved) break;
+  }
+
+  // 累积控件圆点坐标
+  cols.forEach(c => {
+    c.funcPos.forEach(f => {
+      f.ctrls = (f.func.children || []).filter(x => x.type === 'control');
+    });
+  });
+
+  // ── 求包围盒并设置画布（保证 1 用户单位 = 1px，pan/zoom 坐标一致）──
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  function ext(x, y, hw, hh) { const x0 = x - (hw || 0), x1 = x + (hw || 0), y0 = y - (hh || 0), y1 = y + (hh || 0); if (x0 < minX) minX = x0; if (x1 > maxX) maxX = x1; if (y0 < minY) minY = y0; if (y1 > maxY) maxY = y1; }
+  ext(rootCen.x, rootCen.y, ROOT_W / 2, ROOT_H / 2);
+  cols.forEach(c => {
+    ext(c.pos.x, c.pos.y, (Math.max(96, String(c.mod.name || '').length * 14 + 36)) / 2, MOD_H / 2);
+    c.funcPos.forEach(f => ext(f.x, f.y, fBoxW(f.label) / 2, FUNC_H / 2));
+  });
+  const PAD = 56;
+  const vx0 = minX - PAD, vy0 = minY - PAD;
+  const svgW = Math.max(400, maxX - minX + PAD * 2);
+  const svgH = Math.max(300, maxY - minY + PAD * 2);
+
+  let svg = `<svg id="navTreeSvg" xmlns="http://www.w3.org/2000/svg" viewBox="${vx0} ${vy0} ${svgW} ${svgH}" width="${svgW}" height="${svgH}">`;
+  svg += `<defs>`;
+  svg += `<filter id="glow-n" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" result="r"/><feMerge><feMergeNode in="r"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+  svg += `<filter id="glow-s" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6" result="r"/><feMerge><feMergeNode in="r"/><feMergeNode in="r"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+  svg += `<marker id="navArrow" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="var(--text-tertiary)"/></marker>`;
+  svg += `</defs>`;
+
+  // 位置索引（供依赖连线；兼容依赖名来自 API 模块名的情形）
+  const posByName = {};
+  cols.forEach((c, i) => { posByName[String(c.mod.name)] = c.pos; });
+  (modules || []).forEach((mn, i) => { if (i < cols.length) posByName[String(mn)] = cols[i].pos; });
+  const colsByMod = {};
+  cols.forEach(c => { colsByMod[String(c.mod.name)] = c; });
+
+  // ── 依赖关系：模块↔模块 折线分「车道」，各行其道、折中避让，互不重叠 ──
+  const depEdges = (dependencies || []).filter(dep => {
+    if (dep.level === 'function') return false;              // 功能级依赖走功能盒间细虚线，不走模块车道
+    const f = posByName[String(dep.from_module)], t = posByName[String(dep.to_module)];
+    return !!(f && t && f !== t);
+  });
+  const DEP_GAP = 18;                                    // 每条依赖独占一条车道半径
+  const DEP_R_BASE = Math.max(36, MOD_R - 64 - (depEdges.length - 1) * 5); // 车道环在模块环内侧(无功能区)
+  function depAngle(name) {
+    const cm = colsByMod[String(name)];
+    if (cm) return cm.modAng;
+    const idx = (modules || []).indexOf(name);
+    return (idx >= 0 && idx < cols.length) ? cols[idx].modAng : 0;
+  }
+  depEdges.forEach((dep, ei) => {
+    const f = posByName[String(dep.from_module)], t = posByName[String(dep.to_module)];
+    const rDep = Math.max(26, DEP_R_BASE - ei * DEP_GAP);   // 车道路径半径，随边数递减 → 圆环分层
+    // 依赖接线整体略偏一侧（依据目标处于源模块的左/右）：折线避让自身树干
+    const jog = (f.x <= t.x ? 8 : -8);
+    const m1 = polar(depAngle(dep.from_module) + jog, rDep);
+    const m2 = polar(depAngle(dep.to_module) + jog, rDep);
+    // 折线：模块 → 沿径向进车道 → 车道弧段 → 沿径向至目标模块（无功能/模块盒干扰）
+    const d = `M ${f.x} ${f.y} L ${m1.x} ${m1.y} L ${m2.x} ${m2.y} L ${t.x} ${t.y}`;
+    svg += `<path d="${d}" fill="none" stroke="var(--text-tertiary)" stroke-width="1.3" stroke-dasharray="5 4" opacity="0.85" marker-end="url(#navArrow)"/>`;
+  });
+
+  // ── 功能级依赖：需求盒 → 需求盒 细虚线（按 req_id 定位；缺失则跳过，诚实不硬造连线）──
+  const reqPos = {};
+  cols.forEach((c, ci) => c.funcPos.forEach(f => {
+    const rid = String((f.func && f.func.req_id) || '').trim();
+    if (rid) reqPos[rid] = { x: f.x, y: f.y, col: modColors[ci % modColors.length] };
+  }));
+  (dependencies || []).filter(d => d.level === 'function').forEach(dep => {
+    const fr = reqPos[String(dep.from && dep.from.req_id || '')];
+    const to = reqPos[String(dep.to && dep.to.req_id || '')];
+    if (!fr || !to || fr === to) return;
+    svg += `<line x1="${fr.x}" y1="${fr.y}" x2="${to.x}" y2="${to.y}" stroke="${fr.col}" stroke-width="1" stroke-dasharray="3 3" opacity="0.6" marker-end="url(#navArrow)"/>`;
+  });
+
+  // ── 模块分支（登录根节点 → 模块）—— 直接从登录盒顶边中点扇出，杜绝“孤点脱节” ──
+  const rootAnchor = { x: HUB_X, y: rootCen.y - ROOT_H / 2 };   // 登录盒顶边中点 = 唯一树干锚点
+  if (nMod) {
+    cols.forEach((c, i) => {
+      const color = modColors[i % modColors.length];
+      svg += `<line x1="${rootAnchor.x}" y1="${rootAnchor.y}" x2="${c.pos.x}" y2="${c.pos.y}" stroke="${color}" stroke-width="1.8" opacity="0.75"/>`;
+    });
+  }
+
+  // ── 功能放射线（模块 → 功能环绕展开）──
+  cols.forEach((c, i) => {
+    const color = modColors[i % modColors.length];
+    c.funcPos.forEach(f => {
+      const modx = c.pos.x, mody = c.pos.y;
+      svg += `<line x1="${modx}" y1="${mody}" x2="${f.x}" y2="${f.y}" stroke="${color}" stroke-width="1.1" opacity="0.45"/>`;
+    });
+  });
+
+  // ── 模块盒（点击 → 右栏详情）──
+  cols.forEach((c, i) => {
+    const color = modColors[i % modColors.length];
+    const w = Math.max(96, String(c.mod.name || '').length * 14 + 36);
+    svg += `<rect x="${c.pos.x - w / 2}" y="${c.pos.y - MOD_H / 2}" width="${w}" height="${MOD_H}" rx="9" fill="var(--bg-overlay)" stroke="${color}" stroke-width="1.6" filter="url(#glow-n)" class="nav-svg-mod" data-tree-mod="${escXml(String(c.mod.name))}" data-nav-x="${c.pos.x.toFixed(1)}" data-nav-y="${c.pos.y.toFixed(1)}"/>`;
+    svg += `<text x="${c.pos.x}" y="${c.pos.y + 4}" text-anchor="middle" fill="${color}" font-size="12.5" font-weight="bold" font-family="sans-serif" pointer-events="none">${escXml(c.mod.name)}</text>`;
+  });
+
+  // ── 功能盒（点击 → 右栏详情；短标签，全名在 tooltip/详情中）──
+  cols.forEach((c, i) => {
+    const color = modColors[i % modColors.length];
+    c.funcPos.forEach(f => {
+      const fw = fBoxW(f.label);
+      svg += `<rect x="${f.x - fw / 2}" y="${f.y - FUNC_H / 2}" width="${fw}" height="${FUNC_H}" rx="12" fill="var(--bg-elevated)" stroke="${color}" stroke-width="1" class="nav-svg-func" data-tree-mod="${escXml(String(c.mod.name))}" data-tree-func="${escXml(String(f.func.name))}" data-tree-req="${escXml(String(f.func.req_id || ''))}" data-tree-desc="${escXml(String(f.func.description || f.func.url || ''))}" data-nav-x="${f.x.toFixed(1)}" data-nav-y="${f.y.toFixed(1)}"/>`;
+      svg += `<text x="${f.x}" y="${f.y + 3.5}" text-anchor="middle" fill="var(--text-primary)" font-size="11" font-weight="600" font-family="sans-serif" pointer-events="none">${escXml(f.label)}</text>`;
+    });
+  });
+
+  // ── 根节点（登录）：可点击 → 右栏展示系统入口详情 ──
+  {
+    const rx0 = rootCen.x - ROOT_W / 2, ry0 = rootCen.y - ROOT_H / 2;
+    svg += `<g class="nav-svg-root" data-root-label="${escXml(tree.name)}" data-total="${nMod}" data-nav-x="${rootCen.x.toFixed(1)}" data-nav-y="${rootCen.y.toFixed(1)}">`;
+    svg += `<rect x="${rx0}" y="${ry0}" width="${ROOT_W}" height="${ROOT_H}" rx="12" fill="var(--step1-soft)" stroke="var(--step1-color)" stroke-width="1.6" filter="url(#glow-s)"/>`;
+    svg += `<g transform="translate(${rootCen.x - 46}, ${rootCen.y})">`;
+    svg += `<svg x="-10" y="-11" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--step1-color)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
+    svg += `</g>`;
+    svg += `<text x="${rootCen.x + 10}" y="${rootCen.y + 4.5}" text-anchor="start" fill="var(--step1-color)" font-size="15" font-weight="bold" font-family="sans-serif" pointer-events="none">${escXml(tree.name)}</text>`;
+    svg += `</g>`;
+  }
+
+  svg += `</svg>`;
+  return svg;
+}
+
+/**
+ * 绑定导航树 SVG 交互（点击查看详情 / 悬停提示 / 拖拽平移 / 滚轮缩放）
+ */
+function bindNavTreeClicks(container) {
+  if (!container) return;
+
+  const svgEl = container.querySelector('#navTreeSvg');
+  if (svgEl) {
+    let _svgW = parseFloat(svgEl.getAttribute('width')) || 1;
+    let _svgH = parseFloat(svgEl.getAttribute('height')) || 1;
+    initPanZoom(container, svgEl, _svgW, _svgH);
+  }
+
+  // 点击：模块 → 左面板模块详情；功能 → 左面板功能详情
+  container.querySelectorAll('[data-tree-mod]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      const mod = el.getAttribute('data-tree-mod');
+      if (el.hasAttribute('data-tree-func')) {
+        const fn = el.getAttribute('data-tree-func');
+        const req = el.getAttribute('data-tree-req');
+        const desc = el.getAttribute('data-tree-desc');
+        selectTreeFunction(mod, fn, req, desc);
+      } else {
+        selectNavModule(mod);
+      }
+    });
+  });
+
+  // 根节点（登录入口）：点击 → 右栏展示系统入口详情
+  container.querySelectorAll('.nav-svg-root').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      const label = el.getAttribute('data-root-label') || '登录';
+      const total = el.getAttribute('data-total') || '';
+      selectRootNode(label, total);
+    });
+  });
+}
+
+// ── 节点数据查询（供详情/搜索）──
+function _moduleColorValue(modIdx) {
+  return TREE_MOD_COLORS[((modIdx % TREE_MOD_COLORS.length) + TREE_MOD_COLORS.length) % TREE_MOD_COLORS.length];
+}
+function getFlattenTree() {
+  // 返回 [{modIdx, mod, func, req, desc, x, y}] 便于搜索与 lookup
+  const out = [];
+  const modEls = document.querySelectorAll('#navTreeBody .nav-svg-mod');
+  const modNames = [];
+  modEls.forEach((modEl, modIdx) => {
+    const mod = modEl.getAttribute('data-tree-mod');
+    modNames.push(String(mod));
+    out.push({
+      kind: 'module', modIdx, mod,
+      func: null, req: '', desc: '',
+      x: parseFloat(modEl.getAttribute('data-nav-x')) || 0,
+      y: parseFloat(modEl.getAttribute('data-nav-y')) || 0,
+      el: modEl
+    });
+  });
+  document.querySelectorAll('#navTreeBody .nav-svg-func').forEach(funcEl => {
+    const mod = funcEl.getAttribute('data-tree-mod');
+    out.push({
+      kind: 'func',
+      modIdx: Math.max(0, modNames.indexOf(String(mod))),
+      mod,
+      func: funcEl.getAttribute('data-tree-func'),
+      req: funcEl.getAttribute('data-tree-req'),
+      desc: funcEl.getAttribute('data-tree-desc'),
+      x: parseFloat(funcEl.getAttribute('data-nav-x')) || 0,
+      y: parseFloat(funcEl.getAttribute('data-nav-y')) || 0,
+      el: funcEl
+    });
+  });
+  return out;
+}
+
+// ── 模块详情 → 左面板 ──
+function renderModuleDetail(modName) {
+  const body = document.getElementById('navDetailBody');
+  if (!body) return;
+  const flattened = getFlattenTree();
+  const mods = flattened.filter(n => n.kind === 'module');
+  const idx = mods.findIndex(m => String(m.mod) === String(modName));
+  if (idx < 0) {
+    body.innerHTML = '<div class="navtree-empty-detail">未找到模块：' + escHtml(modName) + '</div>';
+    return;
+  }
+  const color = _moduleColorValue(idx);
+  const funcs = flattened.filter(n => n.kind === 'func' && String(n.mod) === String(modName));
+  const chips = funcs.map(f =>
+    `<span class="navtree-func-chip" data-func-name="${escHtml(f.func)}" data-func-mod="${escHtml(f.mod)}">` +
+    `<span class="navtree-module-dot" style="background:${color};width:8px;height:8px"></span>${escHtml(f.func)}</span>`
+  ).join('') || '<span class="navtree-detail-kv"><span class="v">暂无功能</span></span>';
+  body.innerHTML =
+    `<div class="navtree-detail-item">
+       <div class="navtree-detail-title"><span class="navtree-module-dot" style="background:${color}"></span>${escHtml(modName)}</div>
+       <div class="navtree-detail-kv"><span class="k">类型</span><span class="v">功能模块</span></div>
+       <div class="navtree-detail-kv"><span class="k">功能数</span><span class="v">${funcs.length}</span></div>
+       <div class="navtree-detail-kv"><span class="k">功能</span></div>
+       <div class="navtree-chip-wrap">${chips}</div>
+     </div>`;
+  body.querySelectorAll('.navtree-func-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const fn = chip.getAttribute('data-func-name');
+      const m = chip.getAttribute('data-func-mod');
+      selectTreeFunction(m, fn, '', '');
+    });
+  });
+}
+
+// ── 功能详情 → 左面板 ──
+function renderFunctionDetail(modName, funcName, reqId, desc) {
+  const body = document.getElementById('navDetailBody');
+  if (!body) return;
+  const flattened = getFlattenTree();
+  const mods = flattened.filter(n => n.kind === 'module');
+  const idx = mods.findIndex(m => String(m.mod) === String(modName));
+  const color = idx >= 0 ? _moduleColorValue(idx) : 'var(--color-primary)';
+  let controls = [];
+  try {
+    const tree = _navTreeData && JSON.parse(_navTreeData.tree_json);
+    if (tree && tree.children) {
+      const mod = (tree.children || []).find(c => c.type === 'module' && String(c.name) === String(modName));
+      if (mod && mod.children) {
+        const func = mod.children.find(f2 => String(f2.name) === String(funcName));
+        if (func) controls = (func.children || []).filter(c => c.type === 'control').map(c => c.name);
+      }
+    }
+  } catch (e) {}
+  const ctrlText = controls.length
+    ? controls.map(c => `<span class="navtree-ctrl-sep">• ${escHtml(c)}</span>`).join(' ')
+    : '<span class="v">—</span>';
+  body.innerHTML =
+    `<div class="navtree-detail-item">
+       <div class="navtree-detail-title"><span class="navtree-module-dot" style="background:${color}"></span>${escHtml(funcName)}</div>
+       <div class="navtree-detail-kv"><span class="k">模块</span><span class="v">${escHtml(modName)}</span></div>
+       <div class="navtree-detail-kv"><span class="k">需求号</span><span class="v">${escHtml(reqId || '—')}</span></div>
+       <div class="navtree-detail-kv"><span class="k">功能</span><span class="v">${escHtml(desc || '—')}</span></div>
+       <div class="navtree-detail-kv"><span class="k">控件</span><span class="v">${ctrlText}</span></div>
+     </div>`;
+}
+
+// 查看功能详情：左面板展示（不再弹窗/Toast）
+function selectTreeFunction(mod, fn, req, desc) {
+  document.querySelectorAll('#navTreeBody .nav-svg-func').forEach(r => {
+    r.classList.toggle('nav-svg-func-active',
+      r.getAttribute('data-tree-mod') === mod && r.getAttribute('data-tree-func') === fn);
+  });
+  document.querySelectorAll('#navTreeBody .nav-svg-mod').forEach(r => {
+    r.classList.toggle('nav-svg-mod-active', r.getAttribute('data-tree-mod') === mod);
+  });
+  renderFunctionDetail(mod, fn, req, desc);
+}
+
+// 查看模块详情：左面板展示 + 树内高亮
+function selectNavModule(modName) {
+  highlightNavModule(modName);
+  renderModuleDetail(modName);
+}
+
+// 高亮指定模块：树内模块高亮 + 右侧模块卡片联动
+function highlightNavModule(name) {
+  document.querySelectorAll('#navTreeBody .nav-svg-mod').forEach(rect => {
+    rect.classList.toggle('nav-svg-mod-active', rect.getAttribute('data-tree-mod') === name);
+  });
+  const cards = document.querySelectorAll('#navModulesBody .navtree-module-card');
+  cards.forEach(c => {
+    const t = c.querySelector('.navtree-module-name');
+    const hit = !!t && t.textContent.trim() === name;
+    c.classList.toggle('navtree-module-active', hit);
+    if (hit) {
+      c.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      c.classList.add('navtree-module-flash');
+      setTimeout(() => c.classList.remove('navtree-module-flash'), 1300);
+    }
+  });
+}
+
+// 根节点（登录入口）详情 → 左面板
+function renderRootDetail(label, totalMods) {
+  const body = document.getElementById('navDetailBody');
+  if (!body) return;
+  const flattened = getFlattenTree();
+  const mods = flattened.filter(n => n.kind === 'module');
+  const chips = mods.map(n => {
+    const color = _moduleColorValue(n.modIdx);
+    return `<span class="navtree-func-chip" data-func-mod="${escHtml(n.mod)}">` +
+      `<span class="navtree-module-dot" style="background:${color};width:8px;height:8px"></span>${escHtml(n.mod)}</span>`;
+  }).join('') || '<span class="navtree-detail-kv"><span class="v">暂无模块</span></span>';
+  const total = (totalMods && String(totalMods) !== '' ? String(totalMods) : String(mods.length));
+  body.innerHTML =
+    `<div class="navtree-detail-item">
+       <div class="navtree-detail-title"><span class="navtree-module-dot navtree-dot-root"></span>${escHtml(label)}</div>
+       <div class="navtree-detail-kv"><span class="k">类型</span><span class="v">系统登录入口</span></div>
+       <div class="navtree-detail-kv"><span class="k">功能模块数</span><span class="v">${total}</span></div>
+       <div class="navtree-detail-kv"><span class="k">树干接入</span><span class="v">通过「${escHtml(label)}」进入系统，树干向上分叉，功能围绕各模块多方向展开。</span></div>
+       <div class="navtree-detail-kv"><span class="k">模块分支</span></div>
+       <div class="navtree-chip-wrap">${chips}</div>
+     </div>`;
+  body.querySelectorAll('.navtree-func-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const m = chip.getAttribute('data-func-mod');
+      resetSearch();
+      highlightNavModule(m);
+      centerOnNavNode(m);
+    });
+  });
+}
+
+// 选中根节点：高亮根 + 左面板详情
+function selectRootNode(label, total) {
+  document.querySelectorAll('#navTreeBody .nav-svg-root').forEach(r => {
+    r.classList.add('nav-svg-root-active');
+  });
+  renderRootDetail(label, total);
+}
+
+var escXml = escHtml;
+
+// 树模块颜色（与树枝颜色一致；统一走设计令牌，避免硬编码 hex 漂移）
+var TREE_MOD_COLORS = ['var(--step1-color)', 'var(--step2-color)', 'var(--step3-color)',
+  'var(--state-info)', 'var(--state-success)', 'var(--state-warning)', 'var(--state-warning-text)'];
+
+/* ════════════ 拖拽 / 缩放 / 悬停 / 模糊搜索 ════════════ */
+let navView = { s: 0.6, tx: 0, ty: 0, svgW: 1, svgH: 1 };
+let _navSvgEl = null;
+let _navDrag = null;
+let _navDragMoved = false;
+
+function initPanZoom(container, svgEl, svgW, svgH) {
+  _navSvgEl = svgEl;
+  navView = { s: 1, tx: 0, ty: 0, svgW, svgH };
+  const body = container;
+  // 初始自适配：按容器宽高等比缩放并居中
+  fitNavDefault(body);
+
+  // 滚轮缩放（以鼠标位置为中心）
+  body.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = body.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const factor = e.deltaY < 0 ? 1.12 : 0.89;
+    zoomNavAt(px, py, factor);
+  }, { passive: false });
+
+  // 拖拽平移（指针事件；按住任意位置均可平移，空白或节点皆可）
+  function onDown(e) {
+    if (e.button !== 0 && e.type !== 'pointerdown') return;
+    _navDrag = { startX: e.clientX, startY: e.clientY, tx: navView.tx, ty: navView.ty };
+    _navDragMoved = false;
+    body.classList.add('navtree-dragging');
+  }
+  function onMove(e) {
+    if (!_navDrag) return;
+    if (Math.abs(e.clientX - _navDrag.startX) + Math.abs(e.clientY - _navDrag.startY) > 3) {
+      _navDragMoved = true;
+    }
+    if (_navDragMoved) {
+      navView.tx = _navDrag.tx + (e.clientX - _navDrag.startX);
+      navView.ty = _navDrag.ty + (e.clientY - _navDrag.startY);
+      applyNavTransform();
+    }
+  }
+  function onUp(e) {
+    if (!_navDrag) return;
+    _navDrag = null;
+    body.classList.remove('navtree-dragging');
+  }
+  body.addEventListener('pointerdown', onDown);
+  body.addEventListener('pointermove', onMove);
+  body.addEventListener('pointerup', onUp);
+  body.addEventListener('pointercancel', onUp);
+  // 平移后阻止触发节点点击（位移超过阈值则吞掉 click）
+  body.addEventListener('click', e => {
+    if (_navDragMoved) { e.stopPropagation(); e.preventDefault(); _navDragMoved = false; }
+  }, true);
+
+  // 缩放按钮
+  const elIn = document.getElementById('navZoomIn');
+  const elOut = document.getElementById('navZoomOut');
+  const elReset = document.getElementById('navZoomReset');
+  if (elIn) elIn.addEventListener('click', () => zoomNavAt(body.clientWidth / 2, body.clientHeight / 2, 1.2));
+  if (elOut) elOut.addEventListener('click', () => zoomNavAt(body.clientWidth / 2, body.clientHeight / 2, 1 / 1.2));
+  if (elReset) elReset.addEventListener('click', () => fitNavDefault(body));
+
+  // 搜索
+  bindNavSearch(body);
+
+  // 悬停提示
+  bindNavHover(body);
+}
+
+function fitNavDefault(body) {
+  const W = body.clientWidth || 600;
+  const H = body.clientHeight || 400;
+  const scale = Math.max(0.15, Math.min(1, W / navView.svgW, H / navView.svgH));
+  navView.s = scale;
+  navView.tx = (W - navView.svgW * scale) / 2;
+  navView.ty = (H - navView.svgH * scale) / 2;
+  body.scrollTop = 0; body.scrollLeft = 0;
+  applyNavTransform();
+}
+
+function zoomNavAt(px, py, factor) {
+  const ns = Math.max(0.15, Math.min(3, navView.s * factor));
+  const wx = (px - navView.tx) / navView.s;
+  const wy = (py - navView.ty) / navView.s;
+  navView.s = ns;
+  navView.tx = px - wx * ns;
+  navView.ty = py - wy * ns;
+  applyNavTransform();
+}
+
+function applyNavTransform() {
+  if (!_navSvgEl) return;
+  _navSvgEl.style.transform = `translate(${navView.tx}px, ${navView.ty}px) scale(${navView.s})`;
+  const pct = document.getElementById('navZoomPct');
+  if (pct) pct.textContent = Math.round(navView.s * 100) + '%';
+}
+
+// 将世界坐标 (x,y) 居中对齐到视口中心
+function centerOnPoint(x, y) {
+  const body = document.getElementById('navTreeBody');
+  if (!body) return;
+  const W = body.clientWidth;
+  const H = body.clientHeight;
+  // 节点可能超出缩放边界，先确保 scale 可见
+  navView.s = Math.max(navView.s, Math.min(1, Math.max(0.4, W / navView.svgW, H / navView.svgH)));
+  navView.tx = W / 2 - x * navView.s;
+  navView.ty = H / 2 - y * navView.s;
+  applyNavTransform();
+  _flashNavNode(x, y);
+}
+
+// 依赖模块名在树内居中（搜索/卡片点击用）
+function centerOnNavNode(modName) {
+  const flattened = getFlattenTree();
+  const m = flattened.find(n => n.kind === 'module' && String(n.mod) === String(modName));
+  if (m) centerOnPoint(m.x, m.y);
+}
+
+function _flashNavNode(x, y) {
+  const svgEl = _navSvgEl || document.getElementById('navTreeSvg');
+  if (!svgEl) return;
+  svgEl.querySelectorAll('[data-nav-x]').forEach(el => {
+    if (Math.abs((parseFloat(el.getAttribute('data-nav-x')) || 0) - x) < 1 &&
+        Math.abs((parseFloat(el.getAttribute('data-nav-y')) || 0) - y) < 1) {
+      el.style.filter = 'brightness(1.3) drop-shadow(0 0 6px var(--color-primary-glow))';
+      setTimeout(() => { el.style.filter = ''; }, 900);
+    }
+  });
+}
+
+// ── 悬停提示 ──
+function bindNavHover(body) {
+  let tip = document.getElementById('navTooltip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.className = 'navtree-tooltip';
+    tip.id = 'navTooltip';
+    document.body.appendChild(tip);
+  }
+  function show(x, y, html) {
+    tip.innerHTML = html;
+    tip.classList.add('navtree-tooltip-show');
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    let lx = x + 14, ly = y + 14;
+    if (lx + w > window.innerWidth - 8) lx = x - w - 14;
+    if (ly + h > window.innerHeight - 8) ly = y - h - 14;
+    tip.style.left = lx + 'px';
+    tip.style.top = ly + 'px';
+  }
+  function hide() { tip.classList.remove('navtree-tooltip-show'); }
+
+  function tryShow(ev) {
+    const t = ev.target;
+    if (!t || !(t instanceof SVGElement) || !t.hasAttribute('data-tree-mod')) return;
+    const mod = t.getAttribute('data-tree-mod');
+    let title, rows;
+    if (t.hasAttribute('data-tree-func')) {
+      const fn = t.getAttribute('data-tree-func');
+      const req = t.getAttribute('data-tree-req') || '—';
+      title = fn;
+      rows = `<div class="navtree-tooltip-row">模块：${escHtml(mod)}</div><div class="navtree-tooltip-row">需求号：${escHtml(req)}</div>`;
+    } else {
+      title = mod;
+      rows = `<div class="navtree-tooltip-row">功能模块 · 点击查看详情</div>`;
+    }
+    show(ev.clientX || (ev.pageX || 0), ev.clientY || (ev.pageY || 0), `<div class="navtree-tooltip-title">${escHtml(title)}</div>${rows}`);
+  }
+
+  body.addEventListener('mousemove', tryShow);
+  body.addEventListener('pointerover', tryShow);
+  body.addEventListener('mouseleave', hide);
+  body.addEventListener('mouseout', e => {
+    if (!e.relatedTarget || !(e.relatedTarget instanceof SVGElement)) hide();
+  });
+}
+
+// ── 模糊搜索：过滤 + 高亮 + 结果居中 ──
+function bindNavSearch(body) {
+  const input = document.getElementById('navTreeSearch');
+  const clearBtn = document.getElementById('navSearchClear');
+  const matchCount = document.getElementById('navMatchCount');
+  if (!input) return;
+
+  function doSearch() {
+    const q = (input.value || '').trim().toLowerCase();
+    const flattened = getFlattenTree();
+    // 命中模块 & 命中功能
+    const hitMods = flattened.filter(n => n.kind === 'module' && String(n.mod).toLowerCase().includes(q));
+    const hitFuncs = q ? flattened.filter(n => n.kind === 'func' && String(n.func).toLowerCase().includes(q)) : [];
+
+    if (q) {
+      // 区分粒度：先匹配模块；其次匹配功能；再考虑模块下属功能命中（用所属模块）
+      const funcModNames = [...new Set(hitFuncs.map(f => String(f.mod)))];
+      const activeMods = new Set();
+      hitMods.forEach(m => activeMods.add(String(m.mod)));
+      funcModNames.forEach(m => { if (m) activeMods.add(String(m)); });
+
+      if (activeMods.size > 0) {
+        // 隐藏非相关模块，高亮命中模块
+        document.querySelectorAll('#navTreeBody .nav-svg-mod').forEach(el => {
+          const m = el.getAttribute('data-tree-mod');
+          const isActive = activeMods.has(m);
+          const isModHit = hitMods.some(x => x.mod === m);
+          el.style.display = isActive ? '' : 'none';
+          el.classList.toggle('navtree-search-hit', isModHit);
+        });
+        // 命中模块的所属功能全部显示；仅命中的功能额外高亮
+        document.querySelectorAll('#navTreeBody .nav-svg-func').forEach(el => {
+          const m = el.getAttribute('data-tree-mod');
+          const isActive = activeMods.has(m);
+          const isHit = hitFuncs.some(f => f.el === el);
+          el.style.display = isActive ? '' : 'none';
+          el.classList.toggle('navtree-search-hit', isHit);
+        });
+        // 右侧模块卡片高亮 & 隐藏
+        document.querySelectorAll('#navModulesBody .navtree-module-card').forEach(card => {
+          const isActive = activeMods.has(card.getAttribute('data-mod-name'));
+          card.style.display = isActive ? '' : 'none';
+          card.classList.toggle('navtree-search-hit', isActive);
+        });
+        // 汇总命中数
+        if (matchCount) matchCount.textContent = `命中 ${activeMods.size} 模块 / ${hitFuncs.length} 功能`;
+        // 结果居中：优先第一个命中模块
+        const firstMod = hitMods[0] || (funcModNames.length ? flattened.find(n => n.kind === 'module' && n.mod === funcModNames[0]) : null);
+        if (firstMod) centerOnPoint(firstMod.x, firstMod.y);
+      } else {
+        // 无任何命中：提示无结果
+        if (matchCount) matchCount.textContent = '无匹配节点';
+      }
+    } else {
+      // 清空搜索：恢复全部显示
+      document.querySelectorAll('#navTreeBody .nav-svg-mod, #navTreeBody .nav-svg-func').forEach(el => {
+        el.style.display = '';
+        el.classList.remove('navtree-search-hit');
+      });
+      document.querySelectorAll('#navModulesBody .navtree-module-card').forEach(card => {
+        card.style.display = '';
+        card.classList.remove('navtree-search-hit');
+      });
+      matchCount.textContent = '';
+    }
+    if (clearBtn) clearBtn.hidden = !q;
+  }
+
+  input.addEventListener('input', doSearch);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+  if (clearBtn) clearBtn.addEventListener('click', () => { input.value = ''; doSearch(); });
+}
+
+// 重置搜索（外部调用）
+function resetSearch() {
+  const input = document.getElementById('navTreeSearch');
+  if (input && input.value) { input.value = ''; input.dispatchEvent(new Event('input')); }
+}
+
+function renderModulesList(modules, stats) {
+  const container = document.getElementById('navModulesBody');
+  if (!container || !modules) return;
+
+  container.innerHTML = '';
+
+  // 模块颜色：与树枝共用 TREE_MOD_COLORS（严格对齐）
+  const colors = TREE_MOD_COLORS;
+
+  modules.forEach((mod, idx) => {
+    const card = document.createElement('div');
+    card.className = 'navtree-module-card';
+    card.setAttribute('data-mod-name', String(mod));
+    card.innerHTML = `
+      <div class="navtree-module-dot" style="background:${colors[idx % colors.length]}"></div>
+      <span class="navtree-module-name">${escXml(mod)}</span>
+      <span class="navtree-module-count">—</span>
+    `;
+    // 点击模块卡片 → 详情 + 树内高亮 + 居中
+    card.addEventListener('click', () => {
+      resetSearch();
+      highlightNavModule(String(mod));
+      centerOnNavNode(String(mod));
+    });
+    container.appendChild(card);
+  });
+}
+
+function renderDependencies(dependencies) {
+  const container = document.getElementById('navDepsBody');
+  const emptyEl = document.getElementById('navDepsEmpty');
+  if (!container) return;
+
+  if (!dependencies || dependencies.length === 0) {
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+
+  if (emptyEl) emptyEl.style.display = 'none';
+  container.innerHTML = '';
+
+  // 汇总计数放入面板标题旁
+  const hint = document.querySelector('#navDepsTitle .navtree-panel-hint');
+  if (hint) hint.textContent = `模块级 ${dependencies.filter(d => d.level !== 'function').length} · 功能级 ${dependencies.filter(d => d.level === 'function').length}`;
+
+  // 两端对象展示：模块级显示模块名，功能级显示「需求号（模块）」
+  function labelOf(o) {
+    if (!o) return '?';
+    if (o.type === 'function') {
+      return o.req_id ? `${o.req_id}（${o.module || o.name || ''}）` : (o.name || o.module || '?');
+    }
+    return o.name || o.module || '?';
+  }
+
+  const buildGroup = (title, items) => {
+    const grp = document.createElement('div');
+    grp.className = 'navtree-dep-group';
+    grp.innerHTML = `<div class="navtree-dep-group-title">${title}</div>`;
+    items.forEach(dep => {
+      const item = document.createElement('div');
+      item.className = 'navtree-dep-item';
+      item.innerHTML = `
+        <span class="navtree-dep-from">${escXml(labelOf(dep.from))}</span>
+        <span class="navtree-dep-arrow">→</span>
+        <span class="navtree-dep-to">${escXml(labelOf(dep.to))}</span>
+        <span class="navtree-dep-desc">${escXml(dep.description || '')}</span>
+      `;
+      grp.appendChild(item);
+    });
+    return grp;
+  };
+
+  const modDeps = dependencies.filter(d => d.level !== 'function');
+  const fnDeps = dependencies.filter(d => d.level === 'function');
+  if (modDeps.length) container.appendChild(buildGroup('模块级依赖（模块→模块）', modDeps));
+  if (fnDeps.length) container.appendChild(buildGroup('功能级依赖（需求→需求）', fnDeps));
+  if (!modDeps.length && !fnDeps.length) {
+    if (emptyEl) emptyEl.style.display = 'block';
+  }
+}
+
+async function downloadNavTreeExcel() {
+  try {
+    const btn = document.getElementById('btnDownloadNavTree');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<svg class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 9 0 1 1-6.219-8.56"/></svg> 导出中...';
+    }
+
+    const link = document.createElement('a');
+    link.href = '/api/export/navigation-tree';
+    link.download = '';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setTimeout(() => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 导出 Excel';
+      }
+    }, 1500);
+
+  } catch (e) {
+    A.toast('导出失败: ' + e.message, 'error');
+  }
+}
+
+// CSS 旋转动画
+const style = document.createElement('style');
+style.textContent = `.spin { animation: spin 1s linear infinite; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`;
+document.head.appendChild(style);
+</script>
+{% endblock %}

@@ -1,0 +1,603 @@
+{% extends "_layout_base.html" %}
+{% block head_extra %}
+<style>
+  /* ── 状态指示器 ── */
+  .diag-status { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); border-radius: var(--radius-full); font-size: var(--fs-body); font-weight: var(--fw-semibold); }
+  .diag-status.healthy { background: var(--state-success-soft); color: var(--state-success-text); }
+  .diag-status.degraded { background: var(--state-warning-soft); color: var(--state-warning-text); }
+  .diag-status.broken { background: var(--state-error-soft); color: var(--state-error-text); }
+  .diag-status.unknown { background: var(--bg-tint-soft); color: var(--text-tertiary); }
+  .diag-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .diag-dot.pass { background: var(--state-success); }
+  .diag-dot.degraded { background: var(--state-warning); }
+  .diag-dot.fail { background: var(--state-error); }
+  .diag-dot.skip { background: var(--text-tertiary); }
+
+  /* ── 页面布局 ── */
+  .diag-container { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-4) var(--space-5); }
+  .diag-header { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); }
+  .diag-actions { display: flex; gap: var(--space-2); align-items: center; margin-bottom: var(--space-4); }
+  .diag-header .diag-actions { margin-bottom: 0; }
+  .diag-label { font-size: var(--fs-body); color: var(--text-secondary); }
+  .diag-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border-default); margin-bottom: 0; }
+  .diag-tab { padding: var(--space-3) var(--space-5); cursor: pointer; font-size: var(--fs-h3); font-weight: var(--fw-medium); color: var(--text-secondary); border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
+  .diag-tab:hover { color: var(--state-info); }
+  .diag-tab.active { color: var(--state-info); border-bottom-color: var(--state-info); }
+  .diag-pane { display: none; }
+  .diag-pane.active { display: block; }
+
+  /* ── 卡片 ── */
+  .diag-card { background: var(--bg-surface); border-radius: var(--radius-lg); border: 1px solid var(--border-default); padding: var(--space-5); margin-bottom: var(--space-4); }
+  .diag-card h3 { margin: 0 0 var(--space-3); font-size: var(--fs-h2); color: var(--text-primary); display: flex; align-items: center; gap: var(--space-2); }
+  .diag-card h3 .icon { color: var(--state-info); }
+
+  /* ── 自检结果 ── */
+  .self-test-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-3); }
+  .self-test-step { text-align: center; padding: var(--space-4) var(--space-3); border-radius: var(--radius-lg); border: 1px solid var(--border-default); }
+  .self-test-step.pass { border-color: var(--state-success-border); background: var(--state-success-soft); }
+  .self-test-step.fail { border-color: var(--state-error-border); background: var(--state-error-soft); }
+  .self-test-step.skip { border-color: var(--border-default); background: var(--bg-tint-soft); }
+  .self-test-step .step-label { font-size: var(--fs-small); color: var(--text-tertiary); margin-bottom: var(--space-1); }
+  .self-test-step .step-name { font-size: var(--fs-h1); font-weight: var(--fw-bold); margin-bottom: var(--space-2); }
+  .self-test-step .step-status { font-size: var(--fs-h3); font-weight: var(--fw-semibold); }
+  .self-test-step .step-detail { font-size: var(--fs-small); color: var(--text-secondary); margin-top: var(--space-2); line-height: var(--lh-tight); }
+  .self-test-step .step-time { font-size: var(--fs-small); color: var(--text-tertiary); margin-top: var(--space-1); }
+  /* 空态文案占满整行 */
+  .self-test-steps .diag-empty { grid-column: 1 / -1; }
+
+  /* ── 检查项列表 ── */
+  .check-list { margin-top: var(--space-2); }
+  .check-item { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) 0; font-size: var(--fs-body); border-bottom: 1px solid var(--border-faint); }
+  .check-item:last-child { border-bottom: none; }
+  .check-icon { font-size: 16px; flex-shrink: 0; }
+  .check-name { font-weight: var(--fw-medium); min-width: 100px; }
+  .check-detail { color: var(--text-tertiary); font-size: var(--fs-small); }
+
+  /* ── 失败归因 ── */
+  .failure-bar { display: flex; height: 32px; border-radius: var(--radius-sm); overflow: hidden; margin-bottom: var(--space-3); }
+  .failure-seg { display: flex; align-items: center; justify-content: center; font-size: var(--fs-small); font-weight: var(--fw-semibold); color: var(--text-on-color); min-width: 40px; }
+  .failure-legend { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+  .failure-legend-item { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-body); }
+  .failure-legend-swatch { width: 14px; height: 14px; border-radius: var(--radius-xs); }
+  .failure-summary { margin-bottom: var(--space-4); }
+  /* T03 P1-7：图例由 div 改为 button（可下钻），这里只做按钮外观重置，
+     保持与原 .failure-legend-item 视觉一致，不改变既有布局。 */
+  .failure-legend-btn { background: none; border: 1px solid transparent; font: inherit;
+    color: inherit; cursor: pointer; padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); transition: all .15s; }
+  .failure-legend-btn:hover { border-color: var(--state-info-border); background: var(--state-info-soft); }
+  .failure-legend-btn:focus-visible { outline: 2px solid var(--state-info); outline-offset: 1px; }
+
+  /* ── 健康快照表格 ── */
+  .health-table { width: 100%; border-collapse: collapse; font-size: var(--fs-body); border: 1px solid var(--border-default); }
+  .health-table th { text-align: left; padding: var(--space-2) var(--space-3); background: var(--bg-elevated); border-bottom: 2px solid var(--border-default); border-right: 1px solid var(--border-default); font-weight: var(--fw-semibold); color: var(--text-secondary); }
+  .health-table th:last-child { border-right: none; }
+  .health-table td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border-subtle); border-right: 1px solid var(--border-subtle); }
+  .health-table td:last-child { border-right: none; }
+  .health-table .metric-good { color: var(--state-success-text); }
+  .health-table .metric-warn { color: var(--state-warning-text); }
+  .health-table .metric-bad { color: var(--state-error-text); }
+  .health-sub { font-size: var(--fs-small); color: var(--text-tertiary); font-weight: var(--fw-regular); }
+
+  /* ── 按钮 ── */
+  .btn-diag { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-5); border: none; border-radius: var(--radius-md); font-size: var(--fs-body); font-weight: var(--fw-semibold); cursor: pointer; transition: all 0.2s; }
+  .btn-diag.primary { background: var(--color-primary); color: var(--text-inverse); }
+  .btn-diag.primary:hover { background: var(--color-primary-hover); }
+  .btn-diag.primary:disabled { background: var(--bg-elevated); color: var(--text-tertiary); cursor: not-allowed; }
+  .btn-diag.secondary { background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border-default); }
+  .btn-diag.secondary:hover { background: var(--bg-hover); }
+
+  .diag-meta { font-size: var(--fs-small); color: var(--text-tertiary); }
+  .diag-empty { text-align: center; padding: var(--space-10); color: var(--text-tertiary); font-size: var(--fs-h3); }
+  .diag-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--bg-overlay); border-top-color: var(--text-on-color); border-radius: 50%; animation: diag-spin 0.6s linear infinite; }
+  @keyframes diag-spin { to { transform: rotate(360deg); } }
+
+  .diag-run-select { display: flex; gap: var(--space-2); align-items: center; }
+  /* ★ 2026-09-01：与系统格调保持深色一致——补 background/color/箭头，
+     根治"运行"下拉白底问题。
+     ★ 2026-09-01(改)：用户反馈灰色(--bg-elevated)也不好看 → 改为用页面背景色
+     (--bg-base)，下拉与所在页面背景融为一体，依靠边框描边而不形成灰块。 */
+  .diag-run-select select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding: var(--space-2) var(--space-3);
+    padding-right: 36px;
+    height: var(--control-height);
+    background-color: var(--bg-base);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right var(--space-3) center;
+    color: var(--text-primary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-body);
+    cursor: pointer;
+    outline: none;
+  }
+  .diag-run-select select:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-soft); }
+  .diag-run-select select option { background: var(--bg-base); color: var(--text-primary); }
+
+  /* ── 下钻明细辅助类（内联样式下沉）── */
+  .dd-meta { margin-bottom: var(--space-3); font-size: var(--fs-small); color: var(--text-secondary); }
+  .dd-case-id { color: var(--text-tertiary); font-size: var(--fs-xs); }
+</style>
+{% endblock %}
+{% block title %}诊断中心 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+诊断中心
+{% endblock %}
+
+{% block content %}
+
+<div class="diag-container">
+  <!-- ── 页头 ── -->
+  <div class="diag-header">
+    <div>
+      <div class="diag-meta">上次自检: <span id="lastTestTime">—</span></div>
+    </div>
+    <div class="diag-actions">
+      <span id="overallStatus" class="diag-status unknown"><span class="diag-dot skip"></span> 未知</span>
+      <button class="btn-diag primary" id="btnRunSelfTest" onclick="runSelfTest()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        运行自检
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Tab 导航 ── -->
+  <div class="diag-tabs">
+    <div class="diag-tab active" data-tab="self-test" onclick="switchTab('self-test')">流水线自检</div>
+    <div class="diag-tab" data-tab="failures" onclick="switchTab('failures')">失败归因</div>
+    <div class="diag-tab" data-tab="health" onclick="switchTab('health')">Step 健康</div>
+  </div>
+
+  <!-- ════════════ Tab 1: 流水线自检 ════════════ -->
+  <div class="diag-pane active" id="paneSelfTest">
+    <div class="diag-card">
+      <h3><span class="icon">⚡</span> 流水线自检结果</h3>
+      <div class="self-test-steps" id="selfTestSteps">
+        <div class="diag-empty">点击"运行自检"开始诊断</div>
+      </div>
+    </div>
+
+    <div class="diag-card">
+      <h3><span class="icon">⏱</span> 自检历史</h3>
+      <div id="selfTestHistory">
+        <div class="diag-empty">暂无记录</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════ Tab 2: 失败归因 ════════════ -->
+  <div class="diag-pane" id="paneFailures">
+    <div class="diag-actions">
+      <button class="btn-diag secondary" onclick="loadFailures()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        刷新
+      </button>
+      <span class="diag-meta" id="failuresMeta"></span>
+    </div>
+    <div class="diag-card">
+      <h3><span class="icon">⚠</span> 失败分类分布</h3>
+      <div id="failureChart">
+        <div class="diag-empty">点击"刷新"加载失败归因数据</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════ Tab 3: Step 健康快照 ════════════ -->
+  <div class="diag-pane" id="paneHealth">
+    <div class="diag-actions">
+      <div class="diag-run-select">
+        <span class="diag-label">运行:</span>
+        <select id="healthRunSelect" onchange="loadHealth()">
+          <option value="">最新运行</option>
+        </select>
+      </div>
+      <button class="btn-diag secondary" onclick="loadHealth()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        刷新
+      </button>
+    </div>
+    <div class="diag-card" id="healthCard">
+      <div class="diag-empty">点击"刷新"加载 Step 健康数据</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ T03 P1-7：失败归因下钻抽屉 ════════════ -->
+<div class="drilldown-backdrop" id="failureDrawerBackdrop" onclick="closeFailureDrilldown()"></div>
+<aside class="drilldown-drawer" id="failureDrawer" role="dialog" aria-modal="true"
+       aria-labelledby="failureDrawerTitle">
+  <div class="drilldown-header">
+    <span class="drilldown-title" id="failureDrawerTitle">失败明细</span>
+    <button type="button" class="drilldown-close" onclick="closeFailureDrilldown()"
+            aria-label="关闭">&times;</button>
+  </div>
+  <div class="drilldown-body" id="failureDrawerBody">
+    <div class="drilldown-empty">请在左侧点击某个失败归因查看明细</div>
+  </div>
+</aside>
+
+<script>
+// ══════════════════════════════════════════════════
+// Tab 切换
+// ══════════════════════════════════════════════════
+// ★ 本页脚本位于 (content 块)，在 _layout_base.html 里排在
+//   <script src="app-common.js"> **之前**（content=165 行，脚本=171 行）。
+//   因此模块顶层此刻 window._A 还不存在 —— 原先的 `var A = window._A || {}`
+//   拿到的恒是空对象，A.escHtml / A.toast 等公共能力全部退化成 fallback。
+//   这里改为「调用时惰性解析」：函数体在 DOMContentLoaded 之后才执行，
+//   那时 app-common.js 已就位，公共库才真正被复用（T03 下钻逻辑依赖
+//   A.escHtml 做 XSS 转义，必须拿到真实实现）。
+function _A() { return window._A || {}; }
+var $ = function(id) { var f = _A().$; return f ? f(id) : document.getElementById(id); };
+var $$ = function(sel, ctx) {
+  var f = _A().$$;
+  return f ? f(sel, ctx) : Array.from((ctx || document).querySelectorAll(sel));
+};
+var api = function(method, url, body) {
+  var lib = _A();
+  var f = lib.dedupedApi || lib.api;
+  if (f) return f(method, url, body);
+  return fetch(url, { method: method, credentials: 'same-origin' }).then(function(r) { return r.json(); });
+};
+// 统一转义入口：直接复用 A.escHtml（公共库唯一事实源，不另写实现）
+function escH(s) { return _A().escHtml(s); }
+function toast(msg, type) {
+  var f = _A().toast;
+  if (f) { f(msg, type); } else { console.warn('[diagnostics]', msg); }
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.diag-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.diag-pane').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.diag-tab[data-tab="${name}"]`).classList.add('active');
+  document.getElementById(`pane${name[0].toUpperCase()+name.slice(1).replace(/-./g,x=>x[1].toUpperCase())}`).classList.add('active');
+
+  if (name === 'failures') loadFailures();
+  if (name === 'health') { loadHealthRuns(); loadHealth(); }
+}
+
+// ══════════════════════════════════════════════════
+// 自检
+// ══════════════════════════════════════════════════
+async function runSelfTest() {
+  const btn = document.getElementById('btnRunSelfTest');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="diag-spinner"></span> 自检中...';
+
+  try {
+    const resp = await fetch('/api/diagnostics/self-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const data = await resp.json();
+    if (data.success) renderSelfTest(data.data);
+    // T05/P2-2：原生 alert → 统一 toast（本页无 A 标识符，走页内 _A() 惰性包装的 toast）
+    else toast('自检失败: ' + (data.error || '未知错误'), 'error');
+  } catch (e) {
+    toast('自检异常: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> 运行自检';
+    loadSelfTestHistory();
+  }
+}
+
+function renderSelfTest(result) {
+  const steps = result.steps;
+  const container = document.getElementById('selfTestSteps');
+  const statusEl = document.getElementById('overallStatus');
+  const timeEl = document.getElementById('lastTestTime');
+
+  const statusClass = { PASS: 'pass', FAIL: 'fail', SKIP: 'skip' };
+  const statusLabel = { PASS: '✓ 通过', FAIL: '✗ 失败', SKIP: '— 跳过' };
+
+  let html = '';
+  for (const [key, step] of Object.entries(steps)) {
+    const cls = statusClass[step.status] || 'skip';
+    html += `<div class="self-test-step ${cls}">
+      <div class="step-label">${key.toUpperCase()}</div>
+      <div class="step-name">${stepName(key)}</div>
+      <div class="step-status">${statusLabel[step.status] || step.status}</div>
+      <div class="step-detail">${step.detail || ''}</div>
+      <div class="step-time">${step.duration_ms}ms</div>
+    </div>`;
+  }
+  container.innerHTML = html;
+
+  // 总体状态
+  const overall = result.overall;
+  statusEl.className = `diag-status ${overall.toLowerCase()}`;
+  const dots = { HEALTHY: '<span class="diag-dot pass"></span>', DEGRADED: '<span class="diag-dot degraded"></span>', BROKEN: '<span class="diag-dot fail"></span>' };
+  statusEl.innerHTML = `${dots[overall] || ''} ${overall === 'HEALTHY' ? '健康' : overall === 'DEGRADED' ? '降级' : '故障'}`;
+
+  timeEl.textContent = A.fmtDateTime(new Date());
+}
+
+function stepName(key) {
+  const map = { step2: '需求拆解', step3: '用例生成', step4: '浏览器执行', step5: '报告生成' };
+  return map[key] || key;
+}
+
+async function loadSelfTestHistory() {
+  try {
+    const resp = await fetch('/api/diagnostics/self-test/history?limit=5');
+    const data = await resp.json();
+    if (!data.success) return;
+    const list = data.data;
+    const container = document.getElementById('selfTestHistory');
+    if (!list.length) { container.innerHTML = '<div class="diag-empty">暂无记录</div>'; return; }
+
+    let html = '<table class="health-table"><thead><tr><th>时间</th><th>状态</th><th>通过</th><th>失败</th><th>跳过</th></tr></thead><tbody>';
+    for (const r of list) {
+      const cls = { HEALTHY: 'metric-good', DEGRADED: 'metric-warn', BROKEN: 'metric-bad' }[r.overall] || '';
+      html += `<tr>
+        <td>${r.created_at}</td>
+        <td class="${cls}">${r.overall}</td>
+        <td>${r.passed}</td>
+        <td>${r.failed}</td>
+        <td>${r.skipped}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    container.innerHTML = html;
+    } catch (e) { console.warn('[diagnostics.loadSelfTestHistory] 自检历史加载失败:', e); }
+  }
+
+  // 页面加载时获取最新自检结果
+async function loadLatestSelfTest() {
+  try {
+    const resp = await fetch('/api/diagnostics/self-test/latest');
+    const data = await resp.json();
+    if (data.success && data.data) {
+      renderSelfTest(data.data);
+      document.getElementById('lastTestTime').textContent = data.data.created_at;
+    }
+    loadSelfTestHistory();
+  } catch (e) {
+    console.warn('[diagnostics.loadLatestSelfTest] 最新自检结果加载失败:', e);
+    toast('最新自检结果加载失败');
+  }
+}
+
+// ══════════════════════════════════════════════════
+// 失败归因
+// ══════════════════════════════════════════════════
+const FAILURE_COLORS = {
+  PRODUCT_BUG: 'var(--state-error)',
+  HARNESS_ERROR: 'var(--state-warning)',
+  ENVIRONMENT_ERROR: 'var(--state-info)',
+  DATA_ERROR: 'var(--step2-color)',
+  MISSING_PARAM: 'var(--text-secondary)',
+  PAGE_MISMATCH: 'var(--step1-color)',
+  ELEMENT_NOT_FOUND: 'var(--state-critical)',
+};
+
+async function loadFailures() {
+  const container = document.getElementById('failureChart');
+  try {
+    const resp = await fetch('/api/diagnostics/failures');
+    const data = await resp.json();
+    if (!data.success) { container.innerHTML = '<div class="diag-empty">加载失败</div>'; return; }
+
+    const d = data.data;
+    document.getElementById('failuresMeta').textContent = d.run_id ? `运行: ${d.run_id}` : '';
+
+    if (!d.categories.length) {
+      container.innerHTML = '<div class="diag-empty">暂无失败用例（或失败分类未启用）</div>';
+      return;
+    }
+
+    // 条形图
+    const total = d.total_failed;
+    let barHtml = '<div class="failure-bar">';
+    for (const c of d.categories) {
+      const pct = total > 0 ? (c.count / total * 100).toFixed(0) : 0;
+      barHtml += `<div class="failure-seg" style="background:${FAILURE_COLORS[c.category]||'var(--text-tertiary)'};width:${Math.max(Number(pct),5)}%;" title="${c.label}: ${c.count}">${pct}%</div>`;
+    }
+    barHtml += '</div>';
+
+    // 图例 —— T03 P1-7：归因计数改为可点击按钮，点开下钻抽屉
+    //   注意 c.label / c.category 来自 DB，一律经 escH() 转义后再拼 innerHTML。
+    let legendHtml = '<div class="failure-legend">';
+    for (const c of d.categories) {
+      const color = FAILURE_COLORS[c.category] || 'var(--text-tertiary)';   // 取自本文件常量表，非用户数据
+      legendHtml += `<button type="button" class="failure-legend-item failure-legend-btn"
+          data-category="${escH(c.category)}"
+          title="${escH('查看「' + c.label + '」的 ' + c.count + ' 条失败用例明细')}">
+        <span class="failure-legend-swatch" style="background:${color};"></span>
+        ${escH(c.label)}: <strong>${escH(c.count)}</strong>
+      </button>`;
+    }
+    legendHtml += '</div>';
+
+    container.innerHTML = `<div class="failure-summary"><strong>总失败:</strong> ${escH(total)}</div>${barHtml}${legendHtml}`;
+
+    // 事件委托绑定（innerHTML 重建后一次性绑定，避免每个按钮挂一个 listener）
+    container.querySelectorAll('.failure-legend-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        openFailureDrilldown(btn.getAttribute('data-category'), d.run_id || '');
+      });
+    });
+  } catch (e) {
+    container.innerHTML = '<div class="diag-empty">加载失败: ' + escH(e.message) + '</div>';
+  }
+}
+
+// ══════════════════════════════════════════════════
+// T03 P1-7：失败归因下钻抽屉
+//   点击某个归因 → GET /api/diagnostics/failures?category=X → 明细表格
+//   行内「查看日志」→ 跳 item.log_ref（后端已编码为
+//   "/log-panel?run_id={}&case_id={}"，解析由 T04 负责，此处只做跳转）
+// ══════════════════════════════════════════════════
+// ★ 全局统一失败归属中文化（与 pipeline.html 的 FAULT_CN 同源，链路上表述一致）
+const CATEGORY_LABELS = {
+  PRODUCT_BUG: '被测系统缺陷',
+  HARNESS_ERROR: '执行引擎异常',
+  ENVIRONMENT_ERROR: '环境问题',
+  DATA_ERROR: '数据问题',
+  OTHER: '其他',
+  UNKNOWN: '未知',
+  MISSING_PARAM: '缺少必要参数',
+  PAGE_MISMATCH: '页面不匹配',
+  ELEMENT_NOT_FOUND: '元素未找到',
+};
+
+function closeFailureDrilldown() {
+  const drawer = document.getElementById('failureDrawer');
+  const backdrop = document.getElementById('failureDrawerBackdrop');
+  if (drawer) drawer.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('open');
+}
+
+async function openFailureDrilldown(category, runId) {
+  const drawer = document.getElementById('failureDrawer');
+  const backdrop = document.getElementById('failureDrawerBackdrop');
+  const body = document.getElementById('failureDrawerBody');
+  const titleEl = document.getElementById('failureDrawerTitle');
+  if (!drawer || !body) return;
+
+  titleEl.textContent = (CATEGORY_LABELS[category] || category) + ' — 失败明细';
+  // 骨架屏：复用公共库 A.skeleton(el, preset) —— 它自己写 innerHTML，不返回字符串
+  const skel = _A().skeleton;
+  if (skel) { skel(body, 'list'); } else { body.innerHTML = '<div class="drilldown-empty">加载中…</div>'; }
+  drawer.classList.add('open');
+  backdrop.classList.add('open');
+
+  let url = '/api/diagnostics/failures?category=' + encodeURIComponent(category);
+  if (runId) url += '&run_id=' + encodeURIComponent(runId);
+
+  try {
+    const data = await api('GET', url);
+    // diagnostics_bp 统一返回 {"success": bool, "data": ...}（§8.5）
+    if (!data || !data.success) {
+      body.innerHTML = '<div class="drilldown-empty">加载失败：' +
+        escH((data && data.error) || '未知错误') + '</div>';
+      return;
+    }
+    renderFailureDrilldown(data.data || {});
+  } catch (e) {
+    body.innerHTML = '<div class="drilldown-empty">加载失败：' + escH(e.message) + '</div>';
+    toast('失败明细加载失败', 'error');
+  }
+}
+
+function renderFailureDrilldown(d) {
+  const body = document.getElementById('failureDrawerBody');
+  const items = d.items || [];
+  if (!items.length) {
+    body.innerHTML = '<div class="drilldown-empty">该归因下暂无失败用例</div>';
+    return;
+  }
+
+  let html = '<div class="dd-meta">' +
+    '共 <strong>' + escH(d.total != null ? d.total : items.length) + '</strong> 条' +
+    (d.run_id ? '　运行: ' + escH(d.run_id) : '') + '</div>';
+  html += '<table class="drilldown-table"><thead><tr>' +
+    '<th>用例</th><th>失败环节</th><th>失败原因</th><th>执行时间</th><th>操作</th>' +
+    '</tr></thead><tbody>';
+
+  for (const it of items) {
+    // 每个字段都过 escH —— case_name 直接来自 test_cases.title（用户可控）
+    html += '<tr>' +
+      '<td><div>' + escH(it.case_name || it.case_id || '—') + '</div>' +
+        '<div class="dd-case-id">' + escH(it.case_id || '') + '</div></td>' +
+      '<td>' + escH(it.failed_step || '—') + '</td>' +
+      '<td class="dd-reason">' + escH(it.failure_reason || '—') + '</td>' +
+      '<td>' + escH(it.executed_at || '—') + '</td>' +
+      '<td><button type="button" class="btn-diag secondary dd-log-btn" ' +
+        'data-log-ref="' + escH(it.log_ref || '') + '">查看日志</button></td>' +
+    '</tr>';
+  }
+  html += '</tbody></table>';
+  body.innerHTML = html;
+
+  body.querySelectorAll('.dd-log-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const ref = btn.getAttribute('data-log-ref');
+      if (!ref) { toast('该记录没有关联日志', 'warning'); return; }
+      window.location.href = ref;
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════
+// Step 健康快照
+// ══════════════════════════════════════════════════
+async function loadHealthRuns() {
+  try {
+    const resp = await fetch('/api/diagnostics/health/runs');
+    const data = await resp.json();
+    if (!data.success) return;
+    const select = document.getElementById('healthRunSelect');
+    select.innerHTML = '<option value="">最新运行</option>';
+    for (const r of data.data) {
+      const opt = document.createElement('option');
+      opt.value = String(r.run_id);
+      opt.textContent = r.run_id + ' (' + r.latest + ')';
+      select.appendChild(opt);
+    }
+  } catch (e) {
+    console.warn('[diagnostics.loadHealthRuns] 健康运行列表加载失败:', e);
+    toast('健康运行列表加载失败');
+  }
+}
+
+async function loadHealth() {
+  const container = document.getElementById('healthCard');
+  const runId = document.getElementById('healthRunSelect').value;
+  try {
+    const url = runId ? `/api/diagnostics/health?run_id=${runId}` : '/api/diagnostics/health';
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (!data.success) { container.innerHTML = '<div class="diag-empty">加载失败</div>'; return; }
+
+    const d = data.data;
+    if (!d.steps || !Object.keys(d.steps).length) {
+      container.innerHTML = '<div class="diag-empty">暂无健康数据（请先运行一次流水线）</div>';
+      return;
+    }
+
+    let html = `<h3><span class="icon">📊</span> Step 健康快照 <span class="health-sub">运行: ${d.run_id || '—'}</span></h3>`;
+    html += '<table class="health-table"><thead><tr><th>Step</th><th>指标</th><th>值</th></tr></thead><tbody>';
+
+    const stepLabels = { step1: 'Step1 数据拉取', step2: 'Step2 需求拆解', step3: 'Step3 用例建模', step4: 'Step4 检查执行', step5: 'Step5 报告生成' };
+    const metricLabels = {
+      coverage_rate: '切片覆盖率', uncovered_chunks: '未覆盖切片', feature_count: '功能数', requirement_count: '需求数',
+      rule_extractions: '规则提取', ai_calls: 'AI调用', case_count: '用例数', passed: '通过', failed: '失败',
+      source_count: '数据源数', document_count: '文档数',
+    };
+
+    for (const [step, info] of Object.entries(d.steps)) {
+      const label = stepLabels[step] || step;
+      let first = true;
+      for (const [key, val] of Object.entries(info.metrics || {})) {
+        const mlabel = metricLabels[key] || key;
+        html += `<tr>
+          <td>${first ? `<strong>${label}</strong>` : ''}</td>
+          <td>${mlabel}</td>
+          <td>${val}</td>
+        </tr>`;
+        first = false;
+      }
+    }
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  } catch (e) {
+    container.innerHTML = '<div class="diag-empty">加载失败: ' + escH(e.message) + '</div>';
+  }
+}
+
+// ══════════════════════════════════════════════════
+// 初始化
+// ══════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  loadLatestSelfTest();
+  loadHealthRuns();
+  // T03 P1-7：ESC 关闭下钻抽屉（抽屉是 aria-modal，键盘用户必须能退出）
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') closeFailureDrilldown();
+  });
+});
+</script>
+{% endblock %}

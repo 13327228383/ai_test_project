@@ -1,0 +1,381 @@
+{% extends "_layout_base.html" %}
+{% block head_extra %}
+<style>
+/* ════════════ new-project.html 专用样式 ════════════ */
+
+/* ★ 参照修改密码页 .cp-wrapper（flex 居中 + min-height:100%），实现卡片在内容区水平+垂直居中 */
+.np-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100%;
+  padding: 24px 16px;
+}
+
+.np-card {
+  width: 100%;
+  max-width: 560px;
+  margin: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.np-header {
+  text-align: center;
+  padding: var(--space-8) var(--space-6) var(--space-5);
+  border-bottom: 1px solid var(--border-default);
+  background: linear-gradient(180deg, var(--color-primary-soft) 0%, transparent 100%);
+}
+.np-icon-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--space-3);
+}
+.np-icon-circle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  border: 2px solid var(--color-primary-border);
+  color: var(--color-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.np-title {
+  font-size: var(--fs-h1);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+.np-subtitle {
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+}
+
+.np-form {
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.np-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.np-form-label {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  color: var(--text-primary);
+}
+.np-required {
+  color: var(--state-error);
+  margin-left: 2px;
+}
+.np-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.np-input-icon {
+  position: absolute;
+  left: var(--space-3);
+  color: var(--text-tertiary);
+  display: inline-flex;
+  pointer-events: none;
+}
+.np-input {
+  width: 100%;
+  height: var(--control-height-lg);
+  padding: 0 var(--space-3) 0 var(--space-8);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--control-radius);
+  color: var(--text-primary);
+  font-size: var(--fs-body);
+  font-family: var(--font-sans);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.np-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--color-primary-soft);
+}
+.np-input::placeholder { color: var(--text-tertiary); }
+.np-textarea {
+  width: 100%;
+  padding: var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--control-radius);
+  color: var(--text-primary);
+  font-size: var(--fs-body);
+  font-family: var(--font-sans);
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.5;
+}
+.np-textarea:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--color-primary-soft);
+}
+.np-textarea::placeholder { color: var(--text-tertiary); }
+.np-form-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+}
+
+.np-error-box {
+  padding: var(--space-3) var(--space-4);
+  background: var(--state-error-soft);
+  border: 1px solid var(--state-error-border);
+  border-radius: var(--radius-sm);
+  color: var(--state-error-text);
+  font-size: var(--fs-small);
+}
+
+.np-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-default);
+}
+.np-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-height-lg);
+  padding: 0 var(--space-5);
+  border-radius: var(--control-radius);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+.np-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.np-btn-cancel {
+  background: var(--bg-elevated);
+  border-color: var(--border-default);
+  color: var(--text-secondary);
+}
+.np-btn-cancel:hover {
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+  background: var(--bg-surface);
+}
+.np-btn-primary {
+  background: var(--color-primary);
+  color: var(--text-inverse);
+}
+.np-btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+@keyframes np-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+</style>
+{% endblock %}
+{% block title %}新建项目 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+新建项目
+{% endblock %}
+
+{% block topbar_actions %}
+<a href="/project-mgmt" class="btn-topbar" data-perm="project.create">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+  返回列表
+</a>
+{% endblock %}
+
+{% block content %}
+
+<div class="np-wrapper">
+<div class="np-card">
+  <!-- 头部图标 + 标题 -->
+  <div class="np-header">
+    <div class="np-icon-wrap">
+      <div class="np-icon-circle">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </div>
+    </div>
+    <h2 class="np-title">新建项目</h2>
+    <p class="np-subtitle">创建一个新的测试项目，配置名称、初始版本与描述</p>
+  </div>
+
+  <!-- 表单 -->
+  <form id="newProjectForm" autocomplete="off" class="np-form">
+    <!-- 项目名称 -->
+    <div class="np-form-group">
+      <label class="np-form-label" for="projectName">项目名称 <span class="np-required">*</span></label>
+      <div class="np-input-wrap">
+        <span class="np-input-icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+        </span>
+        <input type="text" id="projectName" class="np-input" placeholder="支持中英文、数字、下划线、中划线，例如：电商系统v2" required autofocus />
+      </div>
+      <div class="np-form-hint">支持中文、字母、数字、下划线(_)、中划线(-)，1-64 字符</div>
+    </div>
+
+    <!-- 显示名称 -->
+    <div class="np-form-group">
+      <label class="np-form-label" for="displayName">显示名称</label>
+      <div class="np-input-wrap">
+        <span class="np-input-icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+          </svg>
+        </span>
+        <input type="text" id="displayName" class="np-input" placeholder="留空则使用项目名称" />
+      </div>
+    </div>
+
+    <!-- 初始版本号 -->
+    <div class="np-form-group">
+      <label class="np-form-label" for="projectVersion">初始版本号 <span class="np-required">*</span></label>
+      <div class="np-input-wrap">
+        <span class="np-input-icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+            <line x1="7" y1="7" x2="7.01" y2="7"/>
+          </svg>
+        </span>
+        <input type="text" id="projectVersion" class="np-input" placeholder="例如: v1.0.0" value="v1.0" required />
+      </div>
+    </div>
+
+    <!-- 项目描述 -->
+    <div class="np-form-group">
+      <label class="np-form-label" for="projectDesc">项目描述</label>
+      <textarea id="projectDesc" class="np-textarea" rows="3" placeholder="简要描述项目用途、测试范围或业务背景"></textarea>
+    </div>
+
+    <!-- 错误提示 -->
+    <div class="np-error-box" id="errorBox" style="display:none;"></div>
+
+    <!-- 按钮组 -->
+    <div class="np-actions">
+      <button type="button" class="np-btn np-btn-cancel" id="btnCancel">取消</button>
+      <button type="submit" class="np-btn np-btn-primary" id="btnSubmit">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        创建项目
+      </button>
+    </div>
+  </form>
+</div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  'use strict';
+  var A = window._A;
+  if (!A) return;
+  var $ = A.$, esc = A.escHtml;
+
+  var submitting = false;
+
+  // ── 表单提交 ──
+  var form = $('newProjectForm');
+  if (form) form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    if (submitting) return;
+
+    var name = ($('projectName').value || '').trim();
+    var displayName = ($('displayName').value || '').trim();
+    var version = ($('projectVersion').value || '').trim();
+    var desc = ($('projectDesc').value || '').trim();
+    var errBox = $('errorBox');
+
+    // 前端校验
+    if (!name) { showError('请输入项目名称'); return; }
+    if (!/^[A-Za-z0-9_\-\u4e00-\u9fff]{1,64}$/.test(name)) {
+      showError('项目名称仅支持中文、字母、数字、下划线和中划线，1-64 字符');
+      return;
+    }
+    if (!version) { showError('请输入初始版本号'); return; }
+
+    // 提交
+    submitting = true;
+    var btn = $('btnSubmit');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation:np-spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> 创建中...';
+    }
+    hideError();
+
+    var body = { name: name, version: version };
+    if (displayName) body.display_name = displayName;
+    if (desc) body.description = desc;
+
+    var r = await A.api('POST', '/api/new-project', body);
+    submitting = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> 创建项目';
+    }
+
+    if (r && r.ok) {
+      A._toast && A._toast('项目已创建: ' + name, 'success');
+      // 跳转到项目管理列表
+      setTimeout(function() { window.location.href = '/project-mgmt'; }, 600);
+    } else {
+      var msg = (r && r.error) || '创建失败';
+      // 409 冲突特殊提示
+      if (msg.indexOf('已存在') >= 0) {
+        showError('项目 "' + name + '" 已存在，请更换名称');
+      } else {
+        showError(msg);
+      }
+    }
+  });
+
+  // 取消按钮
+  var btnCancel = $('btnCancel');
+  if (btnCancel) btnCancel.addEventListener('click', function() {
+    if (history.length > 1) history.back();
+    else window.location.href = '/project-mgmt';
+  });
+
+  function showError(msg) {
+    var box = $('errorBox');
+    if (box) {
+      box.textContent = msg;
+      box.style.display = 'block';
+    }
+  }
+  function hideError() {
+    var box = $('errorBox');
+    if (box) {
+      box.textContent = '';
+      box.style.display = 'none';
+    }
+  }
+
+  // ── 登录态守卫 ──
+  A._onAuthOk = function() {
+    A._renderSidebarUser();
+    A.applyPermissions();
+    A._startStepBadgePolling();
+  };
+})();
+</script>
+
+{% endblock %}

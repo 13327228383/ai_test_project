@@ -1,0 +1,881 @@
+{% extends "_layout_base.html" %}
+{% block title %}用例编辑 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+用例编辑
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnBack" data-perm="execution.step3" data-tooltip="返回用例审核列表(保留当前选中)" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+  返回列表
+</button>
+<button class="btn-topbar" id="btnRefresh" data-perm="execution.step3" data-tooltip="刷新用例" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+  刷新用例
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════ 信息栏 ════════════ -->
+<div class="ie-info-bar">
+  <div class="ie-info-item">
+    <span class="ie-info-label">用例总数</span>
+    <span class="ie-info-value" id="totalCases">0</span>
+  </div>
+  <div class="ie-info-item">
+    <span class="ie-info-label">已审核</span>
+    <span class="ie-info-value" id="reviewedCount">0</span>
+  </div>
+  <div class="ie-info-item">
+    <span class="ie-info-label">待审核</span>
+    <span class="ie-info-value" id="pendingCount">0</span>
+  </div>
+</div>
+
+<!-- ════════════ 用例选择栏 ════════════ -->
+<div class="ie-case-bar">
+  <div class="ie-case-selector">
+    <label class="ie-case-label">选择用例</label>
+    <select id="caseSelect" class="ie-case-select">
+      <option value="">加载中...</option>
+    </select>
+  </div>
+  <input type="text" id="caseSearch" class="ie-case-search" placeholder="搜索 case_id / title...">
+  <button class="ie-btn-prev" id="btnPrev" type="button" disabled>上一条</button>
+  <button class="ie-btn-next" id="btnNext" type="button" disabled>下一条</button>
+</div>
+
+<!-- ════════════ 主面板 ════════════ -->
+<div class="ie-panel" id="editPanel" style="display:none;">
+
+  <div class="ie-panel-cols">
+
+    <!-- 左栏：编辑表单 -->
+    <div class="ie-form-col">
+      <div class="ie-form-section">
+        <div class="ie-section-title">基本信息</div>
+        <div class="ie-form-group">
+          <label class="ie-form-label">标题 <span class="ie-required">*</span></label>
+          <input type="text" class="ie-form-input" id="editTitle" placeholder="测试用例标题">
+        </div>
+        <div class="ie-form-row-3">
+          <div class="ie-form-group">
+            <label class="ie-form-label">关联需求 ID</label>
+            <input type="text" class="ie-form-input" id="editReqId" placeholder="REQ-XXX">
+          </div>
+          <div class="ie-form-group">
+            <label class="ie-form-label">优先级</label>
+            <select class="ie-form-select" id="editPriority">
+              <option value="P0">P0</option>
+              <option value="P1">P1</option>
+              <option value="P2">P2</option>
+              <option value="P3">P3</option>
+            </select>
+          </div>
+          <div class="ie-form-group">
+            <label class="ie-form-label">用例类型</label>
+            <select class="ie-form-select" id="editType">
+              <option value="功能">功能</option>
+              <option value="API">API</option>
+              <option value="UI">UI</option>
+              <option value="性能">性能</option>
+              <option value="安全">安全</option>
+              <option value="容错">容错</option>
+            </select>
+          </div>
+        </div>
+        <div class="ie-form-row-3">
+          <div class="ie-form-group">
+            <label class="ie-form-label">风险等级</label>
+            <select class="ie-form-select" id="editRiskLevel">
+              <option value="高">高</option>
+              <option value="中">中</option>
+              <option value="低">低</option>
+            </select>
+          </div>
+          <div class="ie-form-group ie-form-span2">
+            <label class="ie-form-label">状态</label>
+            <input type="text" class="ie-form-input" id="editStatus" readonly>
+          </div>
+        </div>
+      </div>
+
+      <div class="ie-form-section">
+        <div class="ie-section-title">用例内容</div>
+        <div class="ie-form-group">
+          <label class="ie-form-label">验证摘要 <span class="ie-required">*</span></label>
+          <textarea class="ie-form-textarea" id="editSummary" rows="2" placeholder="用例验证意图的简要描述"></textarea>
+        </div>
+        <div class="ie-form-group">
+          <label class="ie-form-label">预置条件</label>
+          <textarea class="ie-form-textarea" id="editPrecondition" rows="3" placeholder="用例执行的前置条件"></textarea>
+        </div>
+        <div class="ie-form-group">
+          <label class="ie-form-label">预期结果 <span class="ie-required">*</span></label>
+          <textarea class="ie-form-textarea" id="editExpected" rows="3" placeholder="用例执行的预期结果"></textarea>
+        </div>
+      </div>
+
+      <div class="ie-form-section">
+        <div class="ie-section-title">操作序列 (actions.json)</div>
+        <textarea class="ie-json-editor" id="editActions" rows="10" placeholder='[{"action":"navigate","target":"/login"}, ...]'></textarea>
+      </div>
+
+      <div class="ie-form-section">
+        <div class="ie-section-title">检查点 (checks.json)</div>
+        <textarea class="ie-json-editor" id="editChecks" rows="8" placeholder='[{"type":"exact","target":"...","expected":"..."}]'></textarea>
+      </div>
+    </div>
+
+    <!-- 右栏：置信度与追溯 -->
+    <div class="ie-info-col">
+      <div class="ie-info-card">
+        <div class="ie-section-title">置信度总分</div>
+        <div class="ie-confidence-ring" id="confidenceRing">
+          <svg width="120" height="120" viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border-default)" stroke-width="10"/>
+            <circle id="confidenceArc" cx="60" cy="60" r="50" fill="none" stroke="var(--color-primary)" stroke-width="10" stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="314" transform="rotate(-90 60 60)"/>
+            <text id="confidenceText" x="60" y="60" text-anchor="middle" dominant-baseline="middle" fill="var(--text-primary)" font-size="24" font-weight="600">0%</text>
+          </svg>
+          <div class="ie-confidence-level" id="confidenceLevel">-</div>
+        </div>
+      </div>
+
+      <div class="ie-info-card">
+        <div class="ie-section-title">五维置信度拆解</div>
+        <div class="ie-dim-list" id="dimList">
+          <div class="ie-empty-mini">加载中...</div>
+        </div>
+      </div>
+
+  </div>
+
+  <!-- 底部操作 -->
+  <div class="ie-action-row">
+    <button class="ie-btn-ghost" id="btnCancel" type="button">取消</button>
+    <button class="ie-btn-primary" id="btnSaveNext" type="button">
+      保存并下一个
+    </button>
+    <button class="ie-btn-primary" id="btnSave" type="button">保存</button>
+  </div>
+
+</div>
+
+<div class="ie-empty-state" id="emptyState">请选择一个用例开始编辑</div>
+
+{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ════════════ 信息栏 ════════════ */
+.ie-info-bar {
+  display: flex;
+  gap: 32px;
+  padding: 16px 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.ie-info-item { display: flex; flex-direction: column; gap: 4px; }
+.ie-info-label { font-size: var(--fs-small); color: var(--text-secondary); }
+.ie-info-value {
+  font-size: var(--fs-h3); font-weight: var(--fw-semibold);
+  color: var(--text-primary); font-family: var(--font-mono);
+}
+.ie-info-primary { color: var(--color-primary); }
+
+/* ════════════ 用例选择栏 ════════════ */
+.ie-case-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+.ie-case-selector { display: flex; align-items: center; gap: 8px; flex: 1; }
+.ie-case-label {
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.ie-case-select {
+  flex: 1;
+  height: var(--control-height);
+  padding: 0 12px;
+  border-radius: var(--control-radius);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: var(--fs-small);
+  outline: none;
+  cursor: pointer;
+}
+.ie-case-select:focus { border-color: var(--color-primary); }
+.ie-case-search {
+  width: 220px;
+  height: var(--control-height);
+  padding: 0 12px;
+  border-radius: var(--control-radius);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: var(--fs-small);
+  outline: none;
+}
+.ie-case-search:focus { border-color: var(--color-primary); }
+.ie-btn-prev, .ie-btn-next {
+  height: var(--control-height);
+  padding: 0 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: var(--fs-small);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.ie-btn-prev:hover:not(:disabled), .ie-btn-next:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.ie-btn-prev:disabled, .ie-btn-next:disabled {
+  opacity: 0.4; cursor: not-allowed;
+}
+
+/* ════════════ 主面板 ════════════ */
+.ie-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--surface-shadow-float);
+  padding: 24px;
+  /* ★ 统一布局(2026-09-05)：编辑主面板填满剩余高度消除底部空白（启用表单状态） */
+  flex: 1;
+  min-height: 0;
+}
+.ie-panel-cols {
+  display: grid;
+  grid-template-columns: 55% 45%;
+  gap: 24px;
+}
+.ie-form-col, .ie-info-col {
+  display: flex; flex-direction: column;
+  gap: 20px;
+}
+
+/* ════════════ Form ════════════ */
+.ie-form-section {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  background: var(--bg-elevated);
+}
+.ie-section-title {
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+.ie-section-title::after {
+  content: ''; flex: 1; height: 1px;
+  background: var(--border-default);
+}
+.ie-form-group { margin-bottom: 12px; }
+.ie-form-group:last-child { margin-bottom: 0; }
+.ie-form-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+.ie-form-span2 { grid-column: span 2; }
+.ie-form-label {
+  display: block;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.ie-required { color: var(--state-error); }
+.ie-form-input, .ie-form-select {
+  width: 100%;
+  height: var(--control-height);
+  padding: 0 12px;
+  border-radius: var(--control-radius);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: var(--fs-small);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.ie-form-input:focus, .ie-form-select:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+.ie-form-input[readonly] {
+  background: var(--border-faint);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+.ie-form-textarea, .ie-json-editor {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--control-radius);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: var(--fs-xs);
+  font-family: var(--font-mono);
+  outline: none;
+  resize: vertical;
+  line-height: 1.5;
+  overflow: auto;
+}
+.ie-form-textarea:focus, .ie-json-editor:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+.ie-json-editor {
+  background: var(--bg-overlay);
+  min-height: 120px;
+}
+
+/* ════════════ Info Cards (Right) ════════════ */
+.ie-info-card {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  background: var(--bg-elevated);
+}
+.ie-confidence-ring {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 12px 0;
+}
+.ie-confidence-level {
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  color: var(--text-secondary);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  background: var(--border-default);
+}
+.ie-confidence-level.green { color: var(--state-success-text); background: var(--state-success-soft); }
+.ie-confidence-level.yellow { color: var(--state-warning-text); background: var(--state-warning-soft); }
+.ie-confidence-level.red { color: var(--state-error-text); background: var(--state-error-soft); }
+
+.ie-dim-list { display: flex; flex-direction: column; gap: 10px; }
+.ie-dim-item { display: flex; flex-direction: column; gap: 4px; }
+.ie-dim-row { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-xs); }
+.ie-dim-name { color: var(--text-secondary); }
+.ie-dim-value { color: var(--text-primary); font-family: var(--font-mono); font-weight: var(--fw-semibold); }
+.ie-dim-bar {
+  height: 6px;
+  background: var(--border-default);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.ie-dim-bar-fill {
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: var(--radius-full);
+  transition: width 0.3s;
+}
+
+/* ════════════ 治理原语：JS 渲染内联样式下沉 ════════════ */
+.ie-dim-item-center { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; }
+.ie-percent-value { font-size: 24px; font-weight: var(--fw-bold); color: var(--text-primary); }
+.ie-confidence-inline { display: inline-block; margin-top: 8px; }
+.ie-dim-sub { font-size: var(--fs-xs); color: var(--text-tertiary); margin-top: 8px; }
+.ie-dim-weight { color: var(--text-tertiary); }
+
+.ie-empty-mini {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: var(--fs-small);
+}
+
+/* ════════════ Action Row ════════════ */
+.ie-action-row {
+  display: flex; justify-content: flex-end; gap: 8px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-default);
+}
+.ie-btn-ghost {
+  height: var(--control-height-lg);
+  padding: 0 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+  font-family: var(--font-sans);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.ie-btn-ghost:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+.ie-btn-primary {
+  height: var(--control-height-lg);
+  padding: 0 24px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--color-primary);
+  color: var(--text-inverse);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.ie-btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  box-shadow: 0 0 16px var(--color-primary-border);
+}
+.ie-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ════════════ Empty State ════════════ */
+.ie-empty-state {
+  padding: 80px 16px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: var(--fs-body);
+  background: var(--bg-surface);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-xl);
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+'use strict';
+
+const A = window._A;
+if (!A) { console.error('[intent-edit] _A 未初始化'); return; }
+const $ = A.$, escHtml = A.escHtml, escAttr = A.escAttr, api = A.api, appendLog = A.appendLog;
+
+// ── 状态 ──
+const state = {
+  cases: [],         // 所有用例列表
+  filteredCases: [], // 搜索过滤后的列表
+  currentIdx: -1,    // 当前编辑的用例在 filteredCases 中的索引
+  currentCase: null, // 当前用例详情
+  saving: false,
+};
+
+// ── 元素引用 ──
+const els = {
+  curProject: $('curProject'),
+  totalCases: $('totalCases'),
+  reviewedCount: $('reviewedCount'),
+  pendingCount: $('pendingCount'),
+  caseSelect: $('caseSelect'),
+  caseSearch: $('caseSearch'),
+  btnPrev: $('btnPrev'),
+  btnNext: $('btnNext'),
+  editPanel: $('editPanel'),
+  emptyState: $('emptyState'),
+  editTitle: $('editTitle'),
+  editReqId: $('editReqId'),
+  editPriority: $('editPriority'),
+  editType: $('editType'),
+  editRiskLevel: $('editRiskLevel'),
+  editStatus: $('editStatus'),
+  editSummary: $('editSummary'),
+  editPrecondition: $('editPrecondition'),
+  editExpected: $('editExpected'),
+  editActions: $('editActions'),
+  editChecks: $('editChecks'),
+  confidenceArc: $('confidenceArc'),
+  confidenceText: $('confidenceText'),
+  confidenceLevel: $('confidenceLevel'),
+  dimList: $('dimList'),
+  btnCancel: $('btnCancel'),
+  btnBack: $('btnBack'),
+  btnSaveNext: $('btnSaveNext'),
+  btnSave: $('btnSave'),
+  btnRefresh: $('btnRefresh'),
+};
+
+// ════════════ 工具函数 ════════════
+
+function safeJsonParse(str) {
+  if (!str || typeof str !== 'string') return null;
+  try { return JSON.parse(str); } catch (e) { return null; }
+}
+
+function safeJsonStringify(obj) {
+  if (obj == null) return '';
+  if (typeof obj === 'string') return obj;
+  try { return JSON.stringify(obj, null, 2); } catch (e) { return String(obj); }
+}
+
+// ★ 风险等级中文名：后端返回 high/medium/low 口径（case_meta），与编辑下拉「高/中/低」对齐
+function riskZh(v) {
+  if (v == null || v === '') return '中';
+  let s = String(v).toLowerCase().trim();
+  const map = { high: '高', medium: '中', low: '低', 高: '高', 中: '中', 低: '低', p0: '高', p1: '中', p2: '低', p3: '低' };
+  return map[s] || '中';
+}
+// ★ 优先级 P 方案：后端已解析为 P0/P1/P2/P3；兜底兼容原值
+function priorityP(v) {
+  if (v == null || v === '') return 'P2';
+  let s = String(v).toUpperCase().trim();
+  if (['P0', 'P1', 'P2', 'P3'].indexOf(s) >= 0) return s;
+  return 'P2';
+}
+// ★ 用例类型：若后端返回的类型未在下拉选项里，动态补一个选项，避免展示错位/保存时被改成默认值
+function ensureSelectOption(sel, rawVal) {
+  if (!sel || rawVal == null) return;
+  const val = String(rawVal).trim();
+  if (!val) return;
+  let found = false;
+  for (let i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].value === val) { found = true; break; }
+  }
+  if (!found) {
+    const opt = document.createElement('option');
+    opt.value = val;
+    opt.textContent = val;
+    sel.appendChild(opt);
+  }
+}
+
+function getConfidenceLevel(score) {
+  if (score == null) return { text: '未知', cls: '' };
+  const v = score > 1 ? score : score * 100;
+  if (v >= 80) return { text: '高置信度', cls: 'green' };
+  if (v >= 60) return { text: '中置信度', cls: 'yellow' };
+  return { text: '低置信度', cls: 'red' };
+}
+
+function setConfidenceRing(score) {
+  const displayScore = score != null ? (score > 1 ? score : score * 100) : 0;
+  const v = Math.max(0, Math.min(100, displayScore)) / 100;
+  const percent = Math.round(displayScore);
+  const circumference = 2 * Math.PI * 50;
+  const offset = circumference * (1 - v);
+  els.confidenceArc.setAttribute('stroke-dashoffset', offset);
+  els.confidenceText.textContent = percent + '%';
+  const level = getConfidenceLevel(score);
+  els.confidenceLevel.textContent = level.text;
+  els.confidenceLevel.className = 'ie-confidence-level ' + level.cls;
+  // 颜色变化
+  if (level.cls === 'green') els.confidenceArc.setAttribute('stroke', 'var(--state-success)');
+  else if (level.cls === 'yellow') els.confidenceArc.setAttribute('stroke', 'var(--state-warning)');
+  else if (level.cls === 'red') els.confidenceArc.setAttribute('stroke', 'var(--state-error)');
+  else els.confidenceArc.setAttribute('stroke', 'var(--color-primary)');
+}
+
+const DIMENSIONS = [
+  { key: 'source_traceable', label: '原文可追溯', weight: 0.30 },
+  { key: 'source_verified', label: '原文已验证', weight: 0.25 },
+  { key: 'section_covered', label: '章节覆盖度', weight: 0.20 },
+  { key: 'uniqueness', label: '唯一性', weight: 0.15 },
+  { key: 'description_specific', label: '描述具体性', weight: 0.10 },
+];
+
+function renderDimensions(confidence) {
+  if (!confidence) {
+    els.dimList.innerHTML = '<div class="ie-empty-mini">无置信度数据</div>';
+    return;
+  }
+  // ★ 如果 confidence 是数值（如 65），显示简化版置信度
+  if (typeof confidence === 'number') {
+    var percent = Math.round(confidence > 1 ? confidence : confidence * 100);
+    var levelText = percent >= 80 ? '高置信度' : (percent >= 60 ? '中置信度' : '低置信度');
+    var levelCls = percent >= 80 ? 'green' : (percent >= 60 ? 'yellow' : 'red');
+    els.dimList.innerHTML = '<div class="ie-dim-item-center">' +
+      '<div class="ie-percent-value">' + percent + '%</div>' +
+      '<div class="ie-confidence-level ' + levelCls + ' ie-confidence-inline">' + levelText + '</div>' +
+      '<div class="ie-dim-sub">' +
+        '详细维度拆解仅在 Step2 需求审核中可用<br>用例审核显示综合置信度' +
+      '</div>' +
+    '</div>';
+    return;
+  }
+  if (typeof confidence !== 'object') {
+    els.dimList.innerHTML = '<div class="ie-empty-mini">无置信度数据</div>';
+    return;
+  }
+  els.dimList.innerHTML = DIMENSIONS.map(dim => {
+    const val = confidence[dim.key] != null ? confidence[dim.key] : 0;
+    const percent = Math.round(val * 100);
+    return '<div class="ie-dim-item">' +
+      '<div class="ie-dim-row">' +
+        '<span class="ie-dim-name">' + escHtml(dim.label) + ' <span class="ie-dim-weight">(' + dim.weight + ')</span></span>' +
+        '<span class="ie-dim-value">' + percent + '%</span>' +
+      '</div>' +
+      '<div class="ie-dim-bar"><div class="ie-dim-bar-fill" style="width:' + percent + '%"></div></div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderTraceLinks(traceLinks) {
+  // ★ 已废弃：追溯链接功能已由关系链路替代，保留空函数防止报错
+}
+
+// ════════════ 数据加载 ════════════
+
+async function loadCases() {
+  els.caseSelect.innerHTML = '<option value="">加载中...</option>';
+  try {
+    const d = await api('GET', '/api/cases');
+    if (!d || !d.ok) {
+      els.caseSelect.innerHTML = '<option value="">加载失败</option>';
+      appendLog('⚠️ 加载用例列表失败: ' + (d && d.error ? d.error : '未知'));
+      return;
+    }
+    state.cases = d.intents || d.cases || [];
+    state.filteredCases = state.cases.slice();
+    updateInfoBar();
+    renderCaseSelect();
+    // ★ 自动选中 URL 参数中的 case_id
+    autoSelectFromUrl();
+  } catch (e) {
+    els.caseSelect.innerHTML = '<option value="">加载异常</option>';
+    appendLog('⚠️ 加载用例列表异常: ' + String(e));
+  }
+}
+
+function autoSelectFromUrl() {
+  var params = new URLSearchParams(window.location.search);
+  var caseId = params.get('case_id');
+  if (!caseId) return;
+  var idx = state.filteredCases.findIndex(function(c) {
+    return (c.case_id || c.id) === caseId;
+  });
+  if (idx >= 0) {
+    selectCase(idx);
+  }
+}
+
+function updateInfoBar() {
+  if (A._currentProject) {
+    if (els.curProject) els.curProject.textContent = A._currentProjectName || A._currentProject || '-';
+  }
+  els.totalCases.textContent = state.cases.length;
+  const reviewed = state.cases.filter(c => c.valid_status === 'approved' || c.review_status === 'approved').length;
+  const pending = state.cases.filter(c => c.valid_status === 'pending' || c.review_status === 'pending' || !c.valid_status).length;
+  els.reviewedCount.textContent = reviewed;
+  els.pendingCount.textContent = pending;
+}
+
+function renderCaseSelect() {
+  if (state.filteredCases.length === 0) {
+    els.caseSelect.innerHTML = '<option value="">无用例</option>';
+    return;
+  }
+  els.caseSelect.innerHTML = state.filteredCases.map((c, idx) => {
+    const label = (c.case_id || c.id || ('#' + idx)) + ' - ' + (c.title || '无标题');
+    return '<option value="' + idx + '">' + escHtml(label) + '</option>';
+  }).join('');
+}
+
+function filterCases(keyword) {
+  if (!keyword) {
+    state.filteredCases = state.cases.slice();
+  } else {
+    const kw = keyword.toLowerCase();
+    state.filteredCases = state.cases.filter(c => {
+      const id = (c.case_id || c.id || '').toLowerCase();
+      const title = (c.title || '').toLowerCase();
+      return id.includes(kw) || title.includes(kw);
+    });
+  }
+  renderCaseSelect();
+  if (state.filteredCases.length > 0) {
+    selectCase(0);
+  } else {
+    clearForm();
+  }
+}
+
+function selectCase(idx) {
+  if (idx < 0 || idx >= state.filteredCases.length) {
+    clearForm();
+    return;
+  }
+  state.currentIdx = idx;
+  state.currentCase = state.filteredCases[idx];
+  els.caseSelect.value = String(idx);
+  renderForm(state.currentCase);
+  updateNavButtons();
+}
+
+function updateNavButtons() {
+  els.btnPrev.disabled = state.currentIdx <= 0;
+  els.btnNext.disabled = state.currentIdx >= state.filteredCases.length - 1;
+}
+
+function clearForm() {
+  state.currentIdx = -1;
+  state.currentCase = null;
+  els.editPanel.style.display = 'none';
+  els.emptyState.style.display = 'block';
+  els.btnPrev.disabled = true;
+  els.btnNext.disabled = true;
+}
+
+function renderForm(c) {
+  els.editPanel.style.display = 'block';
+  els.emptyState.style.display = 'none';
+  els.editTitle.value = c.title || '';
+
+  // ★ 优先级(P0-P3) / 风险等级(高/中/低) / 用例类型：用后端统一口径解析，避免错位
+  els.editPriority.value = priorityP(c.priority || c.risk_level);
+  els.editRiskLevel.value = riskZh(c.risk_level || c._risk_level);
+  ensureSelectOption(els.editType, c.case_type);
+  els.editType.value = (c.case_type ? String(c.case_type).trim() : '功能');
+  els.editReqId.value = c.req_id || '';
+  els.editStatus.value = c.review_status || c.valid_status || (c._review_status || 'pending');
+
+  // ★ 用例内容：后端现返回 payload 中的真实内容（precondition/expected_result/actions/checks）
+  els.editSummary.value = c.intent_summary || '';
+  els.editPrecondition.value = typeof c.precondition === 'string' ? c.precondition
+    : (c.precondition != null ? JSON.stringify(c.precondition, null, 2) : '');
+  els.editExpected.value = c.expected_result || c.expected_outcome || '';
+  els.editActions.value = safeJsonStringify(c.actions);
+  els.editChecks.value = safeJsonStringify(c.checks);
+
+  // 置信度
+  const confidence = c.confidence != null ? c.confidence : c._confidence;
+  const score = typeof confidence === 'number' ? confidence
+    : (confidence && confidence._avg_confidence != null ? confidence._avg_confidence : null);
+  setConfidenceRing(score);
+  renderDimensions(confidence);
+}
+
+// ════════════ 保存 ════════════
+
+async function saveCase(goNext) {
+  if (!state.currentCase || state.saving) return;
+  const caseId = state.currentCase.case_id || state.currentCase.id;
+  if (!caseId) {
+    A.toast('当前用例无 case_id，无法保存', 'error');
+    return;
+  }
+  // 校验必填
+  if (!els.editTitle.value.trim()) { A.toast('标题不能为空', 'warning'); return; }
+  if (!els.editSummary.value.trim()) { A.toast('验证摘要不能为空', 'warning'); return; }
+  if (!els.editExpected.value.trim()) { A.toast('预期结果不能为空', 'warning'); return; }
+  // 校验 JSON
+  const actionsRaw = els.editActions.value.trim();
+  const checksRaw = els.editChecks.value.trim();
+  const actions = safeJsonParse(actionsRaw);
+  const checks = safeJsonParse(checksRaw);
+  if (actionsRaw && actions == null) {
+    if (!(await A.confirm('actions.json 格式有误，是否仍保存为字符串？'))) return;
+  }
+  if (checksRaw && checks == null) {
+    if (!(await A.confirm('checks.json 格式有误，是否仍保存为字符串？'))) return;
+  }
+
+  const updates = {
+    title: els.editTitle.value.trim(),
+    req_id: els.editReqId.value.trim(),
+    priority: els.editPriority.value,
+    risk_level: els.editRiskLevel.value, // 高/中/低 → 后端写 case_meta.risk_level
+    case_type: els.editType.value,
+    intent_summary: els.editSummary.value.trim(),
+    precondition: els.editPrecondition.value,
+    expected_result: els.editExpected.value.trim(),
+  };
+  if (actionsRaw === '') {
+    updates.actions = [];
+  } else if (actions != null) {
+    updates.actions = actions;
+  }
+  if (checksRaw === '') {
+    updates.checks = [];
+  } else if (checks != null) {
+    updates.checks = checks;
+  }
+
+  state.saving = true;
+  try {
+    const d = await api('POST', '/api/cases/review/edit', { case_id: caseId, updates: updates });
+    if (d && d.ok) {
+      appendLog('✅ 用例已保存: ' + caseId);
+      // 更新本地数据
+      Object.assign(state.currentCase, updates);
+      if (goNext && state.currentIdx < state.filteredCases.length - 1) {
+        selectCase(state.currentIdx + 1);
+      }
+    } else {
+      A.toast('保存失败: ' + (d && d.error ? d.error : '未知错误'), 'error');
+    }
+  } catch (e) {
+    A.toast('保存异常: ' + String(e), 'error');
+  } finally {
+    state.saving = false;
+  }
+}
+
+// ════════════ 事件 ════════════
+
+function bindEvents() {
+  els.caseSelect.addEventListener('change', function() {
+    const idx = parseInt(this.value);
+    if (!isNaN(idx)) selectCase(idx);
+  });
+  els.caseSearch.addEventListener('input', function() {
+    filterCases(this.value.trim());
+  });
+  els.btnPrev.addEventListener('click', function() {
+    if (state.currentIdx > 0) selectCase(state.currentIdx - 1);
+  });
+  els.btnNext.addEventListener('click', function() {
+    if (state.currentIdx < state.filteredCases.length - 1) selectCase(state.currentIdx + 1);
+  });
+  els.btnCancel.addEventListener('click', function() {
+    if (state.currentCase) renderForm(state.currentCase);
+  });
+  els.btnBack.addEventListener('click', function() {
+    // ★ 返回列表时带当前 case_id，审核页据此恢复选中
+    const cid = (state.currentCase && (state.currentCase.case_id || state.currentCase.id)) || '';
+    const q = cid ? '?case=' + encodeURIComponent(cid) : '';
+    window.location.href = '/intent-review' + q;
+  });
+  els.btnSave.addEventListener('click', function() { A.withBtnLoading(els.btnSave, '保存中...', function() { return saveCase(false); }); });
+  els.btnSaveNext.addEventListener('click', function() { A.withBtnLoading(els.btnSaveNext, '保存中...', function() { return saveCase(true); }); });
+  els.btnRefresh.addEventListener('click', loadCases);
+}
+
+// ════════════ 入口 ════════════
+
+A._onAuthOk = function() {
+  if (A._renderSidebarUser) A._renderSidebarUser();
+  if (A.applyPermissions) A.applyPermissions();
+  loadCases();
+  A._startStepBadgePolling();
+};
+
+bindEvents();
+
+if (A._currentUser) {
+  loadCases();
+}
+
+})();
+</script>
+{% endblock %}

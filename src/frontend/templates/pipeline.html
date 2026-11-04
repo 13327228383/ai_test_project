@@ -1,0 +1,3733 @@
+{% extends "_layout_base.html" %}
+{% block head_extra %}
+<style>
+/* ═══════════ Pipeline 页面专属样式 ════════════ */
+/* 让 content-body 撑满高度，作为 flex 列容器 */
+.content-body {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  padding: var(--space-4) var(--space-5) !important;
+}
+
+/* 运行状态条 */
+.pipeline-run-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  flex-shrink: 0;
+}
+
+/* 5-Step 横向进度条 */
+.pipeline-bar { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4); flex-shrink: 0; }
+.pipeline-steps { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); width: 100%; }
+.pipeline-step-wrapper { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; min-width: 0; }
+.pipeline-step-circle { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid var(--border-default); background: var(--bg-elevated); color: var(--text-tertiary); transition: all 0.2s; }
+.pipeline-step-circle svg { width: 18px; height: 18px; }
+.pipeline-step-circle.completed { background: var(--state-success-soft); border-color: var(--state-success-border); color: var(--state-success-text); }
+.pipeline-step-circle.active { background: var(--state-warning-soft); border-color: var(--state-warning-border); color: var(--state-warning-text); animation: pulse 1.5s infinite; }
+.pipeline-step-circle.active svg { animation: spin 1s linear infinite; }
+.pipeline-step-circle.pending { background: var(--bg-hover); border-color: var(--state-neutral-border); color: var(--text-tertiary); opacity: 0.8; }
+.pipeline-step-circle.disabled { opacity: 0.3; border-style: dashed; background: transparent; }
+.pipeline-step-circle.disabled svg { opacity: 0.3; }
+.pipeline-step-circle.step-1 { border-color: var(--step1-color); color: var(--step1-color); --step-glow-color: color-mix(in srgb, var(--step1-color), transparent 40%); --step-glow-outer: color-mix(in srgb, var(--step1-color), transparent 65%); }
+.pipeline-step-circle.step-2 { border-color: var(--step2-color); color: var(--step2-color); --step-glow-color: color-mix(in srgb, var(--step2-color), transparent 40%); --step-glow-outer: color-mix(in srgb, var(--step2-color), transparent 65%); }
+.pipeline-step-circle.step-3 { border-color: var(--step3-color); color: var(--step3-color); --step-glow-color: color-mix(in srgb, var(--step3-color), transparent 40%); --step-glow-outer: color-mix(in srgb, var(--step3-color), transparent 65%); }
+.pipeline-step-circle.step-4 { border-color: var(--step4-color); color: var(--step4-color); --step-glow-color: color-mix(in srgb, var(--step4-color), transparent 40%); --step-glow-outer: color-mix(in srgb, var(--step4-color), transparent 65%); }
+.pipeline-step-circle.step-5 { border-color: var(--step5-color); color: var(--step5-color); --step-glow-color: color-mix(in srgb, var(--step5-color), transparent 40%); --step-glow-outer: color-mix(in srgb, var(--step5-color), transparent 65%); }
+.pipeline-step-circle.error { background: var(--state-error-soft); border-color: var(--state-error-border); color: var(--state-error-text); }
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--step-glow-color, var(--color-primary-border)), 0 0 0 0 var(--step-glow-outer, var(--color-primary-glow)); } 50% { box-shadow: 0 0 0 10px transparent, 0 0 0 20px transparent; } }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.pipeline-step-label { font-size: var(--fs-small); font-weight: var(--fw-semibold); color: var(--text-secondary); margin-top: 2px; }
+.pipeline-step-label.active { color: var(--state-warning-text); }
+.pipeline-step-desc { font-size: var(--fs-micro); color: var(--text-tertiary); }
+.pipeline-step-badge { font-size: var(--fs-micro); padding: 2px 14px; border-radius: var(--radius-full); margin-top: 2px; min-width: 64px; text-align: center; }
+.pipeline-step-badge.badge-success { color: var(--state-success-text); background: var(--state-success-soft); border: 1px solid var(--state-success-border); }
+.pipeline-step-badge.badge-active { color: var(--state-warning-text); background: var(--state-warning-soft); border: 1px solid var(--state-warning-border); }
+.pipeline-step-badge.badge-pending { color: var(--text-tertiary); background: var(--state-neutral-soft); border: 1px solid var(--state-neutral-border); }
+.pipeline-step-badge.badge-error { color: var(--state-error-text); background: var(--state-error-soft); border: 1px solid var(--state-error-border); }
+.pipeline-connector { flex: 1; height: 2px; background: var(--border-default); margin-top: 20px; border-radius: var(--radius-full); transition: background 0.3s; min-width: 30px; }
+.pipeline-connector.completed { background: var(--state-success); }
+/* 修复 D1：已完成连线按「出发步骤」自身步骤色着色，消除统一绿色与 Step1 翠绿的相邻粘连 */
+.pipeline-connector.completed.step-1 { background: var(--step1-color); }
+.pipeline-connector.completed.step-2 { background: var(--step2-color); }
+.pipeline-connector.completed.step-3 { background: var(--step3-color); }
+.pipeline-connector.completed.step-4 { background: var(--step4-color); }
+.pipeline-connector.completed.step-5 { background: var(--step5-color); }
+.pipeline-connector.active { background: linear-gradient(90deg, var(--state-success), var(--state-warning)); }
+.pipeline-step-action { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-micro); padding: 3px 10px; border-radius: var(--radius-full); margin-top: 4px; min-width: 76px; justify-content: center; transition: all 0.18s; border: 1px solid transparent; }
+.pipeline-step-action .pipeline-step-badge-text { line-height: 1; }
+.pipeline-step-action.badge-success { color: var(--state-success-text); background: var(--state-success-soft); border-color: var(--state-success-border); }
+.pipeline-step-action.badge-active { color: var(--state-warning-text); background: var(--state-warning-soft); border-color: var(--state-warning-border); }
+.pipeline-step-action.badge-pending { color: var(--text-tertiary); background: var(--state-neutral-soft); border-color: var(--state-neutral-border); }
+.pipeline-step-action.badge-error { color: var(--state-error-text); background: var(--state-error-soft); border-color: var(--state-error-border); }
+.pipeline-step-action.clickable { cursor: pointer; }
+.pipeline-step-action.clickable.badge-success { background: linear-gradient(135deg, var(--state-success-soft) 0%, var(--color-primary-soft) 100%); box-shadow: 0 0 0 0 transparent; }
+.pipeline-step-action.clickable.badge-success:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--color-primary-glow); border-color: var(--state-success); }
+.pipeline-step-action.clickable.badge-pending { background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--color-primary-soft) 100%); border-color: var(--color-primary-border); color: var(--color-primary); }
+.pipeline-step-action.clickable.badge-pending:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--color-primary-glow); background: var(--color-primary); color: var(--text-on-color); border-color: var(--color-primary); }
+.pipeline-step-action.clickable.badge-pending:hover svg { fill: var(--text-on-color); }
+.pipeline-step-action.clickable.badge-error { background: linear-gradient(135deg, var(--state-error-soft) 0%, var(--state-error-soft) 100%); }
+.pipeline-step-action.clickable.badge-error:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--state-error-tint); border-color: var(--state-error); }
+.pipeline-step-action:active { transform: translateY(0) scale(0.97); }
+
+/* 主内容区：双栏 */
+.pipeline-main { position: relative; display: grid; grid-template-columns: 1fr var(--pl-detail-w, 360px); gap: var(--space-4); flex: 1; min-height: 0; }
+@media (max-width: 1200px) { .pipeline-main { grid-template-columns: 1fr; } }
+/* ★ 详情面板左侧拖动分隔条（左右拖拽调整详情宽度，2026-09-02）
+    绝对定位贴合详情栏左缘；拖拽时由 JS 更新 --pl-detail-w，位置随变量自动联动 */
+.detail-splitter { position: absolute; top: 0; bottom: 0; width: 7px; margin-left: -4px; cursor: col-resize; z-index: 8; }
+.detail-splitter:hover, .detail-splitter.dragging { background: var(--color-primary); opacity: 0.4; }
+@media (max-width: 1200px) { .detail-splitter { display: none; } }
+body.panel-resizing { cursor: col-resize; user-select: none; }
+
+/* 左侧面板：tab + 内容 */
+.left-panel { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-lg); display: flex; flex-direction: column; overflow: hidden; min-height: 400px; height: 100%; }
+.left-panel-header { display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-default); }
+.left-panel-title { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-small); font-weight: var(--fw-semibold); color: var(--text-primary); }
+
+/* Tab 切换 */
+.tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--border-default); padding: 0 var(--space-4); flex-shrink: 0; }
+.tab-btn { padding: var(--space-2) var(--space-3); font-size: var(--fs-small); color: var(--text-tertiary); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+.tab-btn:hover { color: var(--text-secondary); }
+.tab-btn.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+.tab-content { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+.tab-content.active { display: flex; }
+
+/* 进度 Tab */
+.progress-summary { padding: var(--space-3) var(--space-4); display: flex; align-items: center; border-bottom: 1px solid var(--border-default); flex-shrink: 0; }
+.progress-summary-text { font-size: var(--fs-small); color: var(--text-secondary); white-space: nowrap; }
+.progress-summary-text strong { color: var(--text-primary); font-family: var(--font-mono); }
+.progress-bar-track { flex: 1; height: 6px; background: var(--bg-elevated); border-radius: var(--radius-full); overflow: hidden; margin: 0 var(--space-3); }
+.progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--step3-color), var(--color-primary)); border-radius: var(--radius-full); transition: width 0.4s ease; }
+.progress-bar-pct { font-size: var(--fs-small); font-family: var(--font-mono); color: var(--text-secondary); min-width: 40px; text-align: right; }
+
+/* 用例列表 */
+.case-list { flex: 1; overflow-y: auto; }
+.case-item { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-default); cursor: pointer; transition: background 0.12s; }
+.case-item:hover { background: var(--bg-tint-subtle); }
+.case-item.selected { background: var(--color-primary-soft); }
+.case-item-icon { width: 20px; height: 20px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.case-item-icon.icon-done { background: var(--state-success-soft); color: var(--state-success-text); }
+.case-item-icon.icon-error { background: var(--state-error-soft); color: var(--state-error-text); }
+.case-item-icon.icon-skip { background: var(--state-info-soft); color: var(--state-info-text); }
+.case-item-icon.icon-block { background: var(--state-warning-soft); color: var(--state-warning-text); }
+.case-item-icon.icon-gate { background: var(--step2-soft); color: var(--track-db); }
+.case-item-icon.icon-active { background: var(--state-warning-soft); color: var(--state-warning-text); animation: pulse 1.5s infinite; }
+.case-item-icon.icon-waiting { background: var(--state-neutral-soft); color: var(--text-tertiary); }
+.case-item-icon svg { width: 12px; height: 12px; }
+.case-item-info { flex: 1; min-width: 0; }
+
+/* ── 子任务进度表格（进度 tab 内，单列） ── */
+.subtask-progress { margin: 0 var(--space-4) var(--space-3); }
+.subtask-progress-table { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); }
+.subtask-progress-table td { padding: 1px var(--space-2); vertical-align: middle; white-space: nowrap; }
+.subtask-progress-table tr { border-bottom: 1px solid var(--border-default); }
+.subtask-progress-table tr:last-child { border-bottom: none; }
+.subtask-group-row td { padding-top: var(--space-1); padding-bottom: 0; border-bottom: none; }
+.subtask-group-label { font-size: var(--fs-micro); font-weight: var(--fw-semibold); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; }
+.subtask-row { transition: background 0.15s; }
+.subtask-row:hover { background: var(--bg-tint-soft); }
+.subtask-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; vertical-align: middle; margin-right: 5px; }
+.subtask-dot.completed { background: var(--state-success); }
+.subtask-dot.active { background: var(--state-warning); animation: pulse 1.5s infinite; }
+.subtask-dot.error { background: var(--state-error); }
+.subtask-dot.pending { background: var(--text-tertiary); opacity: 0.4; }
+.subtask-label { white-space: nowrap; }
+.subtask-label.completed { color: var(--text-primary); }
+.subtask-label.error { color: var(--state-error-text); }
+.subtask-section-title { font-size: var(--fs-small); font-weight: var(--fw-semibold); color: var(--text-primary); margin: var(--space-3) var(--space-4) var(--space-1); }
+.case-item-id { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-tertiary); }
+.case-item-title { font-size: var(--fs-small); color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.case-item-skip { font-size: var(--fs-micro); color: var(--text-tertiary); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.case-item-meta { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
+.case-item-badge { font-size: var(--fs-micro); padding: 2px 8px; border-radius: var(--radius-full); white-space: nowrap; }
+.case-item-badge.badge-success { color: var(--state-success-text); background: var(--state-success-soft); border: 1px solid var(--state-success-border); }
+.case-item-badge.badge-error { color: var(--state-error-text); background: var(--state-error-soft); border: 1px solid var(--state-error-border); }
+.case-item-badge.badge-active { color: var(--state-warning-text); background: var(--state-warning-soft); border: 1px solid var(--state-warning-border); }
+.case-item-badge.badge-warning { color: var(--state-warning-text); background: var(--state-warning-soft); border: 1px solid var(--state-warning-border); }
+.case-item-badge.badge-info { color: var(--state-info-text); background: var(--state-info-soft); border: 1px solid var(--state-info-border); }
+.case-item-badge.badge-gate { color: var(--track-db); background: var(--step2-soft); border: 1px solid var(--step2-border); }
+.case-item-badge.badge-pending { color: var(--text-tertiary); background: var(--state-neutral-soft); border: 1px solid var(--state-neutral-border); }
+.case-item-time { font-size: var(--fs-micro); color: var(--text-tertiary); font-family: var(--font-mono); min-width: 32px; text-align: right; }
+/* Step1 数据源状态：指标与名称强制同行展示 */
+.source-status-item .case-item-info { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; gap: 2px; }
+.source-status-item .case-item-id { display: flex; align-items: baseline; flex-wrap: nowrap; gap: 0 var(--space-2); white-space: nowrap; overflow: hidden; }
+.source-status-detail { font-size: var(--fs-micro); color: var(--text-tertiary); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Step1 数据源统计芯片 */
+.source-stats-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.stat-chip { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 10px; font-size: var(--fs-micro); font-family: var(--font-mono); color: var(--color-primary); background: var(--color-primary-soft); border: 1px solid var(--color-primary-border); white-space: nowrap; }
+.stat-chip.secondary { color: var(--text-tertiary); background: var(--bg-hover); border: 1px solid var(--border-default); }
+/* DOM 详情面板 */
+.dom-page-list { max-height: 400px; overflow-y: auto; }
+.dom-page-item { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border-default); cursor: pointer; transition: background 0.15s; }
+.dom-page-item:hover { background: var(--bg-elevated); }
+.dom-page-item .page-icon { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); background: var(--color-primary-soft); color: var(--color-primary); flex-shrink: 0; }
+.dom-page-item .page-info { flex: 1; min-width: 0; }
+.dom-page-item .page-title { font-size: var(--fs-sm); font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dom-page-item .page-path { font-size: var(--fs-micro); color: var(--text-tertiary); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dom-page-item .page-elements { font-size: var(--fs-micro); color: var(--text-tertiary); font-family: var(--font-mono); flex-shrink: 0; }
+.dom-nav-tree { margin-top: var(--space-3); }
+.dom-nav-tree-title { font-size: var(--fs-sm); font-weight: 600; color: var(--text-primary); margin-bottom: var(--space-2); padding: 0 var(--space-1); }
+.dom-nav-group { margin-bottom: var(--space-2); }
+.dom-nav-group-name { font-size: var(--fs-xs); font-weight: 500; color: var(--color-primary); padding: var(--space-1) var(--space-2); background: var(--color-primary-soft); border-radius: var(--radius-sm); margin-bottom: 4px; }
+.dom-nav-link { display: flex; align-items: center; gap: 6px; padding: 4px var(--space-2); font-size: var(--fs-xs); color: var(--text-secondary); border-radius: 4px; }
+.dom-nav-link:hover { background: var(--bg-elevated); }
+.dom-nav-link .nav-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary); flex-shrink: 0; }
+.dom-nav-link .nav-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* AI 日志 Tab */
+.log-body { flex: 1; overflow-y: auto; padding: var(--space-3); font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1.6; background: var(--bg-base); }
+.log-line { padding: 1px 0; color: var(--text-secondary); word-break: break-all; }
+.log-line.log-error { color: var(--state-error-text); }
+.log-line.log-warn { color: var(--state-warning-text); }
+.log-line.log-info { color: var(--state-info-text); }
+.log-line.log-success { color: var(--state-success-text); }
+.log-line .log-ts { color: var(--text-tertiary); margin-right: 6px; }
+.log-empty { color: var(--text-tertiary); text-align: center; padding: var(--space-8); font-family: var(--font-sans); }
+.log-actions { display: flex; gap: var(--space-2); }
+.log-btn { padding: 2px 8px; font-size: var(--fs-micro); background: var(--bg-elevated); border: 1px solid var(--border-default); border-radius: var(--radius-sm); color: var(--text-secondary); cursor: pointer; }
+.log-btn:hover { background: var(--bg-surface); color: var(--text-primary); }
+
+/* 右侧：用例详情面板 */
+.detail-panel { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-lg); display: flex; flex-direction: column; overflow: hidden; }
+.detail-panel-header { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-default); display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-small); font-weight: var(--fw-semibold); color: var(--text-primary); }
+.detail-panel-body { padding: var(--space-3) var(--space-4); flex: 1; overflow-y: auto; }
+.detail-field { display: flex; justify-content: space-between; align-items: center; padding: var(--space-2) 0; border-bottom: 1px solid var(--border-default); font-size: var(--fs-xs); }
+.detail-field:last-child { border-bottom: none; }
+.detail-field-label { color: var(--text-tertiary); }
+/* 执行详情：状态徽章（语义色 pill，与列表一致：通过=绿 / 失败·错误=红 / 跳过=蓝 / 阻断=琥珀 / 门禁未过=紫） */
+.detail-status-badge { display: inline-block; padding: 2px 10px; border-radius: var(--radius-full); font-size: var(--fs-xs); font-weight: var(--fw-medium); line-height: 1.5; white-space: nowrap; }
+.detail-status-badge.badge-success { color: var(--state-success-text); background: var(--state-success-soft); border: 1px solid var(--state-success-border); }
+.detail-status-badge.badge-error { color: var(--state-error-text); background: var(--state-error-soft); border: 1px solid var(--state-error-border); }
+.detail-status-badge.badge-info { color: var(--state-info-text); background: var(--state-info-soft); border: 1px solid var(--state-info-border); }
+.detail-status-badge.badge-warning { color: var(--state-warning-text); background: var(--state-warning-soft); border: 1px solid var(--state-warning-border); }
+.detail-status-badge.badge-gate { color: var(--track-db); background: var(--step2-soft); border: 1px solid var(--step2-border); }
+.detail-status-badge.badge-active { color: var(--state-warning-text); background: var(--state-warning-soft); border: 1px solid var(--state-warning-border); }
+.detail-status-badge.badge-pending { color: var(--text-tertiary); background: var(--state-neutral-soft); border: 1px solid var(--state-neutral-border); }
+.detail-field-value { color: var(--text-primary); font-family: var(--font-mono); text-align: right; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detail-field-value.muted { color: var(--text-tertiary); }
+.detail-thinking { padding: var(--space-3); background: var(--color-primary-soft); border: 1px solid var(--color-primary-border); border-radius: var(--radius-md); margin-top: var(--space-3); font-size: var(--fs-xs); color: var(--color-primary); display: none; }
+.detail-thinking.show { display: block; }
+.detail-thinking-name { font-weight: var(--fw-semibold); margin-bottom: 2px; }
+.detail-thinking-elapsed { font-family: var(--font-mono); color: var(--text-secondary); }
+
+/* 置信度条 */
+.confidence-row { padding: var(--space-2) 0; }
+.confidence-track { height: 6px; background: var(--bg-elevated); border-radius: var(--radius-full); overflow: hidden; margin-top: var(--space-1); }
+.confidence-fill { height: 100%; border-radius: var(--radius-full); transition: width 0.4s ease; }
+.confidence-fill.high { background: var(--state-success); }
+.confidence-fill.mid { background: var(--state-warning); }
+.confidence-fill.low { background: var(--state-error); }
+
+/* 执行轨道标签 */
+.track-tags { display: flex; gap: var(--space-1); flex-wrap: wrap; margin-top: var(--space-1); }
+.track-tag { font-size: var(--fs-micro); padding: 2px 8px; border-radius: var(--radius-full); border: 1px solid var(--border-default); color: var(--text-secondary); background: var(--bg-elevated); }
+/* ★ 三轨三色（字体色 + 边框/底色各轨独立，与 --track-* 设计令牌一致） */
+.track-tag.tr-track-ui   { color: var(--track-ui);   border-color: var(--track-ui-border);   background: var(--track-ui-soft); }
+.track-tag.tr-track-api  { color: var(--track-api);  border-color: var(--track-api-border);  background: var(--track-api-soft); }
+.track-tag.tr-track-db   { color: var(--track-db);   border-color: var(--track-db-border);   background: var(--track-db-soft); }
+/* 三轨用例个数统计条（不去重） */
+.track-count-bar { display: flex; gap: var(--space-1); flex-wrap: wrap; align-items: center; padding: var(--space-1) 0; }
+.track-count-tag { font-size: var(--fs-micro); padding: 2px 8px; border-radius: var(--radius-full); border: 1px solid var(--border-default); color: var(--text-secondary); background: var(--bg-elevated); }
+.track-count-tag.tr-track-ui  { color: var(--track-ui);  border-color: var(--track-ui-border);  background: var(--track-ui-soft); }
+.track-count-tag.tr-track-api { color: var(--track-api); border-color: var(--track-api-border); background: var(--track-api-soft); }
+.track-count-tag.tr-track-db  { color: var(--track-db);  border-color: var(--track-db-border);  background: var(--track-db-soft); }
+
+/* 详情操作按钮 */
+.detail-actions { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
+.detail-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: var(--space-1); padding: var(--space-2); font-size: var(--fs-xs); border-radius: var(--radius-md); border: 1px solid var(--border-default); background: var(--bg-elevated); color: var(--text-secondary); cursor: pointer; transition: all 0.15s; }
+.detail-btn:hover { background: var(--bg-surface); color: var(--text-primary); border-color: var(--border-hover); }
+.detail-btn.primary { background: var(--color-primary); color: var(--text-inverse); border-color: var(--color-primary); }
+.detail-btn.primary:hover { background: var(--color-primary-hover); }
+
+/* 关联追溯区块 */
+.trace-block { border-top: 1px dashed var(--border-default); padding-top: var(--space-2); }
+.trace-section { margin-bottom: var(--space-2); }
+.trace-section-title { font-size: var(--fs-micro); color: var(--text-tertiary); margin-bottom: var(--space-1); text-transform: uppercase; letter-spacing: 0.5px; }
+.trace-item { display: flex; align-items: center; gap: var(--space-1); padding: 4px 8px; margin-bottom: 2px; font-size: var(--fs-xs); color: var(--text-secondary); background: var(--bg-elevated); border: 1px solid var(--border-default); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s; }
+.trace-item:hover { background: var(--color-primary-soft); border-color: var(--color-primary-border); color: var(--color-primary); }
+.trace-item-icon { width: 14px; height: 14px; flex-shrink: 0; color: var(--text-tertiary); }
+.trace-item:hover .trace-item-icon { color: var(--color-primary); }
+.trace-item-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trace-empty { font-size: var(--fs-micro); color: var(--text-tertiary); padding: 4px 8px; }
+/* ★ 未实际校验(SKIP/阻断/门禁未过)的中性提示：信息蓝虚线框，区别于错误红/阻断琥珀/待执行灰 */
+.exec-neutral-note { font-size: var(--fs-micro); color: var(--state-info-text); background: var(--state-info-soft); border: 1px dashed var(--state-info-border); border-radius: var(--radius-sm); padding: 6px 10px; }
+/* 三轨校验明细条 */
+.track-bars { display: flex; flex-direction: column; gap: 6px; }
+.track-row { display: flex; align-items: center; gap: 8px; font-size: var(--fs-xs); }
+.track-row-label { width: 32px; text-align: right; color: var(--text-secondary); flex-shrink: 0; }
+/* ★ 三轨字体色：UI 天蓝 / API 翠绿 / DB 紫 */
+.track-row-label.tr-track-ui   { color: var(--track-ui); }
+.track-row-label.tr-track-api  { color: var(--track-api); }
+.track-row-label.tr-track-db   { color: var(--track-db); }
+.track-bar { flex: 1; height: 8px; background: var(--bg-elevated); border: 1px solid var(--border-default); border-radius: 4px; overflow: hidden; }
+.track-bar-fill { height: 100%; background: var(--color-primary); transition: width 0.3s; }
+.track-bar-fill.tr-track-ui   { background: var(--track-ui); }
+.track-bar-fill.tr-track-api  { background: var(--track-api); }
+.track-bar-fill.tr-track-db   { background: var(--track-db); }
+.track-bar-fill.fail { background: var(--state-error); }
+/* ── 执行过程校验明细：预期 VS 实际 表格 ── */
+.detail-check-table { width: 100%; border-collapse: collapse; }
+.detail-check-table th, .detail-check-table td { text-align: left; padding: var(--space-2); border-bottom: 1px solid var(--border-default); font-size: var(--fs-sm); vertical-align: top; }
+.detail-check-table th { color: var(--text-secondary); font-weight: 500; white-space: nowrap; }
+.detail-check-table td ul { margin: 0; padding-left: 14px; }
+.detail-check-table .dc-exp, .detail-check-table .dc-act { color: var(--text-primary); }
+.detail-check-table .dc-pass { color: var(--state-success-text); font-weight: 500; }
+.detail-check-table .dc-fail  { color: var(--state-error-text); font-weight: 500; }
+.track-row-stat { width: 72px; flex-shrink: 0; color: var(--text-secondary); text-align: right; }
+
+/* 进度条（通用） */
+.progress-row { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) 0; }
+.progress-track { flex: 1; height: 6px; background: var(--bg-elevated); border-radius: var(--radius-full); overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--color-primary), var(--step1-color)); border-radius: var(--radius-full); transition: width 0.3s; }
+.progress-text { font-size: var(--fs-micro); color: var(--text-tertiary); font-family: var(--font-mono); min-width: 60px; text-align: right; }
+
+/* 运行状态徽章 */
+.run-state-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: var(--radius-full); font-size: var(--fs-micro); font-weight: var(--fw-medium); }
+.run-state-idle { color: var(--text-tertiary); background: var(--state-neutral-soft); border: 1px solid var(--state-neutral-border); }
+.run-state-running { color: var(--state-success-text); background: var(--state-success-soft); border: 1px solid var(--state-success-border); }
+.run-state-paused { color: var(--state-warning-text); background: var(--state-warning-soft); border: 1px solid var(--state-warning-border); }
+.run-state-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.run-state-running .run-state-dot { animation: blink 1s infinite; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* 空状态 */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: var(--space-10); color: var(--text-tertiary); text-align: center; }
+.empty-state svg { width: 32px; height: 32px; margin-bottom: var(--space-3); opacity: 0.4; }
+.empty-state p { font-size: var(--fs-small); }
+
+/* ── 预检弹窗 ── */
+.exec-modal-overlay { position: fixed; inset: 0; background: var(--bg-overlay); z-index: 999; display: flex; align-items: center; justify-content: center; }
+.exec-modal { background: var(--bg-elevated); border: 1px solid var(--border-default); border-radius: var(--radius-lg); width: 520px; max-width: 95vw; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px var(--bg-overlay); }
+.exec-modal-header { padding: var(--space-4); border-bottom: 1px solid var(--border-default); display: flex; align-items: center; justify-content: space-between; }
+.exec-modal-title { font-size: var(--fs-body); font-weight: var(--fw-semibold); color: var(--text-primary); }
+.exec-modal-close { background: none; border: none; color: var(--text-tertiary); cursor: pointer; padding: 4px; border-radius: var(--radius-sm); }
+.exec-modal-close:hover { color: var(--text-primary); background: var(--bg-hover); }
+.exec-modal-body { padding: var(--space-4); overflow-y: auto; flex: 1; }
+.exec-modal-section { margin-bottom: var(--space-4); }
+.exec-modal-section:last-child { margin-bottom: 0; }
+.exec-modal-label { font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-secondary); margin-bottom: var(--space-2); text-transform: uppercase; letter-spacing: 0.5px; }
+.exec-modal-footer { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border-default); display: flex; justify-content: flex-end; gap: var(--space-2); }
+/* 预检行 */
+.preflight-row { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) 0; font-size: var(--fs-xs); }
+.preflight-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+.preflight-dot.ok { background: var(--state-success); }
+.preflight-dot.warn { background: var(--state-warning); }
+.preflight-dot.err { background: var(--state-error); }
+.preflight-name { flex: 1; color: var(--text-primary); }
+.preflight-detail { color: var(--text-tertiary); font-size: var(--fs-micro); }
+.btn-primary { padding: var(--space-2) var(--space-4); font-size: var(--fs-small); color: var(--text-on-color); background: var(--color-primary); border: none; border-radius: var(--radius-sm); cursor: pointer; }
+.btn-primary:hover { opacity: 0.9; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-secondary { padding: var(--space-2) var(--space-4); font-size: var(--fs-small); color: var(--text-secondary); background: transparent; border: 1px solid var(--border-default); border-radius: var(--radius-sm); cursor: pointer; }
+.btn-secondary:hover { color: var(--text-primary); border-color: var(--text-tertiary); }
+/* 选择控件 */
+.exec-select { width: 100%; padding: var(--space-2) var(--space-3); font-size: var(--fs-small); color: var(--text-primary); background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-sm); }
+.exec-select:focus { outline: none; border-color: var(--color-primary); }
+.exec-check-group { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.exec-check-item { display: flex; align-items: center; gap: var(--space-1); font-size: var(--fs-xs); color: var(--text-secondary); cursor: pointer; }
+.exec-check-item input { accent-color: var(--color-primary); }
+
+/* ═══════════ T03 新增（独立追加段，不改动上方任何既有规则） ═══════════ */
+/* P1-6①：结果导出下拉 */
+.export-dropdown { position: relative; display: inline-block; }
+.export-dropdown > summary {
+  list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+}
+.export-dropdown > summary::-webkit-details-marker { display: none; }
+.export-dropdown-menu {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 60;
+  min-width: 220px; padding: var(--space-1);
+  background: var(--bg-elevated); border: 1px solid var(--border-default);
+  border-radius: var(--radius-md); box-shadow: 0 6px 20px var(--bg-overlay);
+}
+.export-dropdown-item {
+  display: block; padding: var(--space-2) var(--space-3);
+  font-size: var(--fs-xs); color: var(--text-secondary);
+  text-decoration: none; border-radius: var(--radius-sm); white-space: nowrap;
+}
+.export-dropdown-item:hover { background: var(--bg-base); color: var(--text-primary); }
+
+/* ═══ 批1 令牌化：内联样式下沉的仅-token 工具类（共用） ═══ */
+.pl-topbar-select { height: 32px; min-width: 160px; font-size: var(--fs-xs); display: flex; align-items: center; padding: 0 var(--space-3); color: var(--text-secondary); background: var(--bg-elevated); border-radius: var(--radius-sm); }
+.pl-select-xs { height: 32px; font-size: var(--fs-xs); }
+/* ★ 步骤/执行等下拉用页面背景色，避免灰底突兀（2026-09-02） */
+#stepSelect { background-color: var(--bg-base); }
+.pl-hdr-label { font-size: var(--fs-xs); color: var(--text-tertiary); }
+.pl-hdr-label-ml { margin-left: var(--space-2); }
+.pl-log-toolbar { display: flex; align-items: center; justify-content: space-between; padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--border-default); flex-shrink: 0; }
+.pl-col-primary-mono { color: var(--color-primary); font-family: var(--font-mono); }
+.pl-col-primary { color: var(--color-primary); }
+.pl-col-fs-xs-primary { font-size: var(--fs-xs); color: var(--color-primary); }
+.pl-mono { font-family: var(--font-mono); }
+.pl-section { margin-top: var(--space-3); }
+.pl-label-mb { margin-bottom: var(--space-1); }
+.pl-box-content { font-size: var(--fs-xs); color: var(--text-secondary); padding: var(--space-2); background: var(--bg-elevated); border-radius: var(--radius-sm); border: 1px solid var(--border-default); white-space: pre-wrap; word-break: break-all; }
+.pl-box-content-primary { font-size: var(--fs-xs); color: var(--text-primary); padding: var(--space-2); background: var(--bg-elevated); border-radius: var(--radius-sm); border: 1px solid var(--border-default); white-space: pre-wrap; word-break: break-all; }
+.pl-box-quote { font-size: var(--fs-xs); color: var(--text-secondary); padding: var(--space-2); background: var(--color-primary-soft); border-radius: var(--radius-sm); border: 1px solid var(--color-primary-border); white-space: pre-wrap; word-break: break-all; }
+.pl-box-scroll { font-size: var(--fs-xs); color: var(--text-tertiary); padding: var(--space-2); background: var(--color-primary-soft); border-radius: var(--radius-sm); border: 1px solid var(--color-primary-border); white-space: pre-wrap; word-break: break-all; max-height: 180px; overflow-y: auto; }
+.pl-detail-box { padding: var(--space-2); background: var(--bg-elevated); border-radius: var(--radius-sm); border: 1px solid var(--border-default); }
+.pl-detail-label { color: var(--text-tertiary); }
+.pl-detail-val { color: var(--text-primary); white-space: pre-wrap; word-break: break-all; }
+.pl-detail-slice { max-width: 220px; white-space: normal; word-break: break-all; }
+.pl-col-success { color: var(--state-success-text); }
+.pl-flex-corner { display: flex; justify-content: space-between; align-items: center; }
+.pl-col-base { font-size: var(--fs-xs); color: var(--text-secondary); margin-bottom: var(--space-1); }
+.pl-col-wk { font-size: var(--fs-xs); color: var(--text-tertiary); }
+.pl-list-box { max-height: 160px; overflow-y: auto; border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: var(--space-2); }
+.pl-fs-monop { width: 100%; max-height: 280px; border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: var(--text-on-color); }
+.pl-badge-btn { font-size: var(--fs-xs); padding: var(--space-1) var(--space-3); }
+.pl-pf-check { cursor: pointer; display: flex; align-items: center; margin-top: var(--space-1); }
+.pl-pf-box { padding: var(--space-2); }
+.pl-pf-radiob { cursor: pointer; display: flex; align-items: center; margin-top: var(--space-1); }
+.pl-pf-opt { color: var(--text-secondary); font-size: var(--fs-xs); margin-left: var(--space-1); white-space: pre-wrap; word-break: break-all; }
+.pl-pf-row { cursor: pointer; display: flex; align-items: center; }
+.pl-check-link { color: var(--brand-primary); text-decoration: underline; }
+.pl-log-line { font-size: var(--fs-xs); color: var(--text-tertiary); margin-bottom: var(--space-2); }
+.pl-trim-col { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--fs-xs); }
+.pl-col-success-sm { font-size: var(--fs-small); color: var(--state-success-text); }
+.pl-col-wk-mb { font-size: var(--fs-xs); color: var(--text-tertiary); margin-bottom: var(--space-1); }
+.pl-ptr-none { pointer-events: none; }
+.pl-cursor-pointer { cursor: pointer; }
+.pl-cursor-notallowed { cursor: not-allowed; }
+.pl-chip-ellipsis { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-empty-xs { padding: var(--space-3); color: var(--text-tertiary); font-size: var(--fs-xs); }
+.pl-err { color: var(--state-error-text); }
+.pl-warn { color: var(--state-warning-text); }
+.pl-warn-bold { color: var(--state-warning-text); font-size: var(--fs-xs); font-weight: 600; }
+.pl-err-bold { color: var(--state-error-text); font-size: var(--fs-xs); font-weight: 600; }
+.pl-opt-hint { color: var(--text-tertiary); font-size: var(--fs-micro); margin-left: var(--space-1); }
+.pl-cb-warn { margin-right: 6px; accent-color: var(--state-warning-text); }
+.pl-cb-err { margin-right: 6px; accent-color: var(--state-error-text); }
+.pl-cb-prime { margin-right: 6px; accent-color: var(--brand-primary); }
+.pl-figma-line { margin-left: 28px; margin-bottom: var(--space-1); font-size: var(--fs-micro); color: var(--text-tertiary); }
+.pl-mr-10 { margin-right: 10px; }
+.pl-figma-force { margin-left: 28px; margin-bottom: var(--space-1); display: flex; align-items: center; cursor: pointer; font-size: var(--fs-micro); }
+.pl-skip-hint { margin-top: var(--space-1); padding: var(--space-1) var(--space-3); background: var(--state-warning-bg); border-radius: var(--radius-sm); font-size: var(--fs-micro); color: var(--state-warning-text); }
+.pl-divider-top { margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--border-color); }
+.pl-warn-msg { margin-top: var(--space-2); font-size: var(--fs-micro); color: var(--state-warning-text); }
+.pl-warn-banner { margin-bottom: var(--space-2); padding: 4px var(--space-2); background: var(--state-warning-bg); border-radius: var(--radius-sm); font-size: var(--fs-micro); color: var(--state-warning-text); }
+.pl-err-msg { margin-top: var(--space-2); font-size: var(--fs-xs); color: var(--state-error-text); }
+.pl-muted-msg { margin-top: var(--space-2); font-size: var(--fs-xs); color: var(--text-tertiary); }
+.pl-verify-btn { background: var(--brand-primary); color: var(--text-on-color); border: none; padding: 4px 12px; border-radius: var(--radius-sm); cursor: pointer; }
+.pl-verify-status { margin-left: var(--space-2); font-size: var(--fs-micro); color: var(--text-tertiary); }
+.pl-verify-result { margin-top: 4px; font-size: var(--fs-micro); }
+.pl-exec-check-pad { display: flex; padding: 2px 0; }
+.pf-ok { color: var(--state-success-text); }
+.pf-err { color: var(--state-error-text); }
+.pf-muted { color: var(--text-tertiary); }
+.pf-marg { display: block; margin: 2px 0; }
+.pf-bold { font-weight: bold; }
+</style>
+{% endblock %}
+{% block title %}流水线执行 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+流水线执行
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnRunAll" data-perm="execution.run" disabled title="一键执行已禁用，请按 Step1→5 逐步执行" data-tooltip="一键执行已禁用，请按 Step1→5 逐步执行" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+  一键执行
+</button>
+<button class="btn-topbar" id="btnPause" data-perm="execution.run">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+  暂停
+</button>
+<button class="btn-topbar" id="btnStop" data-perm="execution.run">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+  停止
+</button>
+<select id="stepSelect" class="form-input pl-select-xs">
+  <option value="0">单步执行...</option>
+  <option value="1" data-step-perm="execution.step1">Step 1 — 数据提取</option>
+  <option value="2" data-step-perm="execution.step2">Step 2 — 需求拆解</option>
+  <option value="3" data-step-perm="execution.step3">Step 3 — 用例建模</option>
+  <option value="4" data-step-perm="execution.step4">Step 4 — 检查执行</option>
+  <option value="5" data-step-perm="execution.step5">Step 5 — 报告生成</option>
+</select>
+<button class="btn-topbar" id="btnStepRun">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 3 19 12 5 21 5 3"/></svg>
+  执行此步
+</button>
+<!-- ════ T03 P1-6①：结果导出下拉 ════
+     后端 4 个导出接口统一走 check_admin_or_permission("docs.export")（export.py:30），
+     故 data-perm 必须写成 docs.export —— 与后端逐字一致（§8.2）。
+     用原生 <details> 做展开收起：无需额外 JS，也不违反 CSP default-src 'self'。 -->
+<details class="export-dropdown" id="exportDropdown" data-perm="docs.export">
+  <summary class="btn-topbar" role="button" aria-haspopup="menu">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    导出结果
+  </summary>
+  <div class="export-dropdown-menu" role="menu">
+    <a class="export-dropdown-item" role="menuitem" href="/api/export/report" download>
+      测试报告（Test_Report.md）
+    </a>
+    <a class="export-dropdown-item" role="menuitem" href="/api/export/coverage" download>
+      覆盖率报告
+    </a>
+    <a class="export-dropdown-item" role="menuitem" href="/api/export/requirements" download>
+      需求清单（requirements.xlsx）
+    </a>
+    <a class="export-dropdown-item" role="menuitem" href="/api/export/validation-intents" download>
+      测试用例（test_cases.xlsx）
+    </a>
+  </div>
+</details>
+<a class="btn-topbar" href="/step3-case-upload" data-perm="execution.step3" data-tooltip="Step3 用例准备&#10;下载模板、上传用例、查看匹配状态" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 12h6"/><path d="M9 16h6"/></svg>
+  用例准备
+</a>
+<a class="btn-topbar" href="/step4-config" data-tooltip="Step4 完整执行配置&#10;版本选择、执行模式、用例搜索、浏览器参数等" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  执行配置
+</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- 运行状态条 -->
+<div class="pipeline-run-status">
+  <span class="run-state-badge run-state-idle" id="runStateBadge">
+    <span class="run-state-dot"></span>
+    <span id="runStateText">空闲</span>
+  </span>
+  <span class="pl-hdr-label" id="runStateDetail">无运行任务</span>
+</div>
+
+<!-- 5-Step 横向进度条 -->
+<div class="pipeline-bar">
+  <div class="pipeline-steps" id="pipelineSteps">
+    <!-- 由 JS 渲染 -->
+  </div>
+</div>
+
+<!-- 主内容：左侧面板 + 右侧详情 -->
+<div class="pipeline-main">
+  <!-- 左侧：Tab 面板 -->
+  <div class="left-panel">
+    <div class="left-panel-header">
+      <div class="left-panel-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span id="leftPanelTitle">Step 3 — 测试用例建模</span>
+      </div>
+      <div class="pl-hdr-label" id="leftPanelStatus">
+        <span id="leftPanelStatusText">进行中</span>
+        <span class="pl-hdr-label-ml" id="leftPanelElapsed"></span>
+      </div>
+    </div>
+
+    <!-- Tab 栏 -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="progress">进度</button>
+      <button class="tab-btn" data-tab="cases">用例列表</button>
+      <button class="tab-btn" data-tab="logs">AI 日志</button>
+    </div>
+
+    <!-- Tab 1: 进度 -->
+    <div class="tab-content active" id="tab-progress">
+      <div class="progress-summary">
+        <span class="progress-summary-text" id="progressSummaryText"><strong>0</strong> / 0 项完成</span>
+        <div class="progress-bar-track"><div class="progress-bar-fill" id="progressBarFill" style="width:0%"></div></div>
+        <span class="progress-bar-pct" id="progressBarPct">0%</span>
+      </div>
+      <div class="case-list" id="caseList">
+        <div class="empty-state" id="caseListEmpty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <p>暂无用例数据，请先执行流水线</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 2: 用例列表（完整） -->
+    <div class="tab-content" id="tab-cases">
+      <div class="track-count-bar" id="caseTrackCounts" style="display:none"></div>
+      <div class="case-list" id="caseListFull">
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <p>暂无用例数据</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: 文档列表（Step1） -->
+    <div class="tab-content" id="tab-docs">
+      <div class="case-list" id="docListFull">
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <p>暂无数据源文档</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: 报告列表（Step5） -->
+    <div class="tab-content" id="tab-reports">
+      <div class="case-list" id="reportList">
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <p>暂无报告数据</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 3: AI 日志 -->
+    <div class="tab-content" id="tab-logs">
+      <div class="pl-log-toolbar">
+        <div class="log-actions">
+          <button class="log-btn" id="btnClearLog">清空</button>
+          <button class="log-btn" id="btnAutoScroll">自动滚动</button>
+        </div>
+      </div>
+      <div class="log-body" id="logBody">
+        <div class="log-empty">暂无日志，点击"一键执行"开始流水线</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右侧：动态详情面板（左侧拖动条可左右调整宽度） -->
+  <div class="detail-splitter" id="detailSplitter" title="拖动调整详情面板宽度"></div>
+  <div class="detail-panel">
+    <div class="detail-panel-header">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      <span id="detailPanelHeaderText">详情</span>
+    </div>
+    <div class="detail-panel-body" id="detailPanelBody">
+      <!-- 空状态 -->
+      <div class="empty-state" id="detailEmpty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        <p id="detailEmptyText">点击左侧列表查看详情</p>
+      </div>
+      <!-- Step1 文档详情 -->
+      <div id="detailDoc" class="pl-section" hidden>
+        <div class="detail-field">
+          <span class="detail-field-label">doc_type</span>
+          <span class="detail-field-value pl-col-primary-mono" id="detailDocType">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">文件名</span>
+          <span class="detail-field-value" id="detailDocFilename">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">格式 / 分类</span>
+          <span class="detail-field-value" id="detailDocFmtCat">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">权重</span>
+          <span class="detail-field-value" id="detailDocWeight">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">字符数</span>
+          <span class="detail-field-value" id="detailDocChars">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">内容哈希</span>
+          <span class="detail-field-value pl-mono" id="detailDocHash">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">提取时间</span>
+          <span class="detail-field-value" id="detailDocTime">—</span>
+        </div>
+        <div class="pl-section">
+          <div class="detail-field-label pl-label-mb">文档内容</div>
+          <div id="detailDocContent" class="pl-box-content">—</div>
+        </div>
+        <div id="traceDoc" class="trace-block pl-section"></div>
+      </div>
+
+      <!-- DOM 快照详情 -->
+      <div id="detailDom" hidden>
+        <div class="detail-field">
+          <span class="detail-field-label">快照总数</span>
+          <span class="detail-field-value pl-col-primary" id="detailDomCount">—</span>
+        </div>
+        <div class="pl-section">
+          <div class="detail-field-label pl-label-mb">页面列表</div>
+          <div class="dom-page-list" id="detailDomPageList"></div>
+        </div>
+        <div class="dom-nav-tree" id="detailDomNavTree" hidden>
+          <div class="dom-nav-tree-title">导航树</div>
+          <div id="detailDomNavContent"></div>
+        </div>
+      </div>
+
+      <!-- Step2 需求详情 -->
+      <div id="detailGeneric" class="ud-hidden">
+        <div class="detail-field">
+          <span class="detail-field-label">需求 ID</span>
+          <span class="detail-field-value pl-col-primary" id="detailGenericId">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">模块</span>
+          <span class="detail-field-value" id="detailGenericModule">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">状态</span>
+          <span class="detail-field-value" id="detailGenericStatus">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">审核状态</span>
+          <span class="detail-field-value" id="detailGenericReviewStatus">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">关联用例</span>
+          <span class="detail-field-value" id="detailGenericCaseCount">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">置信度</span>
+          <span class="detail-field-value" id="detailGenericConf">—</span>
+        </div>
+
+        <div class="ud-mt-3">
+          <div class="detail-field-label ud-mb-1">需求描述</div>
+          <div id="detailGenericDesc" class="pl-box-content-primary">—</div>
+        </div>
+
+        <div class="ud-mt-3">
+          <div class="detail-field-label ud-mb-1">三元组</div>
+          <div class="pl-trim-col">
+            <div class="pl-detail-box">
+              <span class="pl-detail-label">操作：</span>
+              <span id="detailGenericOp" class="pl-detail-val">—</span>
+            </div>
+            <div class="pl-detail-box">
+              <span class="pl-detail-label">条件：</span>
+              <span id="detailGenericCond" class="pl-detail-val">—</span>
+            </div>
+            <div class="pl-detail-box">
+              <span class="pl-detail-label">预期反馈：</span>
+              <span id="detailGenericExpected" class="pl-detail-val">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="ud-mt-3">
+          <div class="detail-field-label ud-mb-1">原文引用</div>
+          <div id="detailGenericQuote" class="pl-box-scroll">—</div>
+        </div>
+
+        <div class="ud-mt-3">
+          <div class="detail-field-label ud-mb-1">来源位置</div>
+          <div class="pl-trim-col">
+            <div class="detail-field">
+              <span class="detail-field-label">源文档锚点</span>
+              <span class="detail-field-value pl-detail-slice" id="detailGenericAnchor">—</span>
+            </div>
+            <div class="detail-field">
+              <span class="detail-field-label">所属切片</span>
+              <span class="detail-field-value pl-mono" id="detailGenericSlice">—</span>
+            </div>
+          </div>
+        </div>
+        <div id="traceGeneric" class="trace-block pl-section"></div>
+      </div>
+      <!-- Step3 用例详情 -->
+      <div id="detailCase" class="ud-hidden">
+        <div class="detail-field">
+          <span class="detail-field-label">用例 ID</span>
+          <span class="detail-field-value pl-col-primary" id="detailCaseId">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">用例名称</span>
+          <span class="detail-field-value" id="detailCaseTitle">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">需求来源</span>
+          <span class="detail-field-value" id="detailReqSource">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">操作步骤数</span>
+          <span class="detail-field-value" id="detailActionsCount">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">检查点数</span>
+          <span class="detail-field-value" id="detailChecksCount">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">风险等级</span>
+          <span class="detail-field-value" id="detailRiskLevel">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">建模时间</span>
+          <span class="detail-field-value" id="detailModelingTime">—</span>
+        </div>
+        <div class="ud-mt-3">
+          <div class="detail-field-label ud-mb-1">AI 置信度</div>
+          <div class="confidence-row">
+            <div class="pl-flex-corner">
+              <span class="detail-field-value pl-col-success-sm" id="detailConfidenceVal">—</span>
+            </div>
+            <div class="confidence-track">
+              <div class="confidence-fill high" id="detailConfidenceFill" style="width:0%;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="ud-mt-3">
+          <div class="detail-field-label ud-mb-1">执行轨道</div>
+          <!-- 根因修复(2026-09-02): 删除写死的 UI/API/DB 三轨默认值，
+               统一由 renderTrackTags 按用例 required_tracks 动态填充；
+               未选用例/加载中显示占位，避免误显"三轨写死"。 -->
+          <div class="track-tags" id="detailTrackTags">
+            <span class="track-tag track-tag-placeholder">加载中...</span>
+          </div>
+        </div>
+        <div class="ud-mt-3">
+          <div class="detail-field-label ud-mb-1">建模状态</div>
+          <div id="detailBuildStatus" class="pl-col-fs-xs-primary">C AI 建模中...</div>
+        </div>
+        <div class="detail-actions">
+          <button class="detail-btn primary" id="btnDetailRemodel">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            重新建模
+          </button>
+          <button class="detail-btn" id="btnDetailView">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            查看详情
+          </button>
+        </div>
+        <div id="traceCase" class="trace-block pl-section"></div>
+      </div>
+      <!-- Step4 执行详情 -->
+      <div id="detailExecution" class="ud-hidden">
+        <div class="detail-field">
+          <span class="detail-field-label">执行 ID</span>
+          <span class="detail-field-value pl-col-primary" id="detailExecId">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">关联用例</span>
+          <span class="detail-field-value" id="detailExecCaseId">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">执行状态</span>
+          <span class="detail-field-value" id="detailExecStatus">—</span>
+        </div>
+        <div class="detail-field ud-hidden" id="detailExecNoteWrap">
+          <span class="detail-field-label">执行说明</span>
+          <span class="detail-field-value" id="detailExecNote">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">通过检查</span>
+          <span class="detail-field-value" id="detailExecPassed">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">失败检查</span>
+          <span class="detail-field-value" id="detailExecFailed">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">执行时间</span>
+          <span class="detail-field-value" id="detailExecTime">—</span>
+        </div>
+        <div class="detail-field" title="全部执行轨道合计通过率：各轨道通过检查数 / 总检查数">
+          <span class="detail-field-label">轨道合计通过率</span>
+          <span class="detail-field-value" id="detailExecTracks">—</span>
+        </div>
+        <div class="track-count-bar" id="execDetailTrackCounts" style="display:none"></div>
+        <div class="ud-mt-1 pl-subsection">
+          <div class="pl-subsection-title" id="execTrackTitle">执行过程校验明细 · 预期 VS 实际</div>
+          <div id="execTrackBars" class="track-bars">
+            <div class="trace-empty" id="execTrackHint">加载中...</div>
+          </div>
+          <div id="execDetailTable" class="ud-mt-1"></div>
+        </div>
+        <div id="traceExecution" class="trace-block pl-section"></div>
+      </div>
+      <!-- Step5 报告详情 -->
+      <div id="detailReport" class="ud-hidden">
+        <div class="detail-field">
+          <span class="detail-field-label">报告 ID</span>
+          <span class="detail-field-value pl-col-primary" id="detailReportId">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">报告类型</span>
+          <span class="detail-field-value" id="detailReportType">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">关联运行</span>
+          <span class="detail-field-value" id="detailReportRunId">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">内容大小</span>
+          <span class="detail-field-value" id="detailReportSize">—</span>
+        </div>
+        <div class="detail-field">
+          <span class="detail-field-label">生成时间</span>
+          <span class="detail-field-value" id="detailReportTime">—</span>
+        </div>
+        <div class="ud-mt-3">
+          <div class="detail-field-label ud-mb-1">报告摘要</div>
+          <iframe id="detailReportPreview" class="pl-fs-monop" sandbox="allow-same-origin"></iframe>
+        </div>
+        <div class="detail-actions">
+          <button class="detail-btn primary" id="btnDetailViewReport">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            查看完整报告
+          </button>
+        </div>
+        <div id="traceReport" class="trace-block pl-section"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ 预检弹窗 ════════════ -->
+<div class="exec-modal-overlay ud-hidden" id="execModal">
+  <div class="exec-modal">
+    <div class="exec-modal-header">
+      <span class="exec-modal-title" id="execModalTitle">执行预检</span>
+      <button class="exec-modal-close" id="execModalClose">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="exec-modal-body">
+      <!-- 预检区 -->
+      <div class="exec-modal-section" id="preflightSection">
+        <div class="exec-modal-label" id="preflightSectionLabel">预检 — 数据源状态</div>
+        <div id="preflightContent" class="pl-col-wk">加载中...</div>
+      </div>
+      <!-- 审核门禁区（Step 3/4/5） -->
+      <div class="exec-modal-section ud-hidden" id="reviewGateSection">
+        <div class="exec-modal-label">审核门禁</div>
+        <div id="reviewGateContent" class="pl-col-wk">加载中...</div>
+      </div>
+      <!-- Step 4 专属配置区 -->
+      <div class="exec-modal-section ud-hidden" id="step4ConfigSection">
+        <div class="exec-modal-label">执行配置</div>
+        <button class="btn-primary pl-badge-btn" id="btnOpenStep4Config">完整执行配置（版本选择、执行模式、用例搜索、浏览器参数）</button>
+        <div class="ud-mb-3">
+          <div class="pl-col-wk-mb">浏览器</div>
+          <select class="exec-select" id="execBrowserSelect"></select>
+        </div>
+        <div class="ud-mb-3">
+          <div class="pl-col-wk-mb">优先级筛选</div>
+          <div class="exec-check-group" id="execPriorityGroup"></div>
+        </div>
+        <div>
+          <div class="pl-col-wk-mb">用例选择 (<span id="execCaseCount">0</span> 条可选)</div>
+          <div class="pl-list-box">
+            <div id="execCaseList" class="pl-col-wk">加载中...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="exec-modal-footer">
+      <button class="btn-secondary" id="execModalCancel">取消</button>
+      <button class="btn-primary" id="execModalConfirm">确认执行</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  'use strict';
+  var A = window._A;
+  if (!A) return;
+  var $ = A.$, api = A.api, escHtml = A.escHtml;
+  var dedupedApi = A.dedupedApi || api;
+
+  A._onAuthOk = function() {
+    A._renderSidebarUser();
+    A.applyPermissions();
+    applyStepPermissions();
+    initPipeline();
+    A._startStepBadgePolling();
+  };
+
+  // ── 步骤权限控制 ──
+  function applyStepPermissions() {
+    var stepSelect = $('stepSelect');
+    var btnStepRun = $('btnStepRun');
+    if (!stepSelect) return;
+    var options = stepSelect.querySelectorAll('option[data-step-perm]');
+    var hasVisibleStep = false;
+    options.forEach(function(opt) {
+      var perm = opt.getAttribute('data-step-perm');
+      if (perm && !A.hasPerm(perm)) {
+        opt.remove();
+      } else if (perm) {
+        hasVisibleStep = true;
+      }
+    });
+    if (!hasVisibleStep) {
+      if (stepSelect) stepSelect.style.display = 'none';
+      if (btnStepRun) btnStepRun.style.display = 'none';
+    }
+  }
+
+  var STEP_META = [
+    null,
+    { name: 'Step 1', desc: '数据提取', color: 'var(--step1-color)' },
+    { name: 'Step 2', desc: '需求拆解', color: 'var(--step2-color)' },
+    { name: 'Step 3', desc: '用例建模', color: 'var(--step3-color)' },
+    { name: 'Step 4', desc: '检查执行', color: 'var(--step4-color)' },
+    { name: 'Step 5', desc: '报告生成', color: 'var(--step5-color)' },
+  ];
+
+  // 数据驱动内联样式装配器：运行期依数据拼接 style，避免静态模板内联样式漂移
+  function dS(props) { return ' style="' + props + '"'; }
+
+  var state = {
+    currentRunId: null,
+    sseSource: null,
+    pollTimer: null,
+    autoScroll: true,
+    logs: [],
+    sseRunId: null,
+    sseReconnectCount: 0,
+    sseMaxReconnect: 3,
+    sseReconnectTimer: null,
+    _lastLogKey: null,
+    cases: [],
+    selectedCaseId: null,
+    reports: [],
+    selectedReportId: null,
+    requirements: [],
+    sourceDocs: [],
+    executions: [],
+    activeStep: 1,
+    userSelectedStep: 0,
+    stepStatus: { 1: 'pending', 2: 'pending', 3: 'pending', 4: 'pending', 5: 'pending' },
+    pipelineSteps: [],
+    step1Sources: {},
+  };
+
+  // ── 右侧面板标题映射 ──
+  var STEP_PANEL_LABELS = {
+    1: '文档详情',
+    2: '需求详情',
+    3: '用例详情',
+    4: '执行详情',
+    5: '报告详情',
+  };
+  var STEP_PANEL_EMPTY = {
+    1: '点击左侧列表查看文档详情',
+    2: '点击左侧列表查看需求详情',
+    3: '点击左侧列表查看用例详情',
+    4: '点击左侧列表查看执行详情',
+    5: '点击左侧列表查看报告详情',
+  };
+
+  // ── Tab 切换（事件委托，避免 switchToStep 重建 tab 时重复绑定） ──
+  function initTabs() {
+    var tabBar = document.querySelector('.tab-bar');
+    if (!tabBar) return;
+    tabBar.addEventListener('click', function(e) {
+      var btn = e.target.closest('.tab-btn');
+      if (!btn) return;
+      var tab = btn.getAttribute('data-tab');
+      if (!tab) return;
+      tabBar.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+      var target = $('tab-' + tab);
+      if (target) target.classList.add('active');
+    });
+  }
+
+  // ── 渲染 5-Step 进度条 ──
+  function renderSteps(stepStatus, activeStep, running) {
+    var container = $('pipelineSteps');
+    if (!container) return;
+    var html = '';
+    for (var i = 1; i <= 5; i++) {
+      var meta = STEP_META[i];
+      var st = stepStatus[i] || 'pending';
+      var permKey = 'execution.step' + i;
+      var hasPerm = A.hasPerm(permKey);
+      var isViewActive = i === activeStep;
+      var circleClass = 'pipeline-step-circle step-' + i + ' ' + st;
+      if (!hasPerm) circleClass += ' disabled';
+      if (isViewActive && st !== 'completed' && st !== 'error') circleClass += ' active';
+      var labelClass = 'pipeline-step-label' + ((st === 'active' || isViewActive) ? ' active' : '');
+      var badgeText = st === 'completed' ? '已完成' : st === 'active' ? '进行中' : st === 'error' ? '失败' : '等待中';
+      if (!hasPerm && st === 'pending') badgeText = '无权限';
+      var icon = '';
+      if (st === 'completed') {
+        icon = '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+      } else if (st === 'active') {
+        icon = '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>';
+      } else {
+        icon = '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>';
+      }
+      var canExec = hasPerm && st !== 'active' && !running;
+      var badgeIconHtml = '';
+      if (st === 'completed') {
+        badgeIconHtml = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+      } else if (st === 'error') {
+        badgeIconHtml = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+      } else if (canExec) {
+        badgeIconHtml = '<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+      }
+      var actionHtml = '<div class="pipeline-step-action badge-' + (st === 'completed' ? 'success' : st === 'active' ? 'active' : st === 'error' ? 'error' : 'pending') + (canExec ? ' clickable' : '') + '"' + (canExec ? ' data-step="' + i + '" title="执行 Step ' + i + '"' : '') + '>' +
+        badgeIconHtml +
+        '<span class="pipeline-step-badge-text">' + badgeText + '</span>' +
+        '</div>';
+      // ★ Step1 增加 Figma 失败节点重试按钮（仅在 Figma 最终失败时显示）
+      var figmaRetryHtml = '';
+      if (i === 1 && hasPerm) {
+        var figmaStatus = (state.step1Sources.figma || {}).status;
+        if (figmaStatus === 'failed') {
+          var failedCount = state.step1Sources.figma.remaining_failed || 0;
+          var retryTitle = failedCount > 0
+            ? '增量重试 ' + failedCount + ' 个失败的 Figma 节点'
+            : '增量重试失败的 Figma 节点';
+          figmaRetryHtml = '<div class="pipeline-step-action badge-error clickable ud-ml-1" data-figma-retry title="' + escHtml(retryTitle) + '">' +
+            '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>' +
+            '<span class="pipeline-step-badge-text">重试Figma</span>' +
+            '</div>';
+        }
+      }
+      html += '<div class="pipeline-step-wrapper' + (hasPerm ? '' : ' pl-ptr-none') + '" data-step="' + i + '">' +
+        '<div class="' + circleClass + (hasPerm ? ' pl-cursor-pointer' : ' pl-cursor-notallowed') + '">' + icon + '</div>' +
+        '<div class="' + labelClass + '">' + escHtml(meta.name) + '</div>' +
+        actionHtml +
+        figmaRetryHtml +
+        '</div>';
+      if (i < 5) {
+        // 连线采用「出发步骤」自身的步骤色，避免统一 --state-success 绿色与 Step1 翠绿相邻粘连
+        var connClass = 'pipeline-connector step-' + i;
+        if (st === 'completed') connClass += ' completed';
+        else if (st === 'active') connClass += ' active';
+        html += '<div class="' + connClass + '"></div>';
+      }
+    }
+    container.innerHTML = html;
+    // 绑定步骤圆圈点击事件 → 切换视图
+    container.querySelectorAll('.pipeline-step-circle').forEach(function(circle) {
+      circle.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var wrapper = this.closest('.pipeline-step-wrapper');
+        var step = parseInt(wrapper.getAttribute('data-step'), 10);
+        if (step > 0) switchToStep(step);
+      });
+    });
+    // 绑定组合徽章点击事件 → 触发执行（带预检弹窗）
+    container.querySelectorAll('.pipeline-step-action.clickable').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var step = parseInt(this.getAttribute('data-step'), 10);
+        if (step > 0) stepRunFromCircle(step);
+      });
+    });
+    // ★ 绑定 Step1 Figma 失败节点重试按钮
+    container.querySelectorAll('[data-figma-retry]').forEach(function(btn) {
+      // T05/P2-2：内部改用 await A.confirm(...)（Promise），处理器必须声明为 async
+      btn.addEventListener('click', async function(e) {
+        e.stopPropagation();
+        if (!(await A.confirm('确定要增量重试最近失败的 Figma 节点吗？'))) return;
+        // T05/P2-2：触发后台重试属写操作，补 loading/disabled 防重复提交
+        await A.withBtnLoading(btn, '触发中...', function() {
+          return fetch('/api/figma-retry-failed', { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+              if (d.ok) {
+                if (A.toast) A.toast('Figma 失败节点重试已触发（后台执行）', 'success');
+              } else {
+                if (A.toast) A.toast(d.error || '触发失败', 'error');
+              }
+            })
+            .catch(function(err) {
+              if (A.toast) A.toast('网络错误: ' + err, 'error');
+            });
+        });
+      });
+    });
+  }
+
+  // ── 加载 Step1 数据源状态（控制 Figma 重试按钮显隐 + 进度列表渲染） ──
+  function loadStep1Status() {
+    fetch('/api/step1-status')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.ok && d.sources_status) {
+          state.step1Sources = d.sources_status;
+          renderSteps(state.stepStatus, state.activeStep, state.running);
+          if (state.activeStep === 1) {
+            renderStepProgressList(1);
+          }
+        }
+      })
+      .catch(function(err) {
+        console.warn('[pipeline] 加载 Step1 状态失败:', err);
+      });
+  }
+
+  // ── 切换步骤内容 ──
+  function switchToStep(step, forceTabKey) {
+    state.activeStep = step;
+    state.userSelectedStep = step;
+    var meta = STEP_META[step];
+    if (!meta) return;
+
+    // 更新步骤圆圈高亮状态
+    document.querySelectorAll('.pipeline-step-circle').forEach(function(c) {
+      var st = c.closest('.pipeline-step-wrapper').getAttribute('data-step');
+      var statusClass = c.classList.contains('completed') || c.classList.contains('error');
+      if (!statusClass) c.classList.remove('active');
+    });
+    var activeCircle = document.querySelector('.pipeline-step-circle.step-' + step);
+    if (activeCircle) {
+      var circleStatus = activeCircle.classList.contains('completed') || activeCircle.classList.contains('error');
+      if (!circleStatus) activeCircle.classList.add('active');
+    }
+    document.querySelectorAll('.pipeline-step-label').forEach(function(l) {
+      l.classList.remove('active');
+    });
+    var activeLabel = document.querySelector('.pipeline-step-wrapper[data-step="' + step + '"] .pipeline-step-label');
+    if (activeLabel) activeLabel.classList.add('active');
+
+    // 更新左侧面板标题
+    var titleEl = $('leftPanelTitle');
+    if (titleEl) titleEl.textContent = meta.name + ' — ' + meta.desc;
+
+    // 更新左侧面板状态文字
+    var statusText = $('leftPanelStatusText');
+    if (statusText) {
+      var st = state.stepStatus[step] || 'pending';
+      statusText.textContent = st === 'completed' ? '已完成' : st === 'active' ? '进行中' : st === 'error' ? '失败' : '等待中';
+    }
+
+    // 更新右侧面板标题并清空详情
+    _showDetailPanel(step);
+
+    // ★ 重置选择状态（防止切换步骤后显示旧步骤的选中项）
+    state.selectedCaseId = null;
+    state.selectedReqId = null;
+    state.selectedDocId = null;
+
+    // 更新 tab 栏（事件委托已在 initTabs 中绑定，无需重复绑定）
+    _renderTabBar(step, false, forceTabKey || null);
+
+    // 进度 tab 只放子任务进度，列表渲染到独立 tab
+    renderStepProgressList(state.activeStep);
+    renderCaseList(state.cases, state.activeStep);
+    renderReportList(state.reports);
+    renderDocList();
+    updateStepProgress(state.activeStep, state.stepStatus[state.activeStep], state.cases, state.perStepCounts, state.stepDone || 0, state.stepTotal || 0);
+    // ★ 切换步骤时过滤日志，只显示当前步骤的日志
+    _filterLogsByStep(step);
+  }
+
+  // ── 根据 step 重建 tab 栏（进度只放子任务进度，列表放独立tab） ──
+  // keepCurrentTab=true 时尽量保持用户当前查看的 tab（轮询跟随步骤时用）
+  // keepCurrentTab=false 时激活第一个 tab（手动切换步骤时用）
+  function _renderTabBar(step, keepCurrentTab, forceTabKey) {
+    var tabBar = document.querySelector('.tab-bar');
+    if (!tabBar) return;
+    var currentTab = null;
+    if (keepCurrentTab) {
+      var activeBtn = tabBar.querySelector('.tab-btn.active');
+      if (activeBtn) currentTab = activeBtn.getAttribute('data-tab');
+    }
+    var tabs = [{ key: 'progress', label: '进度' }];
+    if (step === 1) {
+      tabs.push({ key: 'docs', label: '文档列表' });
+    } else if (step === 2) {
+      tabs.push({ key: 'cases', label: '需求列表' });
+    } else if (step === 3) {
+      tabs.push({ key: 'cases', label: '用例列表' });
+    } else if (step === 4) {
+      tabs.push({ key: 'cases', label: '执行记录' });
+    } else if (step === 5) {
+      tabs.push({ key: 'reports', label: '报告列表' });
+    }
+    tabs.push({ key: 'logs', label: 'AI 日志' });
+    // 判断当前 tab 是否在新 tabs 中存在
+    var tabExists = currentTab && tabs.some(function(t) { return t.key === currentTab; });
+    // ★ 追溯跳转时强制激活目标列表 tab（forceTabKey），不再默认落到"进度"tab
+    var forceKey = forceTabKey && tabs.some(function(t) { return t.key === forceTabKey; }) ? forceTabKey : null;
+    tabBar.innerHTML = tabs.map(function(t, idx) {
+      var isActive = forceKey ? (t.key === forceKey) : (tabExists ? (t.key === currentTab) : (idx === 0));
+      return '<button class="tab-btn' + (isActive ? ' active' : '') + '" data-tab="' + t.key + '">' + t.label + '</button>';
+    }).join('');
+    // 同步 tab-content 显示
+    document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+    var targetKey = forceKey || (tabExists ? currentTab : 'progress');
+    var target = $('tab-' + targetKey);
+    if (target) target.classList.add('active');
+  }
+
+  // ── 切换右侧详情面板 ──
+  function _showDetailPanel(step) {
+    var headerEl = $('detailPanelHeaderText');
+    if (headerEl) headerEl.textContent = STEP_PANEL_LABELS[step] || '详情';
+
+    var emptyText = $('detailEmptyText');
+    if (emptyText) emptyText.textContent = STEP_PANEL_EMPTY[step] || '点击左侧列表查看详情';
+
+    // 隐藏所有详情区块并显示空状态
+    ['detailDoc', 'detailGeneric', 'detailCase', 'detailExecution', 'detailReport', 'detailDom'].forEach(function(id) {
+      var el = $(id);
+      if (el) el.style.display = 'none';
+    });
+    var empty = $('detailEmpty');
+    if (empty) empty.style.display = 'flex';
+  }
+
+  // 暴露给侧边栏步骤点击调用
+  window._switchPipelineStep = switchToStep;
+
+  // ── 渲染用例列表（仅 caseListFull：用例列表 tab） ──
+  function renderCaseList(cases, activeStep) {
+    state.cases = cases || [];
+    var container = $('caseListFull');
+    if (!container) return;
+    var empty = container.querySelector('.empty-state');
+    if (empty) empty.remove();
+    var oldItems = container.querySelectorAll('.case-item');
+    oldItems.forEach(function(el) { el.remove(); });
+
+    // Step2 的"需求列表" tab 渲染需求条目
+    if (activeStep === 2) {
+      _renderRequirementList(container);
+      return;
+    }
+
+    // Step4 的"用例列表" tab 渲染执行记录（执行结果维度，非建模维度）
+    if (activeStep === 4) {
+      _renderExecutionList(container);
+      return;
+    }
+
+    if (!state.cases.length) {
+      container.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><p>暂无用例数据</p></div>';
+      return;
+    }
+
+    state.cases.forEach(function(c) {
+      var isActive = activeStep === 3 && c.review_status === 'pending';
+      var isDone = c.review_status === 'approved' || c.review_status === 'modified';
+      var iconClass = isDone ? 'icon-done' : isActive ? 'icon-active' : 'icon-waiting';
+      var badgeClass = isDone ? 'badge-success' : isActive ? 'badge-active' : 'badge-pending';
+      var badgeText = isDone ? '已完成' : isActive ? '建模中...' : '等待中';
+      var iconSvg = isDone
+        ? '<svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>'
+        : isActive
+          ? '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/></svg>'
+          : '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>';
+      var selClass = state.selectedCaseId === c.case_id ? ' selected' : '';
+      var timeStr = formatModelingTime(c.updated_at || c.created_at);
+      var conf = c.confidence || 0;
+      var risk = c.risk_level || '';
+      var _riskCn = riskCn(risk);
+      var riskBadge = risk ? '<span class="case-item-badge ' + (_riskCn === '高' ? 'badge-error' : _riskCn === '中' ? 'badge-pending' : 'badge-success') + '">风险:' + escHtml(_riskCn) + '</span>' : '';
+      var confBadge = '<span class="case-item-badge ' + (conf >= 80 ? 'badge-success' : conf >= 60 ? 'badge-pending' : 'badge-error') + '">评分:' + conf + '%</span>';
+
+      var div = document.createElement('div');
+      div.className = 'case-item' + selClass;
+      div.setAttribute('data-case-id', c.case_id);
+      div.innerHTML =
+        '<div class="case-item-icon ' + iconClass + '">' + iconSvg + '</div>' +
+        '<div class="case-item-info">' +
+          '<div class="case-item-id">' + escHtml(c.case_id) + '</div>' +
+          '<div class="case-item-title">' + escHtml(c.title || '未命名用例') + '</div>' +
+        '</div>' +
+        '<div class="case-item-meta">' +
+          '<span class="case-item-time">' + escHtml(timeStr) + '</span>' +
+          riskBadge +
+          confBadge +
+          '<span class="case-item-badge ' + badgeClass + '">' + badgeText + '</span>' +
+        '</div>';
+      div.addEventListener('click', function() { selectCase(c.case_id); });
+      container.appendChild(div);
+    });
+  }
+
+  // ── 渲染"进度" tab 列表（只显示子任务进度，列表放独立tab） ──
+  function renderStepProgressList(step) {
+    var container = $('caseList');
+    if (!container) return;
+    var empty = container.querySelector('.empty-state');
+    if (empty) empty.remove();
+    var oldItems = container.querySelectorAll('.case-item');
+    oldItems.forEach(function(el) { el.remove(); });
+    // ★ 清理旧的子任务进度元素
+    container.querySelectorAll('.subtask-section-title, .subtask-progress').forEach(function(el) { el.remove(); });
+
+    // ★ 子任务进度（所有 step 通用，单列表格 + 业务分组）
+    _renderSubTaskProgress(container, step);
+  }
+
+  // ── 子任务进度渲染（单列 + 分组 + 状态圆点） ──
+  function _renderSubTaskProgress(container, step) {
+    var steps = state.pipelineSteps || [];
+    var st = null;
+    for (var i = 0; i < steps.length; i++) {
+      if (steps[i].step === step) { st = steps[i]; break; }
+    }
+    if (!st || !st.sub_items || !st.sub_items.length) return;
+
+    var subs = st.sub_items;
+    // 按 group 分组
+    var groups = [], groupMap = {};
+    for (var j = 0; j < subs.length; j++) {
+      var g = subs[j].group || '';
+      if (!groupMap[g]) { groupMap[g] = { name: g, items: [] }; groups.push(groupMap[g]); }
+      groupMap[g].items.push(subs[j]);
+    }
+    var rows = '';
+    for (var gi = 0; gi < groups.length; gi++) {
+      var grp = groups[gi];
+      rows += '<tr class="subtask-group-row"><td colspan="100%"><span class="subtask-group-label">' + escHtml(grp.name) + '</span></td></tr>';
+      for (var gj = 0; gj < grp.items.length; gj++) {
+        var it = grp.items[gj];
+        var dotCls = 'subtask-dot ' + it.status;
+        var lblCls = 'subtask-label ' + (it.status === 'error' ? 'error' : it.status === 'completed' ? 'completed' : '');
+        rows += '<tr class="subtask-row"><td><span class="' + dotCls + '"></span><span class="' + lblCls + '">' + escHtml(it.label) + '</span></td></tr>';
+      }
+    }
+
+    var html = '<div class="subtask-section-title">子任务进度</div>' +
+      '<div class="subtask-progress">' +
+      '<table class="subtask-progress-table"><tbody>' + rows + '</tbody></table>' +
+      '</div>';
+    container.insertAdjacentHTML('afterbegin', html);
+  }
+
+  // ── 渲染"文档列表" tab（docListFull 容器，Step1 专用，展示数据源状态） ──
+  function renderDocList() {
+    var container = $('docListFull');
+    if (!container) return;
+    // ★ 修复：先清空容器再重建。此前只删除 .empty-state / .case-item，而
+    //   _renderSourceDocsList 生成的 .pl-subsection 包装层从不清理，轮询时
+    //   每次都会再追加一个"已提取文档（N）"栏目 → 无限重复累加（2026-09-02）
+    container.innerHTML = '';
+    // 数据源状态一览（含 DOM 快照等端到端来源）
+    _renderStep1SourceStatus(container);
+    // ★ 已提取源文档列表（可点击查看详情）——修复：此前只渲染数据源状态卡，
+    //   已提取文档列表(_renderSourceDocsList)从未被调用，导致"已完成的文档列表"
+    //   点开无详情（通用问题：所有来源的文档均不可查看）
+    _renderSourceDocsList(container);
+  }
+
+  // 通用空状态
+  function _emptyList(container, msg) {
+    container.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><p>' + escHtml(msg || '暂无数据') + '</p></div>';
+  }
+
+  // Step1: 已提取的源文档列表（可点击查看详情）
+  function _renderSourceDocsList(container) {
+    if (!container || !state.sourceDocs.length) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'pl-subsection';
+    var title = document.createElement('div');
+    title.className = 'pl-subsection-title';
+    title.textContent = '已提取文档（' + state.sourceDocs.length + '）';
+    wrap.appendChild(title);
+    var listEl = document.createElement('div');
+    listEl.className = 'case-list';
+    state.sourceDocs.forEach(function(d) {
+      var fmt = d.file_format || d.doc_type || '—';
+      var cat = d.category || '—';
+      var weight = d.weight != null ? d.weight : '—';
+      var chars = d.char_count || 0;
+      var timeStr = formatModelingTime(d.created_at);
+      var name = d.filename || (fmt + ' 文档');
+      var div = document.createElement('div');
+      div.className = 'case-item';
+      div.setAttribute('data-doc-type', d.doc_type);
+      div.innerHTML =
+        '<div class="case-item-icon icon-done"><svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>' +
+        '<div class="case-item-info">' +
+          '<div class="case-item-id">' + escHtml(fmt.toUpperCase()) + ' · ' + escHtml(cat) + '</div>' +
+          '<div class="case-item-title">' + escHtml(name) + '</div>' +
+        '</div>' +
+        '<div class="case-item-meta">' +
+          '<span class="case-item-time">' + escHtml(timeStr) + '</span>' +
+          '<span class="case-item-badge badge-pending">权重:' + escHtml(String(weight)) + '</span>' +
+          '<span class="case-item-badge badge-success">' + chars + ' 字符</span>' +
+          '<span class="case-item-badge badge-success">已提取</span>' +
+        '</div>';
+      div.addEventListener('click', function() { selectSourceDoc(d.doc_type); });
+      listEl.appendChild(div);
+    });
+    wrap.appendChild(listEl);
+    container.appendChild(wrap);
+  }
+
+  // Step1 进度：展示各数据源状态（含 DOM 爬取、数据库等端到端来源）
+  function _renderStep1SourceStatus(container) {
+    var sources = state.step1Sources || {};
+    var keys = ['confluence', 'figma', 'yapi', 'database', 'dom_crawl', 'upload', 'multi_source_features'];
+    var nameMap = {
+      confluence: 'Confluence 需求文档',
+      figma: 'Figma 设计稿',
+      yapi: 'YApi 接口文档',
+      database: '目标系统数据库',
+      dom_crawl: '目标系统 DOM 快照',
+      upload: '上传文件',
+      multi_source_features: '多源功能提取'
+    };
+    var hasAny = keys.some(function(k) { return sources[k]; });
+    if (!hasAny) {
+      _emptyList(container, '暂无数据源状态，请先执行 Step1');
+      return;
+    }
+    keys.forEach(function(k) {
+      var s = sources[k] || {};
+      var status = s.status || 'pending';
+      var iconClass = status === 'ok' ? 'icon-done' : status === 'failed' ? 'icon-error' : 'icon-waiting';
+      var badgeClass = status === 'ok' ? 'badge-success' : status === 'failed' ? 'badge-error' : status === 'skipped' ? 'badge-pending' : 'badge-pending';
+      var badgeText = status === 'ok' ? '已完成' : status === 'failed' ? '失败' : status === 'skipped' ? '跳过' : '等待中';
+      var iconSvg = status === 'ok'
+        ? '<svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>'
+        : status === 'failed'
+          ? '<svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
+          : '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>';
+      // ★ 构建丰富统计信息
+      var statsHtml = _buildSourceStatsHtml(k, s);
+      var div = document.createElement('div');
+      div.className = 'case-item source-status-item';
+      if (k === 'dom_crawl' && status === 'ok') {
+        div.setAttribute('data-dom-source', 'true');
+        div.style.cursor = 'pointer';
+        div.addEventListener('click', function() { _showDomDetail(); });
+      }
+      div.innerHTML =
+        '<div class="case-item-icon ' + iconClass + '">' + iconSvg + '</div>' +
+        '<div class="case-item-info">' +
+          '<div class="case-item-id">' + escHtml(nameMap[k] || k) + '</div>' +
+          (statsHtml ? '<div class="source-stats-row">' + statsHtml + '</div>' : '') +
+        '</div>' +
+        '<div class="case-item-meta">' +
+          '<span class="case-item-badge ' + badgeClass + '">' + badgeText + '</span>' +
+        '</div>';
+      container.appendChild(div);
+    });
+  }
+
+  // ★ 构建各数据源的统计信息 HTML
+  function _buildSourceStatsHtml(sourceKey, s) {
+    if (s.status !== 'ok') return '';
+    var parts = [];
+    switch (sourceKey) {
+      case 'confluence':
+        if (s.page_count > 0) parts.push('<span class="stat-chip">' + s.page_count + ' 页</span>');
+        if (s.char_count > 0) parts.push('<span class="stat-chip secondary">' + formatFileSize(s.char_count) + '</span>');
+        break;
+      case 'figma':
+        if (s.page_count > 0) parts.push('<span class="stat-chip">' + s.page_count + ' 页面</span>');
+        if (s.node_count > 0) parts.push('<span class="stat-chip">' + s.node_count + ' 节点</span>');
+        if (s.char_count > 0) parts.push('<span class="stat-chip secondary">' + formatFileSize(s.char_count) + '</span>');
+        break;
+      case 'yapi':
+        if (s.interface_count > 0) parts.push('<span class="stat-chip">' + s.interface_count + ' 接口</span>');
+        if (s.group_count > 0) parts.push('<span class="stat-chip">' + s.group_count + ' 分组</span>');
+        if (s.char_count > 0) parts.push('<span class="stat-chip secondary">' + formatFileSize(s.char_count) + '</span>');
+        break;
+      case 'database':
+        if (s.table_count > 0) parts.push('<span class="stat-chip">' + s.table_count + ' 表</span>');
+        if (s.field_count > 0) parts.push('<span class="stat-chip">' + s.field_count + ' 字段</span>');
+        if (s.relationship_count > 0) parts.push('<span class="stat-chip">' + s.relationship_count + ' 关系</span>');
+        if (s.account_count > 0) parts.push('<span class="stat-chip">' + s.account_count + ' 账号</span>');
+        break;
+      case 'dom_crawl':
+        if (s.page_count > 0) {
+          parts.push('<span class="stat-chip">' + s.page_count + ' 页快照</span>');
+          // 显示前几个页面名称
+          var pages = s.pages || [];
+          var pageNames = pages.slice(0, 3).map(function(p) { return p.page_title || p.page_path || '—'; }).join(' · ');
+          if (pageNames) parts.push('<span class="stat-chip secondary pl-chip-ellipsis">' + escHtml(pageNames) + '</span>');
+          if (pages.length > 3) parts.push('<span class="stat-chip secondary">+' + (pages.length - 3) + '</span>');
+        }
+        break;
+    }
+    return parts.join('');
+  }
+
+  // ── DOM 快照详情面板 ──
+  function _showDomDetail() {
+    var domSrc = state.step1Sources.dom_crawl || {};
+    // 隐藏其他详情面板
+    ['detailGeneric', 'detailCase', 'detailExecution', 'detailReport', 'detailDoc'].forEach(function(id) {
+      var el = $(id); if (el) el.style.display = 'none';
+    });
+    var empty = $('detailEmpty');
+    if (empty) empty.style.display = 'none';
+    var domPanel = $('detailDom');
+    if (domPanel) domPanel.style.display = 'block';
+    $('detailPanelHeaderText').textContent = 'DOM 快照详情';
+
+    // 高亮 DOM 来源卡片
+    document.querySelectorAll('.source-status-item').forEach(function(el) { el.classList.remove('selected'); });
+    var domCard = document.querySelector('[data-dom-source]');
+    if (domCard) domCard.classList.add('selected');
+
+    // 快照总数
+    $('detailDomCount').textContent = (domSrc.page_count || 0) + ' 页';
+
+    // 页面列表
+    var pages = domSrc.pages || [];
+    var pageListEl = $('detailDomPageList');
+    if (!pages.length) {
+      pageListEl.innerHTML = '<div class="pl-empty-xs">暂无页面快照</div>';
+    } else {
+      pageListEl.innerHTML = pages.map(function(p) {
+        var title = p.page_title || p.page_path || '未命名页面';
+        var path = p.page_path || '';
+        var elements = p.element_count || 0;
+        return '<div class="dom-page-item">' +
+          '<div class="page-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg></div>' +
+          '<div class="page-info">' +
+            '<div class="page-title">' + escHtml(title) + '</div>' +
+            (path ? '<div class="page-path">' + escHtml(path) + '</div>' : '') +
+          '</div>' +
+          '<div class="page-elements">' + elements + ' 元素</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    // 导航树
+    var navTree = domSrc.nav_tree;
+    var navTreeEl = $('detailDomNavTree');
+    var navContentEl = $('detailDomNavContent');
+    if (navTree && navTree.menu_groups && navTree.menu_groups.length > 0) {
+      navTreeEl.style.display = 'block';
+      var totalLinks = navTree._total_links || 0;
+      var html = '<div class="pl-log-line">共 ' + totalLinks + ' 个链接</div>';
+      navTree.menu_groups.forEach(function(group) {
+        html += '<div class="dom-nav-group">';
+        html += '<div class="dom-nav-group-name">' + escHtml(group.group_name || '默认分组') + ' (' + (group.item_count || 0) + ')</div>';
+        (group.items || []).forEach(function(item) {
+          html += '<div class="dom-nav-link">' +
+            '<span class="nav-dot"></span>' +
+            '<span class="nav-text" title="' + escHtml(item.text || '') + '">' + escHtml(item.text || '—') + '</span>' +
+          '</div>';
+        });
+        html += '</div>';
+      });
+      navContentEl.innerHTML = html;
+    } else {
+      navTreeEl.style.display = 'none';
+    }
+  }
+
+  // ── 选中数据源文档 → 更新详情面板 ──
+  function selectSourceDoc(docType) {
+    var d = null;
+    for (var i = 0; i < state.sourceDocs.length; i++) {
+      if (state.sourceDocs[i].doc_type === docType) { d = state.sourceDocs[i]; break; }
+    }
+    if (!d) return;
+    document.querySelectorAll('.case-item[data-doc-type]').forEach(function(el) {
+      el.classList.toggle('selected', el.getAttribute('data-doc-type') === docType);
+    });
+    var empty = $('detailEmpty');
+    if (empty) empty.style.display = 'none';
+    ['detailGeneric', 'detailCase', 'detailExecution', 'detailReport', 'detailDom'].forEach(function(id) {
+      var el = $(id); if (el) el.style.display = 'none';
+    });
+    var content = $('detailDoc');
+    if (content) content.style.display = 'block';
+    $('detailPanelHeaderText').textContent = '文档详情';
+
+    $('detailDocType').textContent = d.doc_type || '—';
+    $('detailDocFilename').textContent = d.filename || '—';
+    $('detailDocFmtCat').textContent = (d.file_format || '—') + ' / ' + (d.category || '—');
+    $('detailDocWeight').textContent = d.weight != null ? d.weight : '—';
+    $('detailDocChars').textContent = d.char_count || 0;
+    $('detailDocHash').textContent = d.content_hash || '—';
+    $('detailDocTime').textContent = formatModelingTime(d.created_at);
+
+    // 异步加载文档内容
+    $('detailDocContent').textContent = '加载中...';
+    fetchDocContent(d.doc_type, d.file_format);
+    fetchTrace(1, d.doc_type, 'traceDoc');
+  }
+
+  // ── 获取文档内容 ──
+  async function fetchDocContent(docType, fileFormat) {
+    var contentEl = $('detailDocContent');
+    try {
+      var r = await api('GET', '/api/source-doc-content/' + encodeURIComponent(docType));
+      if (r && r.ok) {
+        if (r.is_binary) {
+          contentEl.textContent = '（二进制文档 ' + (r.file_format || '') + '，字符数 ' + (r.char_count || 0) + '，不支持文本预览）';
+        } else if (r.content) {
+          // 限制显示前 5000 字符，避免超大文档卡顿
+          var preview = r.content.length > 5000 ? r.content.substring(0, 5000) + '\n\n... (共 ' + r.content.length + ' 字符，仅显示前 5000 字符)' : r.content;
+          contentEl.textContent = preview;
+        } else {
+          contentEl.textContent = '（文档内容为空）';
+        }
+      } else {
+        contentEl.textContent = '无法加载文档内容' + (r && r.error ? '：' + r.error : '');
+      }
+    } catch (e) {
+      contentEl.textContent = '加载失败: ' + (e.message || '未知错误');
+    }
+  }
+
+  // Step2: 需求条目
+  function _renderRequirementList(container) {
+    if (!state.requirements.length) { _emptyList(container, '暂无需求条目'); return; }
+    state.requirements.forEach(function(r) {
+      var st = r.status || 'waiting';
+      var iconClass = st === 'completed' ? 'icon-done' : st === 'active' ? 'icon-active' : 'icon-waiting';
+      var badgeClass = st === 'completed' ? 'badge-success' : st === 'active' ? 'badge-active' : 'badge-pending';
+      var badgeText = st === 'completed' ? '已拆解' : st === 'active' ? '拆解中...' : '等待中';
+      var iconSvg = st === 'completed'
+        ? '<svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>'
+        : st === 'active'
+          ? '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/></svg>'
+          : '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>';
+      var conf = r.confidence || 0;
+      var caseCnt = r.case_count || 0;
+      var module = r.module || '—';
+      var div = document.createElement('div');
+      div.className = 'case-item';
+      div.setAttribute('data-req-id', r.req_id);
+      div.innerHTML =
+        '<div class="case-item-icon ' + iconClass + '">' + iconSvg + '</div>' +
+        '<div class="case-item-info">' +
+          '<div class="case-item-id">' + escHtml(r.req_id) + ' · ' + escHtml(module) + '</div>' +
+          '<div class="case-item-title">' + escHtml(r.description || '—') + '</div>' +
+        '</div>' +
+        '<div class="case-item-meta">' +
+          (conf >= 0 ? '<span class="case-item-badge ' + (conf >= 80 ? 'badge-success' : conf >= 60 ? 'badge-pending' : 'badge-error') + '">评分:' + conf + '%</span>' : '') +
+          '<span class="case-item-badge badge-pending">用例:' + caseCnt + '</span>' +
+          '<span class="case-item-badge ' + badgeClass + '">' + badgeText + '</span>' +
+        '</div>';
+      div.addEventListener('click', function() { selectRequirement(r.req_id); });
+      container.appendChild(div);
+    });
+  }
+
+  // ── 选中需求 → 更新详情面板 ──
+  function selectRequirement(reqId) {
+    var r = null;
+    for (var i = 0; i < state.requirements.length; i++) {
+      if (state.requirements[i].req_id === reqId) { r = state.requirements[i]; break; }
+    }
+    if (!r) return;
+    document.querySelectorAll('.case-item[data-req-id]').forEach(function(el) {
+      el.classList.toggle('selected', el.getAttribute('data-req-id') === reqId);
+    });
+    var empty = $('detailEmpty');
+    var content = $('detailGeneric');
+    if (empty) empty.style.display = 'none';
+    ['detailCase', 'detailExecution', 'detailReport'].forEach(function(id) {
+      var el = $(id); if (el) el.style.display = 'none';
+    });
+    if (content) content.style.display = 'block';
+
+    $('detailGenericId').textContent = r.req_id || '—';
+    $('detailGenericModule').textContent = r.module || '—';
+    var st = r.status || 'waiting';
+    var stText = st === 'completed' ? '已拆解' : st === 'active' ? '拆解中...' : '等待中';
+    var stEl = $('detailGenericStatus');
+    stEl.textContent = stText;
+    stEl.style.color = st === 'completed' ? 'var(--state-success-text)' : st === 'active' ? 'var(--color-primary)' : 'var(--text-tertiary)';
+    $('detailGenericReviewStatus').textContent = reqStatusCn(r.review_status);
+    $('detailGenericCaseCount').textContent = r.case_count || 0;
+    var conf = r.confidence;
+    var confEl = $('detailGenericConf');
+    if (conf === null || conf === undefined || conf < 0) {
+      confEl.textContent = '—';
+      confEl.style.color = 'var(--text-tertiary)';
+    } else {
+      confEl.textContent = conf + '%';
+      confEl.style.color = conf >= 80 ? 'var(--state-success-text)' : conf >= 60 ? 'var(--state-warning-text)' : 'var(--state-error-text)';
+    }
+
+    $('detailGenericDesc').textContent = r.description || '—';
+    $('detailGenericOp').textContent = r.operation || '—';
+    $('detailGenericCond').textContent = r.condition_expr || '—';
+    $('detailGenericExpected').textContent = r.expected_feedback || '—';
+    $('detailGenericQuote').textContent = r.source_quote || '（无原文引用）';
+    $('detailGenericAnchor').textContent = r.source_anchor || '—';
+    $('detailGenericSlice').textContent = r.slice_id || '—';
+    fetchTrace(2, r.req_id, 'traceGeneric');
+  }
+
+  // Step3: 用例（进度 tab 简版，含 risk/confidence）
+  function _renderCaseProgressList(container) {
+    if (!state.cases.length) { _emptyList(container, '暂无用例数据'); return; }
+    state.cases.forEach(function(c) {
+      var isActive = c.review_status === 'pending';
+      var isDone = c.review_status === 'approved' || c.review_status === 'modified';
+      var iconClass = isDone ? 'icon-done' : isActive ? 'icon-active' : 'icon-waiting';
+      var badgeClass = isDone ? 'badge-success' : isActive ? 'badge-active' : 'badge-pending';
+      var badgeText = isDone ? '已完成' : isActive ? '建模中...' : '等待中';
+      var iconSvg = isDone
+        ? '<svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>'
+        : isActive
+          ? '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/></svg>'
+          : '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>';
+      var selClass = state.selectedCaseId === c.case_id ? ' selected' : '';
+      var conf = c.confidence || 0;
+      var risk = c.risk_level || '';
+      var _riskCn = riskCn(risk);
+      var riskBadge = risk ? '<span class="case-item-badge ' + (_riskCn === '高' ? 'badge-error' : _riskCn === '中' ? 'badge-pending' : 'badge-success') + '">风险:' + escHtml(_riskCn) + '</span>' : '';
+      var confBadge = '<span class="case-item-badge ' + (conf >= 80 ? 'badge-success' : conf >= 60 ? 'badge-pending' : 'badge-error') + '">评分:' + conf + '%</span>';
+      var timeStr = formatModelingTime(c.updated_at || c.created_at);
+      var div = document.createElement('div');
+      div.className = 'case-item' + selClass;
+      div.setAttribute('data-case-id', c.case_id);
+      div.innerHTML =
+        '<div class="case-item-icon ' + iconClass + '">' + iconSvg + '</div>' +
+        '<div class="case-item-info">' +
+          '<div class="case-item-id">' + escHtml(c.case_id) + '</div>' +
+          '<div class="case-item-title">' + escHtml(c.title || '未命名用例') + '</div>' +
+        '</div>' +
+        '<div class="case-item-meta">' +
+          '<span class="case-item-time">' + escHtml(timeStr) + '</span>' +
+          riskBadge +
+          confBadge +
+          '<span class="case-item-badge ' + badgeClass + '">' + badgeText + '</span>' +
+        '</div>';
+      div.addEventListener('click', function() { selectCase(c.case_id); });
+      container.appendChild(div);
+    });
+  }
+
+  // ★ 执行状态视觉映射（图标 + 徽章）：与下方 execStatusCn 中文化一一对应。
+  //   语义色符合系统风格：通过=绿 / 失败·错误=红 / 跳过=蓝 / 阻断=琥珀 /
+  //   门禁未过=紫 / 执行中=琥珀闪 / 待执行=灰。贯穿 Step4 执行列表与执行详情。
+  var EXEC_ICON_SVG = {
+    'icon-done':    '<svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>',
+    'icon-error':   '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+    'icon-skip':    '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="5 12 19 12"/><polyline points="12 5 19 12 12 19"/></svg>',
+    'icon-block':   '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="12 2 22 12 12 22 2 12 12 2"/></svg>',
+    'icon-gate':    '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="9.5" y1="9.5" x2="14.5" y2="14.5"/><line x1="14.5" y1="9.5" x2="9.5" y2="14.5"/></svg>',
+    'icon-active':  '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/></svg>',
+    'icon-waiting': '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>'
+  };
+  function execStatusVisual(st) {
+    var s = String(st || '').toUpperCase().trim();
+    var m = {
+      PASS:     { icon: 'icon-done',    badge: 'badge-success' },
+      FAIL:     { icon: 'icon-error',   badge: 'badge-error' },
+      ERROR:    { icon: 'icon-error',   badge: 'badge-error' },
+      SKIP:     { icon: 'icon-skip',    badge: 'badge-info' },
+      BLOCKED:  { icon: 'icon-block',   badge: 'badge-warning' },
+      PRE_GATE: { icon: 'icon-gate',    badge: 'badge-gate' },
+      RUNNING:  { icon: 'icon-active',  badge: 'badge-active' },
+      PENDING:  { icon: 'icon-waiting', badge: 'badge-pending' }
+    };
+    return m[s] || { icon: 'icon-waiting', badge: 'badge-pending' };
+  }
+
+  // Step4: 执行记录
+  function _renderExecutionList(container) {
+    if (!state.executions.length) { _emptyList(container, '暂无执行记录'); return; }
+    state.executions.forEach(function(e) {
+      var st = (e.status || '').toUpperCase();
+      var vis = execStatusVisual(st);
+      var iconClass = vis.icon;
+      var badgeClass = vis.badge;
+      var iconSvg = EXEC_ICON_SVG[vis.icon] || EXEC_ICON_SVG['icon-waiting'];
+      var timeStr = formatModelingTime(e.executed_at);
+      var fc = e.failure_category || '';
+      var fcBadge = fc ? '<span class="case-item-badge badge-error" title="归属：' + escHtml(faultCn(fc)) + '">归属:' + escHtml(faultCn(fc)) + '</span>' : '';
+      // SKIP/阻断/门禁未过：把存在 failure_reason(或 actual)里的原因展示出来，避免"只标状态不知为何"
+      var skipReason = '';
+      if ((st === 'SKIP' || st === 'BLOCKED' || st === 'PRE_GATE') && (e.failure_reason || e.actual)) {
+        skipReason = String(e.failure_reason || e.actual || '').replace(/^(skip|block|blocked|gate|pre_gate|error)\s*:\s*/i, '').trim();
+      }
+      var div = document.createElement('div');
+      div.className = 'case-item';
+      div.setAttribute('data-case-id', e.case_id);
+      if (e.id != null) div.setAttribute('data-exec-id', String(e.id));
+      div.title = skipReason ? '跳过原因：' + skipReason : '';
+      div.innerHTML =
+        '<div class="case-item-icon ' + iconClass + '">' + iconSvg + '</div>' +
+        '<div class="case-item-info">' +
+          '<div class="case-item-id">' + escHtml(e.case_id) + '</div>' +
+          '<div class="case-item-title">' + escHtml(e.title || '—') + '</div>' +
+          (skipReason ? '<div class="case-item-skip">' + escHtml(skipReason) + '</div>' : '') +
+        '</div>' +
+        '<div class="case-item-meta">' +
+          '<span class="case-item-time">' + escHtml(timeStr) + '</span>' +
+          fcBadge +
+          '<span class="case-item-badge ' + badgeClass + '">' + escHtml(execStatusCn(st)) + '</span>' +
+        '</div>';
+      div.addEventListener('click', function() { selectExecution(e.case_id, e.id); });
+      container.appendChild(div);
+    });
+  }
+
+  // Step5: 报告（进度 tab 简版）
+  function _renderReportProgressList(container) {
+    if (!state.reports.length) { _emptyList(container, '暂无报告数据'); return; }
+    state.reports.forEach(function(r) {
+      var reportTypeLabel = REPORT_TYPE_LABELS[r.report_type] || r.report_type;
+      var timeStr = formatModelingTime(r.created_at);
+      var selClass = state.selectedReportId === r.report_id ? ' selected' : '';
+      var sizeStr = formatFileSize(r.char_count);
+      var div = document.createElement('div');
+      div.className = 'case-item' + selClass;
+      div.setAttribute('data-report-id', r.report_id);
+      div.innerHTML =
+        '<div class="case-item-icon icon-done"><svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>' +
+        '<div class="case-item-info">' +
+          '<div class="case-item-id">报告 #' + escHtml(r.report_id) + '</div>' +
+          '<div class="case-item-title">' + escHtml(reportTypeLabel) + '</div>' +
+        '</div>' +
+        '<div class="case-item-meta">' +
+          '<span class="case-item-time">' + escHtml(timeStr) + '</span>' +
+          '<span class="case-item-badge badge-pending">' + sizeStr + '</span>' +
+          '<span class="case-item-badge badge-success">已生成</span>' +
+        '</div>';
+      div.addEventListener('click', function() { selectReport(r.report_id); });
+      container.appendChild(div);
+    });
+  }
+
+  // ── 选中执行记录 → 更新详情面板 ──
+  // ★ 根因修复(2026-09-02): 同一用例可能有多条执行记录(如 FAIL 后又 BLOCKED)，
+  //   仅按 case_id 匹配会取到列表里第一条，导致"点失败行却显示阻断详情"。
+  //   现优先按唯一 executions.id(execId) 精确匹配；追溯跳转只带 case_id 时回退按 case_id 取第一条。
+  function selectExecution(caseId, execId) {
+    var e = null;
+    if (execId != null && execId !== '') {
+      for (var i = 0; i < state.executions.length; i++) {
+        if (String(state.executions[i].id) === String(execId)) { e = state.executions[i]; break; }
+      }
+    }
+    if (!e) {
+      for (var i = 0; i < state.executions.length; i++) {
+        if (state.executions[i].case_id === caseId) { e = state.executions[i]; break; }
+      }
+    }
+    if (!e) return;
+    var selExecId = e.id != null ? String(e.id) : null;
+    document.querySelectorAll('#caseListFull .case-item').forEach(function(el) {
+      var match = selExecId != null && el.getAttribute('data-exec-id') === selExecId;
+      if (!match) match = el.getAttribute('data-case-id') === caseId;
+      el.classList.toggle('selected', match);
+    });
+    var empty = $('detailEmpty');
+    var content = $('detailExecution');
+    if (empty) empty.style.display = 'none';
+    ['detailGeneric', 'detailCase', 'detailReport'].forEach(function(id) {
+      var el = $(id); if (el) el.style.display = 'none';
+    });
+    if (content) content.style.display = 'block';
+    $('detailExecId').textContent = e.run_id || '—';
+    $('detailExecCaseId').textContent = e.case_id || '—';
+    var st = (e.status || '').toUpperCase() || '未执行';
+    var vis = execStatusVisual(st);
+    var stEl = $('detailExecStatus');
+    if (stEl) {
+      stEl.className = 'detail-field-value detail-status-badge ' + vis.badge;
+      stEl.textContent = execStatusCn(st);
+      stEl.title = '';
+    }
+    // 非通过状态的原因：跳过/阻断/门禁原因、失败归属，显式展示（不再只藏于 hover）
+    // ★ 数据源用 failure_reason(列表接口真实返回的字段)，actual 不在列表接口中，原逻辑恒空
+    var noteWrap = $('detailExecNoteWrap');
+    var noteEl = $('detailExecNote');
+    if (noteWrap && noteEl) {
+      var note = '';
+      if ((st === 'SKIP' || st === 'BLOCKED' || st === 'PRE_GATE' || st === 'ERROR') && (e.failure_reason || e.actual)) {
+        note = String(e.failure_reason || e.actual || '').replace(/^(skip|block|blocked|gate|pre_gate|error)\s*:\s*/i, '').trim();
+      }
+      if (!note && (st === 'FAIL' || st === 'ERROR') && e.failure_category) {
+        note = '归属：' + faultCn(e.failure_category);
+      }
+      if (!note && st === 'FAIL' && (e.failure_reason || e.actual)) {
+        note = String(e.failure_reason || e.actual || '').trim();
+      }
+      noteEl.textContent = note || '';
+      noteWrap.style.display = note ? '' : 'none';
+      if (stEl && note) stEl.title = note;
+    }
+    $('detailExecPassed').textContent = st === 'PASS' ? '1' : '0';
+    $('detailExecFailed').textContent = (st === 'FAIL' || st === 'ERROR') ? '1' : '0';
+    $('detailExecTime').textContent = e.executed_at ? A.fmtDateTime(e.executed_at) : '—';
+    fetchTrace(4, e.case_id, 'traceExecution');
+    loadExecutionTracks(e.run_id, e.case_id, st);
+    renderTrackCounts($('execDetailTrackCounts'), state.track_counts);
+  }
+
+  // ── 执行轨道公共工具（根因修复 2026-09-02：按用例真实 required_tracks 渲染）──
+  var TRACK_LABELS = { ui: 'UI', api: 'API', db: 'DB' };
+  function _trackCap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : ''; }
+  // ★ 风险等级中文化：存储值(high/medium/low) → 中文(高/中/低)；已中文则原样返回
+  var RISK_CN = { high: '高', medium: '中', low: '低' };
+  function riskCn(v) {
+    if (!v) return '';
+    var s = String(v).toLowerCase().trim();
+    return RISK_CN[s] || String(v);
+  }
+  // ★ 全局统一执行状态中文化：存储值(PASS/FAIL/ERROR/SKIP/BLOCKED/PRE_GATE) → 中文，
+  //   贯穿 Step3 用例列表/Step4 执行列表/执行详情三处，消除"英文 vs 中文"链路表述不一致。
+  var EXEC_STATUS_CN = {
+    PASS: '通过', FAIL: '失败', ERROR: '错误', SKIP: '跳过',
+    BLOCKED: '阻断', PRE_GATE: '门禁未过', RUNNING: '执行中', PENDING: '待执行'
+  };
+  function execStatusCn(v) {
+    var s = String(v || '').toUpperCase().trim();
+    return EXEC_STATUS_CN[s] || (s || '未执行');
+  }
+  // ★ 全局统一失败归属(失败原因类别)中文化：存储值 → 中文，用于"归属:"徽标。
+  var FAULT_CN = {
+    PRODUCT_BUG: '被测系统缺陷', HARNESS_ERROR: '执行引擎异常',
+    ENVIRONMENT_ERROR: '环境问题', DATA_ERROR: '数据问题',
+    OTHER: '其他', UNKNOWN: '未知'
+  };
+  function faultCn(v) {
+    if (!v) return '';
+    var s = String(v).trim().toUpperCase();
+    return FAULT_CN[s] || String(v);
+  }
+  // ★ 需求审核状态中文化：存储值(pending/approved/rejected/modified/reviewing/...) → 中文。
+  //   需求详情"审核状态"字段原直显英文原文，与需求列表"已拆解/拆解中/等待中"表述不一致。
+  var REQ_STATUS_CN = {
+    PENDING: '待审核', APPROVED: '已审批', REJECTED: '已驳回', MODIFIED: '已修改',
+    REVIEWING: '审核中', PENDING_REVIEW: '审核中', UNDER_REVIEW: '审核中'
+  };
+  function reqStatusCn(v) {
+    if (!v) return '—';
+    var s = String(v).trim().toUpperCase();
+    return REQ_STATUS_CN[s] || String(v);
+  }
+  // ★ 去除校验证据文本里的冗余判定前缀([PASS]/[FAIL]/[ERROR]...)：结果列已表达通过/未通过，
+  //   实际列只需保留证据正文，避免与"结果"列重复(冗余)。
+  function stripVerdict(t) {
+    return String(t || '')
+      .replace(/\[(PASS|FAIL|ERROR|WARN|SKIP|INFO|NOT_AVAILABLE)\]\s*/gi, '')
+      .replace(/^\s*[;,]+\s*/, '').replace(/;\s*$/,'').trim();
+  }
+  // 用例详情右上角执行轨道标签：无 required_tracks(旧数据)时回退显示全部三轨
+  function renderTrackTags(box, requiredTracks) {
+    if (!box) return;
+    var rails = Array.isArray(requiredTracks) && requiredTracks.length
+      ? requiredTracks.filter(function(t) { return TRACK_LABELS[t]; })
+      : ['ui', 'api', 'db'];
+    box.innerHTML = '';
+    rails.forEach(function(rail) {
+      var tag = document.createElement('span');
+      tag.className = 'track-tag tr-track-' + rail;
+      tag.textContent = (TRACK_LABELS[rail] || rail) + '轨道';
+      box.appendChild(tag);
+    });
+  }
+  // 三轨用例个数统计（不去重）：按 required_tracks 聚合，UI/API/DB 三色标注。
+  // 无数据时隐藏整块；track_counts 形如 {ui:n, api:n, db:n}。
+  function renderTrackCounts(box, trackCounts) {
+    if (!box) return;
+    if (!trackCounts) { box.style.display = 'none'; return; }
+    box.innerHTML = '';
+    var any = false;
+    ['ui', 'api', 'db'].forEach(function(rail) {
+      var n = trackCounts[rail];
+      if (n === undefined || n === null) return;
+      any = true;
+      var tag = document.createElement('span');
+      tag.className = 'track-count-tag tr-track-' + rail;
+      tag.textContent = (TRACK_LABELS[rail] || rail.toUpperCase()) + ' ' + n;
+      box.appendChild(tag);
+    });
+    box.style.display = any ? '' : 'none';
+  }
+
+  // 执行详情：按轨道重建校验条（仅渲染用例真实轨道）
+  function renderExecTrackRows(box, hint, rails) {
+    if (!box) return;
+    while (box.firstChild) { box.removeChild(box.firstChild); }
+    rails.forEach(function(rail) {
+      var row = document.createElement('div'); row.className = 'track-row';
+      var lbl = document.createElement('span'); lbl.className = 'track-row-label tr-track-' + rail;
+      lbl.textContent = TRACK_LABELS[rail] || rail.toUpperCase();
+      var bar = document.createElement('div'); bar.className = 'track-bar';
+      var fill = document.createElement('div'); fill.className = 'track-bar-fill tr-track-' + rail;
+      fill.id = 'trackFill' + _trackCap(rail); fill.style.width = '0%';
+      bar.appendChild(fill);
+      var stat = document.createElement('span'); stat.className = 'track-row-stat';
+      stat.id = 'trackStat' + _trackCap(rail); stat.textContent = '—';
+      row.appendChild(lbl); row.appendChild(bar); row.appendChild(stat);
+      box.appendChild(row);
+    });
+    if (hint) { hint.style.display = 'none'; box.appendChild(hint); }
+  }
+
+  // ── 加载并渲染执行记录轨道(ui/api/db，取决于用例 required_tracks)通过率 ──
+  async function loadExecutionTracks(runId, caseId, status) {
+    var hint = $('execTrackHint');
+    var box = $('execTrackBars');
+    var titleEl = $('execTrackTitle');
+    var st = String(status || '').toUpperCase();
+    // ★ 未实际校验的状态(SKIP/阻断/门禁未过/待执行)：整体隐藏"预期VS实际"校验明细与
+    //   轨道通过率，显示中性提示，避免兜底 evidence 被判成"未通过"误导用户。
+    if (st === 'SKIP' || st === 'BLOCKED' || st === 'PRE_GATE' || st === 'PENDING') {
+      if (box) { while (box.firstChild) { box.removeChild(box.firstChild); } }
+      var neutralMsg = st === 'BLOCKED' ? '该执行已被阻断，未执行校验，无逐项校验明细'
+        : st === 'PRE_GATE' ? '该执行未过前置门禁，未执行校验，无逐项校验明细'
+        : st === 'PENDING' ? '该执行尚未执行，无逐项校验明细'
+        : '该执行已跳过，未执行校验，无逐项校验明细';
+      if (hint) { hint.className = 'exec-neutral-note'; hint.textContent = neutralMsg; hint.style.display = ''; if (box) box.appendChild(hint); }
+      if (titleEl) titleEl.textContent = '执行校验说明';
+      var o = $('detailExecTracks'); if (o) o.textContent = '—';
+      var dt = $('execDetailTable'); if (dt) dt.innerHTML = '';
+      return;
+    }
+    if (titleEl) titleEl.textContent = '执行过程校验明细 · 预期 VS 实际';
+    try {
+      if (!runId) { setTracksEmpty('该执行无 run_id，无法查询执行轨道数据'); return; }
+      var r = await api('GET', '/api/execution-tracks?run_id=' + encodeURIComponent(runId) + '&case_id=' + encodeURIComponent(caseId || ''));
+      if (!r || !r.ok) throw new Error((r && r.error) || '加载失败');
+      var tracks = r.tracks || {};
+      // 只渲染用例真实轨道；接口未提供时回退全部三轨
+      var rails = (r.required_tracks && r.required_tracks.length)
+        ? r.required_tracks.filter(function(t) { return TRACK_LABELS[t]; })
+        : ['ui', 'api', 'db'];
+      renderExecTrackRows(box, hint, rails);
+      if (hint) { hint.className = 'trace-empty'; hint.style.display = 'none'; }
+      var totalPass = 0, totalCnt = 0;
+      rails.forEach(function(rail) {
+        var t = tracks[rail] || {};
+        var statEl = $('trackStat' + _trackCap(rail)), fillEl = $('trackFill' + _trackCap(rail));
+        if (!statEl || !fillEl) return;
+        if (t.total > 0 && t.rate != null) {
+          statEl.textContent = t.pass + '/' + t.total + ' (' + t.rate + '%)';
+          statEl.title = '该轨道通过的行数 / 该轨道校验行数（同轨多条证据已合并为一行；多轨用例总条数>1，对应轨道数，非步骤数）';
+          fillEl.style.width = Math.min(100, Math.max(0, t.rate)) + '%';
+          fillEl.classList.toggle('fail', t.pass < t.total);
+          totalPass += t.pass; totalCnt += t.total;
+        } else {
+          statEl.textContent = '—';
+          fillEl.style.width = '0%';
+          fillEl.classList.remove('fail');
+        }
+      });
+      var scopedTxt = r.scoped === 'case' ? '按用例' : '按运行';
+      var overall = totalCnt > 0 ? Math.round(100 * totalPass / totalCnt) + '%' : '—';
+      $('detailExecTracks').textContent = totalCnt > 0 ? overall + '（' + scopedTxt + '）' : '—';
+      if (hint) hint.style.display = 'none';
+      renderExecDetailTable(r.details || []);
+    } catch (e) {
+      setTracksEmpty('执行轨道数据加载失败');
+    }
+  }
+  // ── 执行过程校验明细：预期 VS 实际 逐项表格 ──
+  function renderExecDetailTable(details) {
+    var box = $('execDetailTable');
+    if (!box) return;
+    box.innerHTML = '';
+    if (!details || !details.length) {
+      box.innerHTML = '<div class="trace-empty">暂无逐项校验明细（该执行的断言明细未解析）</div>';
+      return;
+    }
+    var tbl = document.createElement('table');
+    tbl.className = 'ud-table detail-check-table';
+    var thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th>轨道</th><th>预期 (Expected)</th><th>实际 (Actual)</th><th>结果</th></tr>';
+    tbl.appendChild(thead);
+    var tbody = document.createElement('tbody');
+    details.forEach(function(it) {
+      var tr = document.createElement('tr');
+      var rail = it.rail || 'api';
+      var railCn = TRACK_LABELS[rail] || rail.toUpperCase();
+      var passed = !!it.passed;
+      tr.innerHTML =
+        '<td><span class="track-tag tr-track-' + rail + '">' + escHtml(railCn) + '</span></td>' +
+        '<td class="dc-exp">' + escHtml(stripVerdict(it.expected) || '—') + '</td>' +
+        '<td class="dc-act">' + escHtml(stripVerdict(it.actual) || '—') + '</td>' +
+        '<td class="' + (passed ? 'dc-pass' : 'dc-fail') + '">' + (passed ? '通过' : '未通过') + '</td>';
+      tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody);
+    box.appendChild(tbl);
+  }
+  function setTracksEmpty(msg) {
+    var box = $('execTrackBars');
+    if (box) {
+      // 清空已渲染的轨道行，避免上一执行的残留行误导
+      while (box.firstChild) { box.removeChild(box.firstChild); }
+    }
+    var hint = $('execTrackHint');
+    if (hint) { hint.className = 'exec-neutral-note'; hint.style.display = ''; hint.textContent = msg || '—'; if (box) box.appendChild(hint); }
+    var titleEl = $('execTrackTitle');
+    if (titleEl) titleEl.textContent = '执行校验说明';
+    var o = $('detailExecTracks'); if (o) o.textContent = '—';
+    var dt = $('execDetailTable'); if (dt) dt.innerHTML = '';
+  }
+
+  // ── 格式化建模时间 ──
+  function formatModelingTime(timeStr) {
+    if (!timeStr) return '—';
+    try {
+      var d = new Date(timeStr);
+      if (isNaN(d.getTime())) return '—';
+      var now = new Date();
+      var diff = Math.floor((now - d) / 1000);
+      if (diff < 60) return '刚刚';
+      if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+      if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+      if (diff < 2592000) return Math.floor(diff / 86400) + '天前';
+      return d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+    } catch (e) {
+      return '—';
+    }
+  }
+
+  // ── 选中用例 → 更新详情面板 ──
+  function selectCase(caseId) {
+    state.selectedCaseId = caseId;
+    var c = null;
+    for (var i = 0; i < state.cases.length; i++) {
+      if (state.cases[i].case_id === caseId) { c = state.cases[i]; break; }
+    }
+    if (!c) return;
+
+    // 高亮选中
+    document.querySelectorAll('.case-item').forEach(function(el) {
+      el.classList.toggle('selected', el.getAttribute('data-case-id') === caseId);
+    });
+
+    // 显示详情
+    var empty = $('detailEmpty');
+    var content = $('detailCase');
+    if (empty) empty.style.display = 'none';
+    if (content) content.style.display = 'block';
+
+    $('detailCaseId').textContent = c.case_id;
+    $('detailCaseTitle').textContent = c.title || '未命名';
+    $('detailReqSource').textContent = c.req_id ? '需求 ' + c.req_id : '—';
+    $('detailActionsCount').textContent = (c.actions_count != null ? c.actions_count : (c.actions ? c.actions.length : 0));
+    $('detailChecksCount').textContent = (c.checks ? c.checks.length : 0);
+    $('detailRiskLevel').textContent = c.risk_level ? riskCn(c.risk_level) : '—';
+
+    // ★ 根因修复(2026-09-02): 执行轨道标签按用例真实 required_tracks 渲染，
+    //   不再写死 UI/API/DB 三轨（纯 API 靶子此前误显示"3轨"）
+    renderTrackTags($('detailTrackTags'), c.required_tracks);
+
+    var modelingTime = c.updated_at || c.created_at;
+    $('detailModelingTime').textContent = modelingTime ? A.fmtDateTime(modelingTime) : '—';
+
+    // 置信度（统一兼容 0-1 小数与 0-100 百分比）
+    var conf = c.confidence || 0;
+    var displayConf = conf > 1 ? Math.round(conf) : Math.round(conf * 100);
+    $('detailConfidenceVal').textContent = displayConf + '%';
+    var fill = $('detailConfidenceFill');
+    if (fill) {
+      fill.style.width = displayConf + '%';
+      fill.className = 'confidence-fill ' + (displayConf >= 80 ? 'high' : displayConf >= 60 ? 'mid' : 'low');
+    }
+
+    // 建模状态
+    var buildStatus = $('detailBuildStatus');
+    if (buildStatus) {
+      if (c.review_status === 'approved' || c.review_status === 'modified') {
+        buildStatus.textContent = '已完成';
+        buildStatus.style.color = 'var(--state-success-text)';
+      } else if (c.review_status === 'rejected') {
+        buildStatus.textContent = '已驳回';
+        buildStatus.style.color = 'var(--state-error-text)';
+      } else {
+        buildStatus.textContent = '建模中...';
+        buildStatus.style.color = 'var(--color-primary)';
+      }
+    }
+    fetchTrace(3, c.case_id, 'traceCase');
+  }
+
+  // ── 报告类型标签映射 ──
+  var REPORT_TYPE_LABELS = {
+    'report': '测试报告',
+    'html_report': 'HTML报告',
+    'coverage_report': '覆盖率报告',
+  };
+
+  // ── 渲染报告列表 ──
+  function renderReportList(reports) {
+    state.reports = reports || [];
+    var container = $('reportList');
+    if (!container) return;
+    var empty = container.querySelector('.empty-state');
+    if (empty) empty.remove();
+    var oldItems = container.querySelectorAll('.case-item');
+    oldItems.forEach(function(el) { el.remove(); });
+
+    if (!state.reports.length) {
+      container.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><p>暂无报告数据</p></div>';
+      return;
+    }
+
+    state.reports.forEach(function(r) {
+      var reportTypeLabel = REPORT_TYPE_LABELS[r.report_type] || r.report_type;
+      var selClass = state.selectedReportId === r.report_id ? ' selected' : '';
+      var timeStr = formatModelingTime(r.created_at);
+
+      var div = document.createElement('div');
+      div.className = 'case-item' + selClass;
+      div.setAttribute('data-report-id', r.report_id);
+      div.innerHTML =
+        '<div class="case-item-icon icon-done">' +
+          '<svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>' +
+        '</div>' +
+        '<div class="case-item-info">' +
+          '<div class="case-item-id">' + escHtml(r.report_id) + '</div>' +
+          '<div class="case-item-title">' + escHtml(reportTypeLabel) + '</div>' +
+        '</div>' +
+        '<div class="case-item-meta">' +
+          '<span class="case-item-time">' + escHtml(timeStr) + '</span>' +
+          '<span class="case-item-badge badge-success">已完成</span>' +
+        '</div>';
+      div.addEventListener('click', function() { selectReport(r.report_id); });
+      container.appendChild(div);
+    });
+  }
+
+  // ── 选中报告 → 更新详情面板 ──
+  function selectReport(reportId) {
+    state.selectedReportId = reportId;
+    var r = null;
+    for (var i = 0; i < state.reports.length; i++) {
+      if (state.reports[i].report_id === reportId) { r = state.reports[i]; break; }
+    }
+    if (!r) return;
+
+    // 高亮选中
+    document.querySelectorAll('#reportList .case-item').forEach(function(el) {
+      el.classList.toggle('selected', el.getAttribute('data-report-id') === reportId);
+    });
+
+    // 显示详情
+    var empty = $('detailEmpty');
+    var content = $('detailReport');
+    if (empty) empty.style.display = 'none';
+    if (content) content.style.display = 'block';
+
+    $('detailReportId').textContent = r.report_id;
+    $('detailReportType').textContent = REPORT_TYPE_LABELS[r.report_type] || r.report_type;
+    $('detailReportRunId').textContent = r.run_id || '—';
+    $('detailReportSize').textContent = formatFileSize(r.char_count);
+    var reportTime = r.created_at;
+    $('detailReportTime').textContent = reportTime ? A.fmtDateTime(reportTime) : '—';
+
+    // 加载报告摘要（iframe 渲染）
+    var iframeEl = $('detailReportPreview');
+    if (iframeEl) iframeEl.srcdoc = '<!DOCTYPE html><html><body>加载中...</body></html>';
+    fetchReportPreview(r.report_id, r.report_type);
+
+    // 绑定"查看完整报告"按钮
+    var btnView = $('btnDetailViewReport');
+    if (btnView) {
+      btnView.onclick = function() { viewFullReport(r.report_id, r.report_type); };
+    }
+    fetchTrace(5, r.report_id, 'traceReport');
+  }
+
+  // ── 获取报告摘要（用 iframe srcdoc 渲染，支持 SVG 图表展示） ──
+  async function fetchReportPreview(reportId, reportType) {
+    var iframeEl = $('detailReportPreview');
+    if (!iframeEl) return;
+    try {
+      var r = await api('GET', '/api/report-content/' + encodeURIComponent(reportId));
+      if (r && r.ok && r.content) {
+        var raw = r.content;
+        var isHtml = /<\s*html[\s>]/i.test(raw) || /<\s*!doctype\s+html/i.test(raw);
+        var hasSvgOrTable = /<\s*(svg|table|div)\b/i.test(raw);
+        var html = '';
+        if (isHtml) {
+          // 完整 HTML 文档：截取前 8000 字符避免过大
+          html = raw.length > 8000 ? raw.substring(0, 8000) + '\n<!-- ... 截断 ... -->' : raw;
+        } else if (hasSvgOrTable || reportType === 'html_report' || reportType === 'coverage_report') {
+          // HTML/SVG 片段：包装成完整 HTML
+          html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:"Microsoft YaHei",Arial,sans-serif;padding:12px;background:var(--text-on-color);color:var(--text-primary);margin:0;font-size:12px;}table{border-collapse:collapse;margin:8px 0;}td,th{border:1px solid var(--border-default);padding:4px 8px;}</style></head><body>'
+            + (raw.length > 8000 ? raw.substring(0, 8000) + '\n<!-- ... 截断 ... -->' : raw)
+            + '</body></html>';
+        } else {
+          // 纯文本/markdown：转义后原样显示
+          var text = raw.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Consolas,monospace;padding:12px;background:var(--text-on-color);color:var(--text-primary);margin:0;font-size:12px;white-space:pre-wrap;word-break:break-all;}</style></head><body>' + (text.length > 5000 ? text.substring(0, 5000) + '\n\n... (共 ' + text.length + ' 字符，仅显示前 5000)' : text) + '</body></html>';
+        }
+        iframeEl.srcdoc = html;
+        // 自适应高度（限制最大 280px）
+        iframeEl.onload = function() {
+          try {
+            var h = iframeEl.contentDocument.body.scrollHeight;
+            iframeEl.style.height = Math.min(Math.max(h + 20, 120), 280) + 'px';
+          } catch (e) { /* 跨域忽略 */ }
+        };
+      } else {
+        iframeEl.srcdoc = '<!DOCTYPE html><html><body>无法加载报告内容</body></html>';
+      }
+    } catch (e) {
+      iframeEl.srcdoc = '<!DOCTYPE html><html><body' + dS('color:var(--state-error)') + '>加载失败: ' + escHtml(e.message || '未知错误') + '</body></html>';
+    }
+  }
+
+  // ── 打开完整报告（新窗口渲染，支持 SVG 图表） ──
+  async function viewFullReport(reportId, reportType) {
+    try {
+      var r = await api('GET', '/api/report-content/' + encodeURIComponent(reportId));
+      if (!r || !r.ok || !r.content) {
+        A.toast('无法加载报告内容' + (r && r.error ? '：' + r.error : ''), 'error');
+        return;
+      }
+      var win = window.open('', '_blank');
+      if (!win) { A.toast('弹窗被浏览器拦截，请允许弹窗后重试', 'error'); return; }
+      var content = r.content;
+      var isHtml = /<\s*html[\s>]/i.test(content) || /<\s*!doctype\s+html/i.test(content);
+      if (isHtml) {
+        // content 来自后端生成的报告，属可信系统内容，需原样渲染（转义会破坏报告显示）
+        win.document.write(content);
+      } else if (reportType === 'html_report' || reportType === 'coverage_report' || /<\s*(svg|table|div)\b/i.test(content)) {
+        // 含 HTML/SVG 片段：包装成完整 HTML（content 为后端生成的可信报告片段）
+        win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>测试报告 #' + escHtml(reportId) + '</title><style>body{font-family:"Microsoft YaHei",Arial,sans-serif;padding:20px;background:var(--text-on-color);color:var(--text-primary);}table{border-collapse:collapse;margin:10px 0;}td,th{border:1px solid var(--border-default);padding:6px 12px;}</style></head><body>' + content + '</body></html>');
+      } else {
+        // 纯文本/markdown：原样显示
+        win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>测试报告 #' + escHtml(reportId) + '</title><style>body{font-family:Consolas,monospace;padding:20px;background:var(--text-on-color);color:var(--text-primary);white-space:pre-wrap;word-break:break-all;}</style></head><body>' + content.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</body></html>');
+      }
+      win.document.close();
+    } catch (e) {
+      A.toast('加载失败: ' + (e.message || '未知错误'), 'error');
+    }
+  }
+
+  // ── 步骤名称映射（关联追溯用） ──
+  var STEP_NAMES = { 1: 'Step1 数据提取', 2: 'Step2 需求拆解', 3: 'Step3 用例建模', 4: 'Step4 检查执行', 5: 'Step5 报告生成' };
+
+  // ── 获取关联追溯并渲染 ──
+  async function fetchTrace(step, id, containerId) {
+    var container = $(containerId);
+    if (!container) return;
+    container.innerHTML = '<div class="trace-empty">加载关联中...</div>';
+    try {
+      var r = await api('GET', '/api/pipeline-trace/' + encodeURIComponent(step) + '/' + encodeURIComponent(id));
+      if (!r || !r.ok) {
+        container.innerHTML = '<div class="trace-empty">加载关联失败</div>';
+        return;
+      }
+      var html = '';
+      var up = r.upstream || [];
+      var down = r.downstream || [];
+      if (!up.length && !down.length) {
+        container.innerHTML = '<div class="trace-empty">无上下游关联</div>';
+        return;
+      }
+      if (up.length) {
+        html += '<div class="trace-section"><div class="trace-section-title">↑ 上游（' + up.length + '）</div>';
+        up.forEach(function(item) {
+          html += '<div class="trace-item" data-step="' + item.step + '" data-id="' + escHtml(item.id) + '">' +
+            '<svg class="trace-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>' +
+            '<span class="trace-item-label">' + escHtml(STEP_NAMES[item.step] || ('Step' + item.step)) + ' · ' + escHtml(item.label) + '</span>' +
+            '</div>';
+        });
+        html += '</div>';
+      }
+      if (down.length) {
+        html += '<div class="trace-section"><div class="trace-section-title">↓ 下游（' + down.length + '）</div>';
+        down.forEach(function(item) {
+          html += '<div class="trace-item" data-step="' + item.step + '" data-id="' + escHtml(item.id) + '">' +
+            '<svg class="trace-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>' +
+            '<span class="trace-item-label">' + escHtml(STEP_NAMES[item.step] || ('Step' + item.step)) + ' · ' + escHtml(item.label) + '</span>' +
+            '</div>';
+        });
+        html += '</div>';
+      }
+      container.innerHTML = html;
+      // 绑定点击跳转
+      container.querySelectorAll('.trace-item').forEach(function(el) {
+        el.addEventListener('click', function() {
+          var tStep = parseInt(el.getAttribute('data-step'), 10);
+          var tId = el.getAttribute('data-id');
+          jumpToStep(tStep, tId);
+        });
+      });
+    } catch (e) {
+      container.innerHTML = '<div class="trace-empty">加载失败: ' + escHtml(e.message || '未知错误') + '</div>';
+    }
+  }
+
+  // ── 跨步骤跳转并选中条目 ──
+  function jumpToStep(step, id) {
+    // ★ 追溯跳转强制落到该步骤的"列表 tab"（step1→文档/2-4→列表/5→报告），而非默认"进度"tab
+    var listTab = { 1: 'docs', 2: 'cases', 3: 'cases', 4: 'cases', 5: 'reports' }[step] || null;
+    // 先切换到目标 step
+    switchToStep(step, listTab);
+    // 等列表渲染后选中条目（延迟，确保 pollStatus 已填充 state）
+    setTimeout(function() {
+      try {
+        if (step === 1) { selectSourceDoc(id); }
+        else if (step === 2) { selectRequirement(id); }
+        else if (step === 3) { selectCase(id); }
+        else if (step === 4) { selectExecution(id); }
+        else if (step === 5) { selectReport(parseInt(id, 10)); }
+      } catch (e) { /* 列表可能还没渲染，忽略 */ }
+    }, 600);
+  }
+
+  // ── 格式化文件大小 ──
+  function formatFileSize(chars) {
+    if (!chars && chars !== 0) return '—';
+    if (chars < 1024) return chars + ' 字符';
+    if (chars < 1024 * 1024) return (chars / 1024).toFixed(1) + ' KB';
+    return (chars / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  // ── 各 Step 进度文案映射 ──
+  var STEP_PROGRESS_LABEL = {
+    1: { pending: '等待提取', active: '提取中...', done: '已提取', unit: '个来源' },
+    2: { pending: '等待拆解', active: '拆解中...', done: '已拆解', unit: '个需求' },
+    3: { pending: '等待建模', active: '建模中...', done: '已构建', unit: '个用例' },
+    4: { pending: '等待执行', active: '执行中...', done: '已执行', unit: '个检查' },
+    5: { pending: '等待生成', active: '生成中...', done: '已生成', unit: '个报告' },
+  };
+
+  // ── 更新当前 Step 进度条 ──
+  function updateStepProgress(currentStep, stepStatus, cases, perStepCounts, stepDone, stepTotal) {
+    var summaryEl = $('progressSummaryText');
+    var fillEl = $('progressBarFill');
+    var pctEl = $('progressBarPct');
+    var label = STEP_PROGRESS_LABEL[currentStep] || STEP_PROGRESS_LABEL[3];
+    var st = stepStatus || 'pending';
+
+    // 根据当前 Step 设置进度条颜色 + 文字颜色
+    var stepColorVar = '--step' + currentStep + '-color';
+    var stepColor = getComputedStyle(document.documentElement).getPropertyValue(stepColorVar).trim() || 'var(--color-primary)';
+    fillEl.style.background = 'linear-gradient(90deg, ' + stepColor + ', ' + stepColor + '99)';
+    summaryEl.style.color = stepColor;
+    pctEl.style.color = stepColor;
+
+    if (st === 'pending') {
+      summaryEl.style.color = '';
+      pctEl.style.color = '';
+      summaryEl.innerHTML = '<span class="ud-muted">' + label.pending + '</span>';
+      fillEl.style.width = '0%';
+      pctEl.textContent = '—';
+      return;
+    }
+    if (st === 'active') {
+      summaryEl.innerHTML = label.active;
+      // ★ 使用后端返回的实际进度数据
+      var pct = 0;
+      if (stepTotal > 0) {
+        pct = Math.round(stepDone / stepTotal * 100);
+      }
+      fillEl.style.width = pct + '%';
+      pctEl.textContent = stepTotal > 0 ? (stepDone + '/' + stepTotal + ' (' + pct + '%)') : '执行中...';
+      return;
+    }
+    // completed：用后端返回的 count
+    var count = 0;
+    if (perStepCounts && perStepCounts[currentStep] != null) {
+      count = perStepCounts[currentStep];
+    } else if (currentStep === 3 && cases) {
+      count = cases.length;
+    }
+    if (count === 0) {
+      summaryEl.style.color = '';
+      pctEl.style.color = '';
+      summaryEl.innerHTML = '<span class="ud-muted">' + label.done + ' 0 ' + label.unit + '</span>';
+      fillEl.style.width = '0%';
+      pctEl.textContent = '0%';
+      return;
+    }
+    // Step3 额外展示审核进度
+    if (currentStep === 3 && cases && cases.length) {
+      var done = 0;
+      cases.forEach(function(c) {
+        if (c.review_status === 'approved' || c.review_status === 'modified') done++;
+      });
+      var pct = Math.round(done / cases.length * 100);
+      summaryEl.innerHTML = '<b' + dS('color:' + stepColor) + '>' + done + '</b> / ' + cases.length + ' 项完成 (' + pct + '%)';
+      fillEl.style.width = pct + '%';
+      pctEl.textContent = pct + '%';
+    } else {
+      summaryEl.innerHTML = '<b' + dS('color:' + stepColor) + '>' + count + '</b> ' + label.unit;
+      fillEl.style.width = '100%';
+      pctEl.textContent = '100%';
+    }
+  }
+
+  // ── 加载当前项目名 ──
+  // 当前项目统一由侧边栏展示（绿色主题色），顶栏不再单独展示；此处保留空实现保持调用点兼容
+  async function loadProjects() {
+    return;
+  }
+
+  // ── 状态轮询 ──
+  async function pollStatus() {
+    try {
+      // 并行加载 pipeline-progress 和 status，减少等待时间
+      var results = await Promise.all([
+        dedupedApi('GET', '/api/pipeline-progress'),
+        dedupedApi('GET', '/api/status')
+      ]);
+      var pp = results[0];
+      var s = results[1];
+
+      // ★ 运行状态徽章（依赖 /api/status，失败时跳过不阻塞步骤状态渲染）
+      if (s && s.ok) {
+        var badge = $('runStateBadge');
+        var text = $('runStateText');
+        var detail = $('runStateDetail');
+        if (s.paused) {
+          if (badge) badge.className = 'run-state-badge run-state-paused';
+          if (text) text.textContent = '已暂停';
+          if (detail) detail.textContent = '暂停于 Step ' + (s.paused_step || '?');
+        } else if (s.running) {
+          if (badge) badge.className = 'run-state-badge run-state-running';
+          if (text) text.textContent = '运行中';
+          var runs = s.active_runs || [];
+          if (detail) detail.textContent = runs.length + ' 个任务运行中';
+        } else {
+          if (badge) badge.className = 'run-state-badge run-state-idle';
+          if (text) text.textContent = '空闲';
+          if (detail) detail.textContent = '无运行任务';
+        }
+      }
+
+      // Step 状态
+      // ★ 统一来源：状态只从 /api/pipeline-progress 的 steps 读取，
+      //    不再用 /api/status 的 active_runs 覆盖，避免状态不一致。
+      var stepStatus = { 1: 'pending', 2: 'pending', 3: 'pending', 4: 'pending', 5: 'pending' };
+      var activeStep = 0;
+      if (pp && pp.ok && pp.steps) {
+        pp.steps.forEach(function(st) {
+          stepStatus[st.step] = st.status || 'pending';
+          if (st.status === 'active') activeStep = st.step;
+        });
+        state.pipelineSteps = pp.steps;
+      }
+
+      // 保存状态
+      state.stepStatus = stepStatus;
+      // ★ 只有当用户没有手动选择步骤时，才自动跟随运行中的步骤
+      if (activeStep > 0 && !state.userSelectedStep) {
+        // ★ 步骤变化时同步 tab 栏（保持用户当前 tab，避免轮询打断查看）
+        if (state.activeStep !== activeStep) {
+          state.activeStep = activeStep;
+          _renderTabBar(activeStep, true);
+          _showDetailPanel(activeStep);
+        }
+      }
+
+      // ★ 同步禁用/启用执行按钮（防止执行过程中重复点击）
+      // 统一使用 pp.running（与步骤状态同一来源），避免和步骤状态不同步
+      var btnRunAll = $('btnRunAll');
+      var btnStepRun = $('btnStepRun');
+      var stepSelect = $('stepSelect');
+      var isRunning = !!(pp && pp.ok && pp.running);
+      // ★ 2026-08-29 [已拍板] run-all 永久禁用：btnRunAll 恒为 disabled，不随运行状态恢复
+      if (btnRunAll) btnRunAll.disabled = true;
+      if (isRunning) {
+        if (btnStepRun) btnStepRun.disabled = true;
+        if (stepSelect) stepSelect.disabled = true;
+      } else {
+        if (btnStepRun) btnStepRun.disabled = false;
+        if (stepSelect) stepSelect.disabled = false;
+      }
+
+      // 更新左侧面板标题和状态
+      var activeMeta = state.activeStep > 0 ? STEP_META[state.activeStep] : null;
+      var titleEl = $('leftPanelTitle');
+      if (titleEl && activeMeta) {
+        titleEl.textContent = activeMeta.name + ' — ' + activeMeta.desc;
+      }
+      var statusText = $('leftPanelStatusText');
+      if (statusText) {
+        if (s.running) statusText.textContent = '进行中';
+        else if (s.paused) statusText.textContent = '已暂停';
+        else statusText.textContent = '空闲';
+      }
+      var elapsedEl = $('leftPanelElapsed');
+      if (elapsedEl && s.active_runs && s.active_runs.length > 0) {
+        var elapsed = Math.floor(Date.now() / 1000 - s.active_runs[0].start_ts);
+        if (elapsed >= 0) elapsedEl.textContent = '耗时 ' + formatElapsed(elapsed);
+      } else if (elapsedEl) {
+        elapsedEl.textContent = '';
+      }
+
+      // 进度 tab 只放子任务进度，列表渲染到独立 tab（来自 pipeline-progress）
+      if (pp && pp.ok) {
+        var cases = pp.cases || [];
+        var reports = pp.reports || [];
+        state.requirements = pp.requirements || [];
+        state.sourceDocs = pp.source_docs || [];
+        state.executions = pp.executions || [];
+        state.track_counts = pp.track_counts || null;
+        renderTrackCounts($('caseTrackCounts'), state.track_counts);
+        renderStepProgressList(state.activeStep);
+        renderCaseList(cases, state.activeStep);
+        renderReportList(reports);
+        renderDocList();
+        // 从 steps 数组中提取 perStepCounts
+        var perStepCounts = {};
+        if (pp.steps) {
+          pp.steps.forEach(function(st) {
+            perStepCounts[st.step] = st.count || 0;
+          });
+        }
+        state.perStepCounts = perStepCounts;
+        state.stepDone = pp.step_done || 0;
+        state.stepTotal = pp.step_total || 0;
+        updateStepProgress(state.activeStep, state.stepStatus[state.activeStep], cases, perStepCounts, state.stepDone, state.stepTotal);
+      }
+
+      // 订阅 SSE
+      var runs = s.active_runs || [];
+      if (runs.length > 0) {
+        var r0 = runs[0];
+        if (r0.run_id && r0.run_id !== state.currentRunId) {
+          state.currentRunId = r0.run_id;
+          subscribeSSE(r0.run_id);
+        }
+      }
+
+      // 思考状态
+      var thinking = $('detailThinking');
+      if (thinking) {
+        if (s.thinking_active) {
+          thinking.classList.add('show');
+          if ($('detailThinkingName')) $('detailThinkingName').textContent = s.thinking_name || 'AI 思考中';
+          if ($('detailThinkingElapsed')) $('detailThinkingElapsed').textContent = '耗时 ' + (s.thinking_elapsed || 0) + 's';
+        } else {
+          thinking.classList.remove('show');
+        }
+      }
+
+      renderSteps(stepStatus, activeStep, s.running);
+      loadStep1Status();
+    } catch (e) {
+      console.warn('[pipeline] pollStatus 失败:', e);
+    }
+  }
+
+  function formatElapsed(sec) {
+    if (sec < 60) return sec + 's';
+    if (sec < 3600) return Math.floor(sec / 60) + 'm' + (sec % 60) + 's';
+    return Math.floor(sec / 3600) + 'h' + Math.floor((sec % 3600) / 60) + 'm';
+  }
+
+  // ── SSE 日志订阅 ──
+  function subscribeSSE(runId, clearExisting) {
+    if (state.sseSource) {
+      try { state.sseSource.close(); } catch(e) {}
+      state.sseSource = null;
+    }
+    if (state.sseReconnectTimer) {
+      clearTimeout(state.sseReconnectTimer);
+      state.sseReconnectTimer = null;
+    }
+    // ★ 仅在 runId 变更或显式要求时清空日志，页面恢复可见时保留已有日志
+    var isNewRun = runId !== state.sseRunId;
+    state.sseRunId = runId;
+    state.sseReconnectCount = 0;
+    state._lastLogKey = null;
+    // ★ 先拉历史日志回放，再接入实时 SSE 流
+    _fetchHistoryThenSSE(runId, clearExisting !== false && isNewRun);
+  }
+
+  // ★ 从后端获取当前项目+版本的确定性 run_id（重启/刷新后恢复历史日志订阅）
+  function _restoreRunIdFromSession() {
+    fetch('/api/run-id', { credentials: 'same-origin' })
+      .then(function(r) {
+        if (!r.ok) return null;
+        return r.json();
+      })
+      .then(function(d) {
+        if (d && d.run_id && d.run_id !== state.currentRunId) {
+          state.currentRunId = d.run_id;
+          // ★ 恢复历史日志：拉取 MySQL 中的日志回放，并接 SSE 等待新执行
+          subscribeSSE(d.run_id);
+        }
+      })
+      .catch(function(err) {
+        console.debug('[pipeline] /api/run-id 获取失败:', err);
+      });
+  }
+
+  function _fetchHistoryThenSSE(runId, clearExisting) {
+    // ★ 仅在 runId 变更时清空日志；页面恢复可见时保留已有日志，避免闪烁和卡顿感
+    if (clearExisting) {
+      clearLogs();
+    }
+    fetch('/api/log-history/' + encodeURIComponent(runId), { credentials: 'same-origin' })
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function(resp) {
+        // ★ 后端返回 {run_id,total,offset,limit,has_more,logs:[...]}，需取 resp.logs
+        var logs = (resp && resp.logs) ? resp.logs : [];
+        if (logs.length > 0) {
+          for (var i = 0; i < logs.length; i++) {
+            var entry = logs[i];
+            appendLog({ text: entry.text || '', ts: entry.ts || '', level: entry.level || '', step: entry.step || '' });
+          }
+          // ★ 去重 key 只用 text：历史日志 ts(MySQL) 与 SSE 实时 ts 精度/格式可能不同，
+          //    用 text+ts 会因 ts 不匹配导致去重失效、日志重复显示。
+          var last = logs[logs.length - 1];
+          state._lastLogKey = (last.text || '').trim();
+        }
+      })
+      .catch(function(err) {
+        console.warn('[pipeline] 拉取历史日志失败:', err);
+      })
+      .then(function() {
+        _openSSE(runId);
+      });
+  }
+
+  function _openSSE(runId) {
+    var url = '/api/log-stream?run_id=' + encodeURIComponent(runId);
+    var es = new EventSource(url);
+    state.sseSource = es;
+    es.onopen = function() {
+      state.sseReconnectCount = 0;
+      appendLog({ text: 'SSE 连接已建立 (run_id=' + runId + ')', ts: '', level: 'info' });
+    };
+    es.onmessage = function(e) {
+      try {
+        var d = JSON.parse(e.data);
+        if (d.heartbeat) return;
+        if (d.health_summary) return;
+        // ★ 后端发送的格式是 {"log": text, "step": ...}，需要转换为前端期望的格式
+        var logData = { text: d.log || d.text || '', ts: d.ts || '', level: d.level || '', step: d.step || '' };
+        // ★ 去重：跳过与历史日志最后一条相同的日志（只用 text，避免 ts 精度差异导致漏判）
+        if (state._lastLogKey) {
+          var key = (logData.text || '').trim();
+          if (key === state._lastLogKey) {
+            state._lastLogKey = null;
+            return;
+          }
+          state._lastLogKey = null;
+        }
+        appendLog(logData);
+      } catch (err) {
+        appendLog({ text: e.data, ts: '' });
+      }
+    };
+    es.onerror = function() {
+      try { es.close(); } catch(e2) {}
+      state.sseSource = null;
+      if (state.sseReconnectCount < state.sseMaxReconnect) {
+        state.sseReconnectCount++;
+        var delay = 1000 * state.sseReconnectCount;
+        appendLog({ text: 'SSE 连接断开，' + delay/1000 + ' 秒后重连 (' + state.sseReconnectCount + '/' + state.sseMaxReconnect + ')', ts: '', level: 'warn' });
+        state.sseReconnectTimer = setTimeout(function() {
+          state.sseReconnectTimer = null;
+          _openSSE(runId);
+        }, delay);
+      } else {
+        appendLog({ text: 'SSE 重连失败，已达最大重试次数。请刷新页面重试。', ts: '', level: 'error' });
+        if (A.toast) A.toast('SSE 连接已断开，请刷新页面重试', 'error');
+      }
+    };
+  }
+
+  function appendLog(d) {
+    var body = $('logBody');
+    if (!body) return;
+    var empty = body.querySelector('.log-empty');
+    if (empty) empty.remove();
+
+    var text = d.text || d.message || '';
+    var ts = d.ts || '';
+    var level = (d.level || '').toLowerCase();
+    var step = d.step || '';  // ★ step 字段（如 "step1" / "step2"）
+    var line = document.createElement('div');
+    var cls = 'log-line';
+    if (level === 'error' || /error|失败|异常/i.test(text)) cls += ' log-error';
+    else if (level === 'warn' || /warn|警告/i.test(text)) cls += ' log-warn';
+    else if (level === 'success' || /success|完成|通过/i.test(text)) cls += ' log-success';
+    else if (level === 'info' || /info|信息/i.test(text)) cls += ' log-info';
+    line.className = cls;
+    line.setAttribute('data-step', step);  // ★ 标记步骤
+    line.innerHTML = (ts ? '<span class="log-ts">' + escHtml(ts) + '</span>' : '') + escHtml(text);
+    body.appendChild(line);
+    state.logs.push(line);
+    if (state.logs.length > 500) {
+      var old = state.logs.shift();
+      if (old && old.parentNode) old.parentNode.removeChild(old);
+    }
+    // ★ 按当前步骤过滤：system 日志始终显示，步骤日志按当前步骤过滤
+    if (step && state.activeStep) {
+      var expected = 'step' + state.activeStep;
+      line.style.display = (step === expected || step === 'system') ? '' : 'none';
+    }
+    if (state.autoScroll) {
+      body.scrollTop = body.scrollHeight;
+    }
+  }
+
+  // ★ 步骤切换时，过滤日志面板：system 和无步骤日志始终显示，步骤日志按当前步骤过滤
+  function _filterLogsByStep(step) {
+    var expected = 'step' + step;
+    for (var i = 0; i < state.logs.length; i++) {
+      var el = state.logs[i];
+      if (!el || !el.parentNode) continue;
+      var s = el.getAttribute('data-step') || '';
+      el.style.display = (s === '' || s === 'system' || s === expected) ? '' : 'none';
+    }
+  }
+
+  function clearLogs() {
+    var body = $('logBody');
+    if (body) body.innerHTML = '<div class="log-empty">日志已清空</div>';
+    state.logs = [];
+    state._lastLogKey = null;
+  }
+
+  // ── 预检弹窗逻辑 ──
+  var execState = { step: 0, pendingAction: null, browsers: [], priorities: [], cases: [], selectedCases: [] };
+  var execModal = $('execModal');
+  var execModalTitle = $('execModalTitle');
+  var preflightSection = $('preflightSection');
+  var preflightSectionLabel = $('preflightSectionLabel');
+  var preflightContent = $('preflightContent');
+  var reviewGateSection = $('reviewGateSection');
+  var reviewGateContent = $('reviewGateContent');
+  var step4ConfigSection = $('step4ConfigSection');
+  var execBrowserSelect = $('execBrowserSelect');
+  var execPriorityGroup = $('execPriorityGroup');
+  var execCaseList = $('execCaseList');
+  var execCaseCount = $('execCaseCount');
+
+  function openExecModal(step, action) {
+    // Step 4 直接跳转审核页面，不走弹窗
+    if (step === 4) {
+      window.location.href = '/intent-review';
+      return;
+    }
+
+    execState.step = step;
+    execState.pendingAction = action;
+    execState.selectedCases = [];
+
+    var titleMap = { 0: '一键执行: 预检', 1: 'Step 1: 数据源预检', 2: 'Step 2: 执行确认', 3: 'Step 3: 用例建模', 5: 'Step 5: 执行结果检查' };
+    execModalTitle.textContent = titleMap[step] || ('Step ' + step + ': 执行预检');
+    execModal.style.display = 'flex';
+
+    // 重置所有区域
+    preflightSection.style.display = 'block';
+    preflightContent.innerHTML = '';
+    reviewGateSection.style.display = 'none';
+    reviewGateContent.innerHTML = '';
+    step4ConfigSection.style.display = 'none';
+    var btn = $('execModalConfirm');
+    if (btn) { btn.disabled = false; btn.textContent = '确认执行'; btn.title = ''; btn.style.display = ''; }
+
+    // 按步骤定制预检内容
+    if (step === 0) {
+      // 一键执行：数据源 + 逐步检查
+      preflightSectionLabel.textContent = '数据源状态';
+      preflightContent.innerHTML = '<div id="pfDataSource">加载中...</div>';
+      reviewGateSection.style.display = 'block';
+      reviewGateContent.innerHTML = '<div class="exec-modal-label">流水线闸门</div><div id="pfGateCheck">加载中...</div>';
+      loadPreflightData();
+      loadPipelineGates();
+    } else if (step === 1) {
+      // Step 1: 仅数据源状态
+      preflightSectionLabel.textContent = '数据源状态';
+      preflightContent.innerHTML = '<div id="pfDataSource">加载中...</div>';
+      loadPreflightData();
+    } else if (step === 2) {
+      // Step 2: 检查 Step1 是否有产出文档
+      preflightSectionLabel.textContent = 'Step1 数据源就绪检查';
+      preflightContent.innerHTML = '<div id="pfStep1Check">加载中...</div>';
+      loadStep1Check();
+    } else if (step === 3) {
+      // Step 3: 用例建模选项（支持 force_regen）
+      preflightSectionLabel.textContent = 'Step3 用例建模';
+      preflightContent.innerHTML = '<div class="pl-pf-box">' +
+        '<label class="preflight-row pl-pf-check">' +
+        '<input type="checkbox" id="pfForceStep3" class="pl-cb-warn">' +
+        '<span class="pl-warn-bold">强制重生成用例</span>' +
+        '<span class="pl-opt-hint">（忽略版本覆盖率，清空旧用例后重新建模）</span>' +
+        '</label></div>';
+    } else if (step === 5) {
+      // Step 5: 检查 Step4 执行结果
+      preflightSectionLabel.textContent = 'Step4 执行结果检查';
+      preflightContent.innerHTML = '<div id="pfStep4Check">加载中...</div>';
+      loadStep4Check();
+    }
+  }
+
+  function closeExecModal() {
+    execModal.style.display = 'none';
+    execState.pendingAction = null;
+  }
+
+  // ── Step 1: 数据源预检 ──
+  function loadPreflightData() {
+    var el = document.getElementById('pfDataSource');
+    if (!el) el = preflightContent;
+    el.innerHTML = '加载中...';
+    api('GET', '/api/preflight').then(function(r) {
+      if (!r || !r.ok) {
+        el.innerHTML = '<span class="ud-err-t">预检失败: ' + (r && r.error ? r.error : '无响应') + '</span>';
+        return;
+      }
+      var sources = r.sources || {};
+      var selOpts = r.selection_options || {};
+      var cacheStale = r.cache_stale || false;
+      var nameMap = { confluence: 'Confluence', figma: 'Figma', yapi: 'YApi', database: '数据库', upload: '上传文件', dom_crawl: 'DOM 爬取' };
+      var html = '';
+      var anyChecked = false;
+      Object.keys(nameMap).forEach(function(key) {
+        if (key === 'upload') return; // 上传文件不需要勾选
+        var s = sources[key];
+        var opt = selOpts[key] || {};
+        if (!s) { html += '<div class="preflight-row"><span class="preflight-dot err"></span><span class="preflight-name">' + nameMap[key] + '</span><span class="preflight-detail">未检测</span></div>'; return; }
+        var dotCls = s.status === 'configured' ? 'ok' : (s.status === 'not_configured' ? 'err' : 'warn');
+        var checked = opt.checked ? ' checked' : '';
+        var disabled = opt.enabled ? '' : ' disabled';
+        if (opt.checked) anyChecked = true;
+        html += '<label class="preflight-row' + (opt.enabled ? ' pl-pf-cursor' : '') + '">';
+        html += '<input type="checkbox" class="pf-source-cb pl-cb-prime" data-source="' + key + '"' + checked + disabled + '>';
+        html += '<span class="preflight-dot ' + dotCls + '"></span>';
+        html += '<span class="preflight-name">' + nameMap[key] + '</span>';
+        html += '<span class="preflight-detail">' + escHtml(s.detail || '') + '</span>';
+        html += '</label>';
+
+        // ★ Figma 专属：缓存+配额信息 + 强制刷新复选框
+        if (key === 'figma' && opt.enabled) {
+          var figmaS = sources['figma'] || {};
+          var hasCache = figmaS.cache_available;
+          var quota = figmaS.quota || {};
+          var planType = quota.plan_type || 'free';
+          var remaining = quota.remaining != null ? quota.remaining : '?';
+          var figmaExtra = '';
+          figmaExtra += '<div class="pf-figma-extra pl-figma-line">';
+          figmaExtra += '<span class="pl-mr-10">' + (hasCache ? '缓存可用' : '缓存为空') + '</span>';
+          figmaExtra += '<span>' + (planType === 'paid' ? '付费账号（无限制）' : '免费账号（剩余 ' + remaining + ' 次/月）') + '</span>';
+          if (cacheStale) {
+            figmaExtra += ' <span class="ud-warn-t">⚠ 缓存已过期（>5天）</span>';
+          }
+          figmaExtra += '</div>';
+          if (hasCache) {
+            figmaExtra += '<label class="pf-figma-force pl-figma-force">';
+            figmaExtra += '<input type="checkbox" id="pfFigmaForceRefresh" class="pl-cb-warn">';
+            figmaExtra += '<span class="ud-muted">强制刷新（忽略缓存重新拉取 Figma）</span>';
+            figmaExtra += '</label>';
+          }
+          html += figmaExtra;
+        }
+      });
+      // 始终显示上传文件状态（不可勾选）
+      var upS = sources['upload'];
+      if (upS) {
+        var upCls = upS.status === 'configured' ? 'ok' : 'err';
+        html += '<div class="preflight-row"><span class="preflight-dot ' + upCls + '"></span><span class="preflight-name">上传文件</span><span class="preflight-detail">' + escHtml(upS.detail || '') + '</span></div>';
+      }
+      // ★ 跳过提示：当有数据源被取消勾选时显示
+      html += '<div id="pfSkipHint" class="pl-skip-hint">';
+      html += '⚠ 已取消勾选的数据源将被跳过，建议<a href="/docs" target="_blank" class="pl-check-link">手动上传功能清单</a>以补充对应数据';
+      html += '</div>';
+      // ★ 强制覆盖：清除所有缓存数据后重新拉取（适用于需求文档变更、缓存异常等场景）
+      html += '<div class="pl-divider-top">';
+      html += '<label class="preflight-row pl-pf-row">';
+      html += '<input type="checkbox" id="pfForceOverwrite" class="pl-cb-err">';
+      html += '<span class="pl-err-bold">强制覆盖</span>';
+      html += '<span class="pl-opt-hint">（清除所有已拉取的需求、用例、执行记录，重新拉取全部数据源）</span>';
+      html += '</label>';
+      // ★ 强制重拆解需求：忽略哈希检查，重新拆解 Step2（适用于需求条目异常、unchanged 误标等场景）
+      html += '<label class="preflight-row pl-pf-row ud-mt-1">';
+      html += '<input type="checkbox" id="pfForceStep2" class="pl-cb-warn">';
+      html += '<span class="pl-warn-bold">强制重拆解需求</span>';
+      html += '<span class="pl-opt-hint">（忽略哈希检查，重新拆解需求；所有 unchanged 需求改为 modified）</span>';
+      html += '</label>';
+      // ★ 强制重生成用例：忽略版本变更，重新建模 Step3（适用于用例为 0、用例质量异常等场景）
+      html += '<label class="preflight-row pl-pf-row ud-mt-1">';
+      html += '<input type="checkbox" id="pfForceStep3" class="pl-cb-warn">';
+      html += '<span class="pl-warn-bold">强制重生成用例</span>';
+      html += '<span class="pl-opt-hint">（忽略版本覆盖率，清空旧用例后重新建模）</span>';
+      html += '</label>';
+      html += '</div>';
+      if (r.warnings && r.warnings.length) {
+        html += '<div class="pl-warn-msg">' + escHtml(r.warnings.join('; ')) + '</div>';
+      }
+      // ★ 缓存过期全局警告（显示在数据源列表上方）
+      if (cacheStale) {
+        html = '<div class="pl-warn-banner">⚠ Figma 缓存已超过 5 天未更新，建议勾选"强制刷新"获取最新设计稿</div>' + html;
+      }
+      if (!r.can_proceed || !anyChecked) {
+        html += '<div class="pl-err-msg">未勾选任何数据源</div>';
+        var btn = $('execModalConfirm');
+        if (btn) { btn.disabled = true; btn.textContent = '无可用数据源'; }
+      }
+      // ★ 连通性验证按钮 + 结果区
+      html += '<div id="pfVerifySection" class="pl-divider-top">';
+      html += '<button id="pfVerifyBtn" class="btn btn-sm pl-verify-btn" onclick="verifyConnectivity()">验证连通性</button>';
+      html += '<span id="pfVerifyStatus" class="pl-verify-status"></span>';
+      html += '<div id="pfVerifyResult" class="pl-verify-result"></div>';
+      html += '</div>';
+      el.innerHTML = html;
+      // 监听 checkbox 变化：更新确认按钮状态 + 跳过提示
+      el.querySelectorAll('.pf-source-cb').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+          updateExecConfirmBtn();
+        });
+      });
+      // ★ 初始调用：确保跳过提示在初始渲染时正确显示
+      updateExecConfirmBtn();
+    }).catch(function(e) {
+      el.innerHTML = '<span class="ud-err-t">预检加载失败: ' + (e.message || '网络错误') + '</span>';
+    });
+  }
+
+  /** 数据源连通性验证 */
+  function verifyConnectivity() {
+    var btn = $('pfVerifyBtn');
+    var status = $('pfVerifyStatus');
+    var result = $('pfVerifyResult');
+    if (!btn || !status || !result) return;
+    btn.disabled = true;
+    btn.textContent = '验证中...';
+    status.textContent = '';
+    result.innerHTML = '';
+    api('POST', '/api/preflight/verify').then(function(r) {
+      btn.disabled = false;
+      btn.textContent = '验证连通性';
+      if (!r || !r.ok) {
+        status.textContent = '验证失败';
+        result.innerHTML = '<span class="ud-err-t">' + (r && r.error ? r.error : '无响应') + '</span>';
+        return;
+      }
+      var results = r.results || {};
+      var nameMap = { confluence: 'Confluence', figma: 'Figma', yapi: 'YApi', database: '数据库', dom_crawl: '靶子系统' };
+      var html = '';
+      var allOk = true;
+      Object.keys(nameMap).forEach(function(key) {
+        var s = results[key];
+        if (!s) return;
+        var icon = s.status === 'ok' ? '✔' : (s.status === 'failed' ? '✘' : (s.status === 'not_configured' ? '—' : '?'));
+        var color = s.status === 'ok' ? 'var(--state-success-text)' : (s.status === 'failed' ? 'var(--state-error-text)' : 'var(--text-tertiary)');
+        if (s.status === 'failed') allOk = false;
+        html += '<div class="pf-marg"><span class="pf-bold"' + dS('color:' + color) + '>' + icon + '</span> ' + nameMap[key] + ': <span' + dS('color:' + color) + '>' + escHtml(s.detail || '') + '</span></div>';
+      });
+      if (r.failed_configured && r.failed_configured.length > 0) {
+        status.innerHTML = '<span class="ud-err-t">' + r.failed_configured.length + ' 个数据源连通失败！</span>';
+      } else if (allOk) {
+        status.innerHTML = '<span class="ud-ok-t">全部连通正常</span>';
+      } else {
+        status.textContent = '验证完成';
+      }
+      result.innerHTML = html;
+    }).catch(function(e) {
+      btn.disabled = false;
+      btn.textContent = '验证连通性';
+      status.textContent = '验证失败';
+      result.innerHTML = '<span class="ud-err-t">' + (e.message || '网络错误') + '</span>';
+    });
+  }
+
+  function updateExecConfirmBtn() {
+    var anyChecked = false;
+    var allChecked = true;
+    document.querySelectorAll('.pf-source-cb:not(:disabled)').forEach(function(cb) {
+      if (cb.checked) anyChecked = true;
+      else allChecked = false;
+    });
+    var btn = $('execModalConfirm');
+    if (btn) {
+      btn.disabled = !anyChecked;
+      btn.textContent = anyChecked ? '确认执行' : '未勾选数据源';
+    }
+    // ★ 显示/隐藏跳过提示
+    var hint = $('pfSkipHint');
+    if (hint) {
+      hint.style.display = allChecked ? 'none' : '';
+    }
+  }
+
+  /** 返回未勾选的数据源列表（传给后端 skip_sources）。仅收集已启用（非禁用）的未勾选项 */
+  function getUncheckedSources() {
+    var skip = [];
+    document.querySelectorAll('.pf-source-cb:not(:checked):not(:disabled)').forEach(function(cb) {
+      skip.push(cb.getAttribute('data-source'));
+    });
+    return skip;
+  }
+
+  // ── Step 2: 检查 Step1 产出 ──
+  function loadStep1Check() {
+    var el = document.getElementById('pfStep1Check');
+    if (!el) el = reviewGateContent;
+    el.innerHTML = '加载中...';
+    api('GET', '/api/pipeline-progress').then(function(r) {
+      var html = '';
+      if (!r || !r.ok || !r.steps) {
+        html = '<span class="preflight-dot warn"></span> 无法获取流水线状态';
+      } else {
+        var s1 = r.steps.filter(function(s) { return s.step === 1; })[0];
+        if (s1 && s1.status === 'completed') {
+          html = '<span class="preflight-dot ok"></span> Step 1 已完成，文档已就绪';
+        } else {
+          html = '<span class="preflight-dot err"></span> Step 1 未完成，请先执行 Step 1';
+          var btn = $('execModalConfirm');
+          if (btn) { btn.disabled = true; btn.textContent = '请先执行 Step 1'; }
+        }
+      }
+      el.innerHTML = html;
+    }).catch(function() {
+      el.innerHTML = '<span class="preflight-dot warn"></span> 状态检查失败';
+    });
+  }
+
+  // ── Step 5: 检查 Step4 执行结果 ──
+  function loadStep4Check() {
+    var el = document.getElementById('pfStep4Check');
+    if (!el) el = reviewGateContent;
+    el.innerHTML = '加载中...';
+    api('GET', '/api/pipeline-progress').then(function(r) {
+      var html = '';
+      if (!r || !r.ok || !r.steps) {
+        html = '<span class="preflight-dot warn"></span> 无法获取流水线状态';
+      } else {
+        var s4 = r.steps.filter(function(s) { return s.step === 4; })[0];
+        var s3 = r.steps.filter(function(s) { return s.step === 3; })[0];
+        if (s4 && s4.status === 'completed') {
+          html = '<span class="preflight-dot ok"></span> Step 4 已完成，有执行结果';
+        } else if (s3 && s3.status === 'completed') {
+          html = '<span class="preflight-dot warn"></span> Step 4 未执行，但 Step 3 已完成（可继续）';
+        } else {
+          html = '<span class="preflight-dot err"></span> Step 4 无执行结果，请先执行 Step 4';
+          var btn = $('execModalConfirm');
+          if (btn) { btn.disabled = true; btn.textContent = '请先执行 Step 4'; }
+        }
+      }
+      el.innerHTML = html;
+    }).catch(function() {
+      el.innerHTML = '<span class="preflight-dot warn"></span> 状态检查失败';
+    });
+  }
+
+  // ── 一键执行: 流水线闸门 ──
+  function loadPipelineGates() {
+    var el = document.getElementById('pfGateCheck');
+    if (!el) el = reviewGateContent;
+    el.innerHTML = '加载中...';
+    api('GET', '/api/pipeline-progress').then(function(r) {
+      var html = '';
+      if (!r || !r.ok || !r.steps) {
+        html = '<span class="preflight-dot warn"></span> 无法获取流水线状态';
+        el.innerHTML = html;
+        return;
+      }
+      var steps = r.steps || [];
+      var stepMap = {};
+      steps.forEach(function(s) { stepMap[s.step] = s; });
+      var issues = [];
+      if (!stepMap[1] || stepMap[1].status !== 'completed') {
+        issues.push('Step 1 未完成');
+      }
+      // 检查审核状态
+      api('GET', '/api/status').then(function(st) {
+        var reviewState = (st && st.review_state) ? st.review_state : {};
+        if (reviewState.pending > 0) issues.push('需求审核: ' + reviewState.pending + ' 条待审核');
+        api('GET', '/api/cases/review/state').then(function(cr) {
+          if (cr && cr.pending > 0) issues.push('用例审核: ' + cr.pending + ' 条待审核');
+          if (issues.length === 0) {
+            html = '<span class="preflight-dot ok"></span> 所有闸门已通过，可执行';
+          } else {
+            html = '<span class="preflight-dot warn"></span> ' + issues.join('; ');
+            html += '<div class="pl-muted-msg">将从 Step 1 开始执行，未完成步骤会重新运行</div>';
+          }
+          el.innerHTML = html;
+        }).catch(function() { el.innerHTML = html; });
+      }).catch(function() { el.innerHTML = html; });
+    }).catch(function() {
+      el.innerHTML = '<span class="preflight-dot warn"></span> 状态检查失败';
+    });
+  }
+
+  // Step 4 配置加载
+  function loadStep4Config() {
+    execBrowserSelect.innerHTML = '<option value="">检测中...</option>';
+    execPriorityGroup.innerHTML = '<span class="pl-col-wk">加载中...</span>';
+    execCaseList.innerHTML = '加载中...';
+    execCaseCount.textContent = '0';
+    api('GET', '/api/step4-config').then(function(r) {
+      if (!r || !r.ok) { execBrowserSelect.innerHTML = '<option value="">加载失败</option>'; return; }
+      // 浏览器
+      var browsers = r.browsers || [];
+      execState.browsers = browsers;
+      execBrowserSelect.innerHTML = '';
+      if (browsers.length === 0) {
+        execBrowserSelect.innerHTML = '<option value="">未检测到浏览器</option>';
+      } else {
+        browsers.forEach(function(b) {
+          var opt = document.createElement('option');
+          opt.value = b.name || b;
+          opt.textContent = (b.name || b) + (b.default ? ' (默认)' : '');
+          if (b.default) opt.selected = true;
+          execBrowserSelect.appendChild(opt);
+        });
+      }
+      // 优先级
+      var priorities = r.priorities || [];
+      execState.priorities = priorities;
+      execPriorityGroup.innerHTML = '';
+      if (priorities.length === 0) {
+        execPriorityGroup.innerHTML = '<span class="pl-col-wk">无</span>';
+      } else {
+        priorities.forEach(function(p) {
+          var label = document.createElement('label');
+          label.className = 'exec-check-item';
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.value = p;
+          cb.checked = true;
+          label.appendChild(cb);
+          label.appendChild(document.createTextNode(riskCn(p)));
+          execPriorityGroup.appendChild(label);
+        });
+      }
+      // 并行推荐
+      var parallel = r.parallel || {};
+      if (parallel.recommendation) {
+        var rec = parallel.recommendation;
+        var recEl = document.createElement('span');
+        recEl.style.cssText = 'font-size:var(--fs-micro);color:var(--text-tertiary);margin-left:var(--space-2);';
+        recEl.textContent = '(推荐并发: ' + rec.recommended + ', 可用内存: ' + (rec.available_memory_mb || '?') + 'MB)';
+        execPriorityGroup.appendChild(recEl);
+      }
+      // 用例列表
+      loadCases();
+    }).catch(function() {
+      execBrowserSelect.innerHTML = '<option value="">加载失败</option>';
+    });
+  }
+
+  function loadCases() {
+    execCaseList.innerHTML = '加载中...';
+    api('GET', '/api/cases').then(function(r) {
+      if (!r || !r.ok) { execCaseList.innerHTML = '<span class="ud-err-t">加载失败</span>'; return; }
+      var cases = r.cases || r.intents || [];
+      execState.cases = cases;
+      execState.selectedCases = [];
+      renderCaseCheckboxes();
+    }).catch(function() {
+      execCaseList.innerHTML = '<span class="ud-err-t">加载失败</span>';
+    });
+  }
+
+  function renderCaseCheckboxes() {
+    var cases = execState.cases;
+    var selectedPriorities = [];
+    execPriorityGroup.querySelectorAll('input[type="checkbox"]:checked').forEach(function(cb) {
+      selectedPriorities.push(cb.value);
+    });
+    var filtered = cases;
+    if (selectedPriorities.length > 0) {
+      filtered = cases.filter(function(c) {
+        return selectedPriorities.indexOf(c.risk_level || c.priority || '') >= 0;
+      });
+    }
+    execCaseCount.textContent = filtered.length;
+    if (filtered.length === 0) {
+      execCaseList.innerHTML = '<span class="ud-muted">无匹配用例</span>';
+      return;
+    }
+    var html = '';
+    filtered.forEach(function(c, i) {
+      var cid = escHtml(c.case_id || c.id || ('case-' + i));
+      var title = escHtml(c.title || c.name || cid);
+      var risk = escHtml(riskCn(c.risk_level || c.priority || ''));
+      html += '<label class="exec-check-item pl-exec-check-pad">' +
+        '<input type="checkbox" value="' + cid + '" data-idx="' + i + '">' +
+        '<span class="ud-f1">' + title + '</span>' +
+        (risk ? '<span class="ud-muted">' + risk + '</span>' : '') +
+        '</label>';
+    });
+    execCaseList.innerHTML = html;
+  }
+
+  // ── 执行控制 ──
+  async function _withBtnLoading(btnId, loadingText, action) {
+    var btn = $(btnId);
+    if (!btn) return action();
+    var tag = btn.tagName;
+    var isFormElement = (tag === 'BUTTON' || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA');
+    if (isFormElement && btn.disabled) return;
+    if (!isFormElement && btn.dataset.loading === 'true') return;
+    var origText = btn.textContent;
+    var origCursor = btn.style.cursor;
+    var origPointerEvents = btn.style.pointerEvents;
+    var origOpacity = btn.style.opacity;
+    if (isFormElement) {
+      btn.disabled = true;
+    } else {
+      btn.dataset.loading = 'true';
+      btn.style.pointerEvents = 'none';
+      btn.style.cursor = 'not-allowed';
+      btn.style.opacity = '0.6';
+    }
+    btn.textContent = loadingText;
+    try { return await action(); } finally {
+      if (isFormElement) {
+        btn.disabled = false;
+      } else {
+        btn.dataset.loading = 'false';
+        btn.style.pointerEvents = origPointerEvents;
+        btn.style.cursor = origCursor;
+        btn.style.opacity = origOpacity;
+      }
+      btn.textContent = origText;
+    }
+  }
+
+  // ── 步骤启动审核闸门（软提示）：Step3→需求审核，Step4→用例审核 ──
+  // 启动前检查对应前序审核是否存在待审核项；有则软提示「去审核 / 继续执行」，
+  // 不硬阻断（通过放行，人工可键入跳过）。返回 true 表示可继续执行。
+  async function checkStepReviewGate(step) {
+    var gate = { 3: 'req', 4: 'case' }[step];
+    if (!gate) return true;
+    var pending = 0;
+    try {
+      if (gate === 'req') {
+        var st = await api('GET', '/api/status');
+        var rs = (st && st.review_state) ? st.review_state : {};
+        pending = rs.pending || 0;
+      } else {
+        var cr = await api('GET', '/api/cases/review/state');
+        pending = (cr && cr.pending) || 0;
+      }
+    } catch (e) {
+      return true;  // 网络异常不阻断，交由后续执行报错处理
+    }
+    if (pending <= 0) return true;
+    var page = (gate === 'req') ? '/intent-review' : '/review';
+    var label = (gate === 'req') ? '需求审核' : '用例审核';
+    var go = await A.confirm(
+      '启动 Step ' + step + ' 前检测到 ' + label + ' 有 ' + pending + ' 条待审核。\n\n'
+      + '选择「继续执行」将跳过本次检查直接放行；选择「去审核」前往审核页。',
+      { title: label + '未完成', okText: '继续执行', cancelText: '去审核' }
+    );
+    if (!go) { window.location.href = page; return false; }
+    return true;
+  }
+
+  // ── 步骤圆圈点击：先检查是否需要重新执行 ──
+  async function stepRunFromCircle(step) {
+    var permMap = { 1: 'execution.step1', 2: 'execution.step2', 3: 'execution.step3', 4: 'execution.step4', 5: 'execution.step5' };
+    if (permMap[step] && !A.hasPerm(permMap[step])) {
+      if (A.toast) A.toast('无权执行 Step ' + step, 'error');
+      return;
+    }
+    if (!(await checkStepReviewGate(step))) return;
+    // 检查当前步骤状态
+    var st = state.stepStatus[step] || 'pending';
+    if (st === 'completed') {
+      if (!(await A.confirm('Step ' + step + ' 已完成。\n\n重新执行将覆盖当前结果，确定继续？', { danger: true }))) return;
+    } else if (st === 'active') {
+      if (A.toast) A.toast('Step ' + step + ' 正在执行中', 'info');
+      return;
+    }
+    openExecModal(step, 'stepRun');
+  }
+
+  async function runAll() {
+    // ★ 2026-08-29 [已拍板] 一键执行已禁用：必须按 Step1→5 逐步骤执行。
+    //   函数体直接提示并返回，不再打开预检弹窗、不再发起任何请求。
+    if (A.toast) A.toast('一键执行已禁用，请按 Step1→5 逐步执行', 'warning');
+    return;
+  }
+
+  async function stepRun(n) {
+    var permMap = { 1: 'execution.step1', 2: 'execution.step2', 3: 'execution.step3', 4: 'execution.step4', 5: 'execution.step5' };
+    var requiredPerm = permMap[n];
+    if (requiredPerm && !A.hasPerm(requiredPerm)) {
+      if (A.toast) A.toast('无权执行 Step ' + n, 'error');
+      return;
+    }
+    if (!(await checkStepReviewGate(n))) return;
+    // 检查是否需要重新执行
+    var st = state.stepStatus[n] || 'pending';
+    if (st === 'completed') {
+      if (!(await A.confirm('Step ' + n + ' 已完成。\n\n重新执行将覆盖当前结果，确定继续？', { danger: true }))) return;
+    } else if (st === 'active') {
+      if (A.toast) A.toast('Step ' + n + ' 正在执行中', 'info');
+      return;
+    }
+    openExecModal(n, 'stepRun');
+  }
+
+  // 预检确认后实际执行
+  async function doRunAll(opts) {
+    // ★ 2026-08-29 [已拍板] 一键执行已禁用：函数体直接提示并返回，绝不发起 /api/run-all 请求。
+    if (A.toast) A.toast('一键执行已禁用，请按 Step1→5 逐步执行', 'warning');
+    return;
+  }
+
+  async function doStepRun(n, opts) {
+    opts = opts || {};
+    await _withBtnLoading('btnStepRun', '执行中...', async function() {
+      try {
+        var r = await api('POST', '/api/step/' + n, opts);
+        if (r.ok) {
+          if (A.toast) A.toast('Step ' + n + ' 已启动', 'success');
+          state.currentRunId = r.run_id;
+          subscribeSSE(r.run_id);
+          pollStatus();
+        } else {
+          if (A.toast) A.toast('启动失败: ' + (r.error || ''), 'error');
+        }
+      } catch (e) {
+        if (A.toast) A.toast('网络错误: ' + e, 'error');
+      }
+    });
+  }
+
+  async function pauseRun() {
+    await _withBtnLoading('btnPause', '暂停中...', async function() {
+      try {
+        var r = await api('POST', '/api/pause', {});
+        if (r.ok) { if (A.toast) A.toast('已暂停', 'success'); }
+        else { if (A.toast) A.toast('暂停失败: ' + (r.error || ''), 'warning'); }
+        pollStatus();
+      } catch (e) { if (A.toast) A.toast('网络错误: ' + e, 'error'); }
+    });
+  }
+
+  async function resumeRun() {
+    await _withBtnLoading('btnPause', '恢复中...', async function() {
+      try {
+        var r = await api('POST', '/api/resume', {});
+        if (r.ok) { if (A.toast) A.toast('已恢复', 'success'); }
+        else { if (A.toast) A.toast('恢复失败: ' + (r.error || ''), 'warning'); }
+        pollStatus();
+      } catch (e) { if (A.toast) A.toast('网络错误: ' + e, 'error'); }
+    });
+  }
+
+  async function stopRun() {
+    await _withBtnLoading('btnStop', '停止中...', async function() {
+      try {
+        var r = await api('POST', '/api/stop', {});
+        if (r.ok) { if (A.toast) A.toast('已停止: ' + (r.message || ''), 'success'); }
+        else { if (A.toast) A.toast('停止失败: ' + (r.error || ''), 'warning'); }
+        pollStatus();
+      } catch (e) { if (A.toast) A.toast('网络错误: ' + e, 'error'); }
+    });
+  }
+
+  // ── 详情面板拖动调宽 ──
+  // 通过绝对定位的 .detail-splitter 左右拖拽，把宽度写回 --pl-detail-w CSS 变量，
+  // .pipeline-main 的 grid 第二列随之联动；左栏 flex 自适应补位（2026-09-02）
+  function _initDetailSplitter() {
+    var splitter = $('detailSplitter');
+    if (!splitter) return;
+    var main = document.querySelector('.pipeline-main');
+    if (!main) return;
+    var MIN_W = 260, MAX_W = 760;
+    function setW(px, commit) {
+      var w = Math.max(MIN_W, Math.min(MAX_W, px));
+      main.style.setProperty('--pl-detail-w', w + 'px');
+      if (commit && window.localStorage) {
+        try { window.localStorage.setItem('pl_detail_w', String(w)); } catch (e) { /* 忽略 */ }
+      }
+    }
+    // 恢复上次宽度
+    var saved = null;
+    try { saved = window.localStorage && window.localStorage.getItem('pl_detail_w'); } catch (e) { /* 忽略 */ }
+    if (saved) { var n = parseInt(saved, 10); if (n >= MIN_W && n <= MAX_W) setW(n, false); }
+    splitter.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      splitter.classList.add('dragging');
+      document.body.classList.add('panel-resizing');
+      var startX = e.clientX;
+      var startW = main.getBoundingClientRect().right - splitter.getBoundingClientRect().left;
+      function onMove(ev) { setW(startW - (ev.clientX - startX), false); }
+      function onUp() {
+        var commitW = main.style.getPropertyValue('--pl-detail-w');
+        splitter.classList.remove('dragging');
+        document.body.classList.remove('panel-resizing');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if (commitW) setW(parseFloat(commitW), true);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
+  // ── 初始化 ──
+  function initPipeline() {
+    initTabs();
+    // ★ 详情面板左右拖拽调宽（2026-09-02）
+    _initDetailSplitter();
+    // ★ 读取 URL 参数 step，从控制台跳转时锁定查看指定步骤，避免自动切换
+    var params = new URLSearchParams(window.location.search);
+    var stepParam = parseInt(params.get('step'), 10);
+    if (stepParam >= 1 && stepParam <= 5) {
+      state.userSelectedStep = stepParam;
+      state.activeStep = stepParam;
+    }
+    _renderTabBar(state.activeStep, false);
+    _showDetailPanel(state.activeStep);
+    loadProjects();
+    renderSteps({ 1: 'pending', 2: 'pending', 3: 'pending', 4: 'pending', 5: 'pending' }, 0);
+    loadStep1Status();
+    pollStatus();
+    // ★ 智能自适应轮询：活跃时 2s，隐藏时 30s，空闲时 10s
+    A.adaptivePoll('pipeline-status', pollStatus, { fastMs: 2000, slowMs: 10000, idleMs: 30000 });
+
+    // URL 参数 run_id
+    var runIdParam = params.get('run_id');
+    if (runIdParam) {
+      state.currentRunId = runIdParam;
+      subscribeSSE(runIdParam);
+      if (A.toast) A.toast('已自动订阅运行: ' + runIdParam, 'info');
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    } else {
+      // ★ 无 URL run_id 时，从后端获取当前项目+版本的确定性 run_id
+      //    重启服务/刷新页面后，前端可据此恢复历史日志订阅，不再依赖内存中的随机 UUID
+      _restoreRunIdFromSession();
+    }
+
+    // 按钮绑定
+    var btnRunAll = $('btnRunAll');
+    if (btnRunAll) btnRunAll.addEventListener('click', runAll);
+    var btnPause = $('btnPause');
+    if (btnPause) btnPause.addEventListener('click', function() {
+      var badge = $('runStateBadge');
+      if (badge && badge.className.indexOf('run-state-paused') !== -1) resumeRun();
+      else pauseRun();
+    });
+    var btnStop = $('btnStop');
+    if (btnStop) btnStop.addEventListener('click', stopRun);
+    var btnStepRun = $('btnStepRun');
+    if (btnStepRun) btnStepRun.addEventListener('click', function() {
+      var sel = $('stepSelect');
+      var n = parseInt(sel.value, 10);
+      if (n > 0) stepRun(n);
+    });
+    var btnClearLog = $('btnClearLog');
+    if (btnClearLog) btnClearLog.addEventListener('click', clearLogs);
+    var btnAutoScroll = $('btnAutoScroll');
+    if (btnAutoScroll) btnAutoScroll.addEventListener('click', function() {
+      state.autoScroll = !state.autoScroll;
+      this.textContent = state.autoScroll ? '自动滚动' : '已暂停滚动';
+      if (state.autoScroll) {
+        var body = $('logBody');
+        if (body) body.scrollTop = body.scrollHeight;
+      }
+    });
+    // ★ 重新建模按钮
+    var btnRemodel = $('btnDetailRemodel');
+    if (btnRemodel) btnRemodel.addEventListener('click', remodelCase);
+
+    // ★ 查看详情按钮（Step3 用例详情 → 跳转 Step4 该用例执行详情）
+    var btnDetailView = $('btnDetailView');
+    if (btnDetailView) btnDetailView.addEventListener('click', function() {
+      var cid = state.selectedCaseId;
+      if (!cid) { if (A.toast) A.toast('请先在左侧选择用例再查看详情', 'warn'); return; }
+      jumpToStep(4, cid);
+    });
+
+    // ★ 预检弹窗事件绑定
+    var execModalClose = $('execModalClose');
+    if (execModalClose) execModalClose.addEventListener('click', closeExecModal);
+    var execModalCancel = $('execModalCancel');
+    if (execModalCancel) execModalCancel.addEventListener('click', closeExecModal);
+    var execModalOverlay = $('execModal');
+    if (execModalOverlay) execModalOverlay.addEventListener('click', function(e) {
+      if (e.target === execModalOverlay) closeExecModal();
+    });
+    var execModalConfirm = $('execModalConfirm');
+    if (execModalConfirm) execModalConfirm.addEventListener('click', function() {
+      var action = execState.pendingAction;
+      var step = execState.step;
+      // ★ 收集用户选择
+      var skipSources = getUncheckedSources();
+      var figmaForceRefresh = ($('pfFigmaForceRefresh') && $('pfFigmaForceRefresh').checked) || false;
+      var forceRegen = ($('pfForceStep3') && $('pfForceStep3').checked) || false;
+      var forceOverwrite = ($('pfForceOverwrite') && $('pfForceOverwrite').checked) || false;
+      var forceStep2 = ($('pfForceStep2') && $('pfForceStep2').checked) || false;
+      var opts = { skip_sources: skipSources };
+      if (figmaForceRefresh) opts.figma_force_refresh = true;
+      if (forceRegen) opts.force_regen = true;
+      if (forceOverwrite) opts.force_overwrite = true;
+      if (forceStep2) opts.force_step2 = true;
+      if (action === 'runAll') {
+        closeExecModal();
+        doRunAll(opts);
+      } else if (action === 'stepRun') {
+        closeExecModal();
+        doStepRun(step, opts);
+      }
+    });
+    // 优先级变化时刷新用例列表
+    if (execPriorityGroup) {
+      execPriorityGroup.addEventListener('change', function(e) {
+        if (e.target.type === 'checkbox') renderCaseCheckboxes();
+      });
+    }
+  }
+
+  // ★ 重新建模：调用后端 API 触发 AI 重新建模
+  async function remodelCase() {
+    if (!state.selectedCaseId) {
+      if (A.toast) A.toast('请先选择一条用例', 'warning');
+      return;
+    }
+    await _withBtnLoading('btnDetailRemodel', '建模中...', async function() {
+      try {
+        var r = await api('POST', '/api/cases/review/reject', {
+          case_id: state.selectedCaseId,
+          comment: '用户点击重新建模'
+        });
+        if (r.ok) {
+          if (r.regenerated) {
+            if (A.toast) A.toast('重新建模成功，已替换用例', 'success');
+          } else if (r.hint) {
+            if (A.toast) A.toast(r.hint, 'warning');
+          }
+          // 刷新用例列表
+          pollStatus();
+        } else {
+          if (A.toast) A.toast('重新建模失败: ' + (r.error || ''), 'error');
+        }
+      } catch (e) {
+        if (A.toast) A.toast('网络错误: ' + e, 'error');
+      }
+    });
+  }
+
+  // ── 页面可见性：隐藏时立即切断 SSE + 轮询（防止阻塞浏览器连接池导致切页卡顿）──
+  function _pausePolling() {
+    A.stopAdaptivePoll('pipeline-status');
+  }
+  function _resumePolling() {
+    // ★ 智能轮询会自动 resume，无需手动 restart
+    // ★ 页面恢复可见时，若有活跃 run_id 且 SSE 已断开，则重连（不拉历史日志，避免卡顿）
+    if (state.currentRunId && !state.sseSource) {
+      // ★ 同一 runId 恢复：跳过 clearLogs + 历史日志拉取，直接重连 SSE
+      state.sseReconnectCount = 0;
+      state._lastLogKey = null;
+      _openSSE(state.currentRunId);
+    }
+  }
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+      // ★ 页面隐藏时立即切断 SSE，比 pagehide/beforeunload 更早触发
+      _pausePolling();
+      if (state.sseSource) { try { state.sseSource.close(); } catch(e) {} state.sseSource = null; }
+      if (state.sseReconnectTimer) { clearTimeout(state.sseReconnectTimer); state.sseReconnectTimer = null; }
+    } else {
+      _resumePolling();
+    }
+  });
+  // 页面卸载清理（切断 SSE + 轮询，防止阻塞浏览器连接池导致切页卡顿）
+  function _cleanup() {
+    _pausePolling();
+    if (state.sseSource) { try { state.sseSource.close(); } catch(e) {} state.sseSource = null; }
+    if (state.sseReconnectTimer) { clearTimeout(state.sseReconnectTimer); state.sseReconnectTimer = null; }
+  }
+  // ★ 挂到全局，供侧边栏链接点击时主动清理（比 pagehide 更早触发，避免连接池阻塞）
+  A._cleanupPipeline = _cleanup;
+  window.addEventListener('pagehide', _cleanup);
+  window.addEventListener('beforeunload', _cleanup);
+
+  if (A._currentUser) {
+    initPipeline();
+  }
+})();
+</script>
+{% endblock %}

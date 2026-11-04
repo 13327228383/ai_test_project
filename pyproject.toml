@@ -1,0 +1,9 @@
+[tool.bandit]
+# bandit 安全扫描配置
+# 排除迁移脚本中的 DDL（DROP TABLE, ALTER TABLE 等是迁移的必要操作）
+exclude_dirs = ["ai_test_env", "__pycache__", ".git", "node_modules"]
+skips = ["B101", "B110", "B111", "B112", "B307", "B322"]
+# B101: assert（测试用）
+# B110-B112: try-except 相关（我们有专用检查）
+# B307: eval（少用但合理场景存在）
+# B322: input()（CLI 程序需要）

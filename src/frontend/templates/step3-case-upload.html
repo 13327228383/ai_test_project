@@ -1,0 +1,470 @@
+{% extends "_layout_base.html" %}
+{% block title %}用例准备 — 上传用例 / 下载模板 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+用例准备（上传 / 下载模板）
+{% endblock %}
+
+{% block content %}
+
+<div class="cu-info-bar">
+  <div class="cu-info-item">
+    <span class="cu-info-label">当前被测系统</span>
+    <span class="cu-info-value cu-info-primary" id="curTarget">-</span>
+  </div>
+  <div class="cu-info-item">
+    <span class="cu-info-label">当前用户</span>
+    <span class="cu-info-value" id="curUser">-</span>
+  </div>
+</div>
+
+<div class="cu-panel">
+
+  <!-- ════════ 模板下载 ════════ -->
+  <section class="cu-card">
+    <div class="cu-card-header">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <span class="cu-card-title">下载用例模板</span>
+      <span class="cu-card-hint">模板已预填当前被测系统的 target_key + version</span>
+    </div>
+    <div class="cu-card-body">
+      <div class="cu-row">
+        <label class="cu-label">格式</label>
+        <select class="cu-select" id="tplFmt">
+          <option value="csv">CSV</option>
+          <option value="json">JSON</option>
+        </select>
+        <button class="cu-btn-primary" id="btnDownloadTpl" data-perm="case.template" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          下载模板
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ 用例上传 ════════ -->
+  <section class="cu-card">
+    <div class="cu-card-header">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <span class="cu-card-title">上传用例并执行</span>
+      <span class="cu-card-hint">文件须携带 target_key + version，与当前被测系统匹配</span>
+    </div>
+    <div class="cu-card-body">
+      <div class="cu-drop-zone" id="dropZone" tabindex="0" data-perm="case.upload">
+        <div class="cu-drop-zone-icon">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <div class="cu-drop-zone-title">拖拽用例文件到此处，或 <span class="cu-drop-zone-link">点击选择文件</span></div>
+        <div class="cu-drop-zone-hint">支持 .csv .json，单文件不超过 50MB</div>
+        <input type="file" id="fileInput" accept=".csv,.json" class="hidden">
+      </div>
+
+      <!-- 校验反馈区 -->
+      <div class="cu-feedback" id="feedback" style="display:none;">
+        <div class="cu-feedback-row">
+          <span class="cu-fb-label">文件绑定</span>
+          <span class="cu-fb-value" id="fbTarget">-</span>
+        </div>
+        <div class="cu-feedback-row">
+          <span class="cu-fb-label">当前系统</span>
+          <span class="cu-fb-value" id="fbCurrent">-</span>
+        </div>
+        <div class="cu-feedback-status" id="fbStatus"></div>
+        <div class="cu-feedback-msg" id="fbMsg"></div>
+      </div>
+
+      <div class="cu-action-row">
+        <button class="cu-btn-ghost" id="btnValidate" type="button" data-perm="case.upload">
+          仅校验不上传
+        </button>
+        <button class="cu-btn-primary" id="btnUpload" type="button" data-perm="case.upload" disabled>
+          上传并执行
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ 台账核对（T1：短路链 ledger 核对结果） ════════ -->
+  <section class="cu-card" id="ledgerCard" style="display:none;">
+    <div class="cu-card-header">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      <span class="cu-card-title">台账核对（ledger）</span>
+      <span class="cu-card-badge" id="ledgerBadge">0</span>
+    </div>
+    <div class="cu-card-body">
+      <div class="cu-feedback" id="ledgerSummary" style="display:none;">
+        <div class="cu-feedback-row">
+          <span class="cu-fb-label">已核对</span>
+          <span class="cu-fb-value" id="lgChecked">-</span>
+          <span class="cu-fb-label cu-fb-label-gap">一致</span>
+          <span class="cu-fb-value lg-ok" id="lgOk">-</span>
+          <span class="cu-fb-label cu-fb-label-gap">不一致</span>
+          <span class="cu-fb-value lg-bad" id="lgBad">-</span>
+          <span class="cu-fb-label cu-fb-label-gap">真值缺失</span>
+          <span class="cu-fb-value lg-warn" id="lgUnknown">-</span>
+        </div>
+      </div>
+      <div class="cu-hist-list" id="ledgerMismatchList"></div>
+    </div>
+  </section>
+
+  <!-- ════════ 最近上传历史 ════════ -->
+  <section class="cu-card">
+    <div class="cu-card-header">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span class="cu-card-title">最近上传</span>
+      <span class="cu-card-badge" id="histBadge">0</span>
+    </div>
+    <div class="cu-card-body">
+      <div class="cu-empty-state" id="histEmpty">暂无上传记录</div>
+      <div class="cu-hist-list" id="histList"></div>
+    </div>
+  </section>
+
+</div>
+
+{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ── 信息栏（.cu-info-* / .cu-panel / .cu-btn-* / .cu-empty-state 已提升为
+   app-design.css 全局共用类，与 /clarify（需求澄清）一致，本页不再重复声明） ── */
+
+/* ── 面板 ── */
+.cu-card {
+  background: var(--bg-surface); border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl); box-shadow: var(--surface-shadow-float);
+  overflow: hidden;
+}
+.cu-card-header {
+  display: flex; align-items: center; gap: 8px; padding: 14px 20px;
+  background: var(--border-subtle); border-bottom: 1px solid var(--border-default);
+}
+.cu-card-title { font-size: var(--fs-small); font-weight: var(--fw-semibold); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; }
+.cu-card-hint { font-size: var(--fs-xs); color: var(--text-tertiary); margin-left: auto; }
+.cu-card-badge { font-size: var(--fs-xs); color: var(--color-primary); background: var(--color-primary-soft); padding: 2px 8px; border-radius: var(--radius-full); }
+.cu-card-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+
+.cu-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.cu-label { font-size: var(--fs-small); color: var(--text-secondary); }
+.cu-select {
+  appearance: none; padding: 8px 28px 8px 12px; border-radius: var(--radius-sm);
+  font-size: var(--fs-small); color: var(--text-primary);
+  background-color: var(--border-default); border: 1px solid var(--border-hover);
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center;
+}
+.cu-select:focus { outline: none; border-color: var(--color-primary); }
+
+/* ── 拖拽区 ── */
+.cu-drop-zone {
+  border: 2px dashed var(--border-default); border-radius: var(--radius-lg);
+  background: var(--bg-elevated); padding: 32px 24px; text-align: center;
+  cursor: pointer; transition: all 0.15s; display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.cu-drop-zone:hover, .cu-drop-zone.dragover { border-color: var(--color-primary); background: var(--color-primary-soft); }
+.cu-drop-zone-icon { color: var(--text-tertiary); transition: color 0.15s; }
+.cu-drop-zone:hover .cu-drop-zone-icon, .cu-drop-zone.dragover .cu-drop-zone-icon { color: var(--color-primary); }
+.cu-drop-zone-title { font-size: var(--fs-body); font-weight: var(--fw-medium); color: var(--text-primary); }
+.cu-drop-zone-link { color: var(--color-primary); text-decoration: underline; cursor: pointer; }
+.cu-drop-zone-hint { font-size: var(--fs-small); color: var(--text-tertiary); }
+
+/* ── 校验反馈 ── */
+.cu-feedback { border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: var(--bg-elevated); padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.cu-feedback-row { display: flex; align-items: center; gap: 12px; }
+.cu-fb-label { font-size: var(--fs-small); color: var(--text-tertiary); width: 72px; }
+.cu-fb-label-gap { width: auto; margin-left: 16px; }
+.cu-fb-value { font-size: var(--fs-small); font-family: var(--font-mono); color: var(--text-primary); }
+.cu-fb-value.lg-ok { color: var(--state-success-text); font-weight: var(--fw-semibold); }
+.cu-fb-value.lg-bad { color: var(--state-error); font-weight: var(--fw-semibold); }
+.cu-fb-value.lg-warn { color: var(--state-warning); font-weight: var(--fw-semibold); }
+.cu-feedback-status { font-size: var(--fs-body); font-weight: var(--fw-semibold); }
+.cu-feedback-status.ok { color: var(--state-success-text); }
+.cu-feedback-status.reject { color: var(--state-error); }
+.cu-feedback-status.warn { color: var(--state-warning); }
+.cu-feedback-msg { font-size: var(--fs-small); color: var(--text-secondary); }
+
+/* ── 操作行（.cu-btn-* 已全局，此处仅保留本页专用间距类） ── */
+.cu-action-row { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ── 历史 ── */
+.cu-hist-list { display: flex; flex-direction: column; }
+.cu-hist-item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border-default); transition: background 0.1s; }
+.cu-hist-item:last-child { border-bottom: none; }
+.cu-hist-item:hover { background: var(--border-faint); }
+.cu-hist-name { flex: 1; min-width: 0; font-size: var(--fs-small); font-weight: var(--fw-medium); color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cu-hist-tag { font-size: var(--fs-xs); padding: 2px 10px; border-radius: var(--radius-full); flex-shrink: 0; font-family: var(--font-mono); }
+.cu-hist-tag.pass { color: var(--state-success-text); background: var(--state-success-soft); }
+.cu-hist-tag.fail { color: var(--state-error); background: var(--state-error-soft); }
+.cu-hist-meta { font-size: var(--fs-xs); color: var(--text-tertiary); font-family: var(--font-mono); flex-shrink: 0; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+'use strict';
+
+const A = window._A;
+if (!A) { console.error('[step3-case-upload] _A 未初始化'); return; }
+const $ = A.$, escHtml = A.escHtml, escAttr = A.escAttr, api = A.api, appendLog = A.appendLog;
+
+// ── 状态 ──
+const state = {
+  selectedFile: null,
+  lastMatch: null,   // VersionMatchResult
+};
+
+// ── 元素 ──
+const els = {
+  curTarget: $('curTarget'),
+  curUser: $('curUser'),
+  tplFmt: $('tplFmt'),
+  btnDownloadTpl: $('btnDownloadTpl'),
+  dropZone: $('dropZone'),
+  fileInput: $('fileInput'),
+  feedback: $('feedback'),
+  fbTarget: $('fbTarget'),
+  fbCurrent: $('fbCurrent'),
+  fbStatus: $('fbStatus'),
+  fbMsg: $('fbMsg'),
+  btnValidate: $('btnValidate'),
+  btnUpload: $('btnUpload'),
+  histBadge: $('histBadge'),
+  histEmpty: $('histEmpty'),
+  histList: $('histList'),
+};
+
+// ── 加载当前被测系统 + 用户 ──
+async function loadContext() {
+  try {
+    const t = await api('GET', '/api/step3/case/current-target');
+    if (t && t.ok) {
+      els.curTarget.textContent = t.target_key || '-';
+    }
+  } catch (e) { /* 忽略 */ }
+  try {
+    const u = await api('GET', '/api/current-user');
+    if (u && u.user && u.user.name) els.curUser.textContent = u.user.name;
+    else if (u && u.user && u.user.id) els.curUser.textContent = u.user.id;
+  } catch (e) { /* 忽略 */ }
+}
+
+// ── 下载模板 ──
+els.btnDownloadTpl.addEventListener('click', async function() {
+  const fmt = els.tplFmt.value;
+  try {
+    A.withBtnLoading(this, '下载中...', async function() {
+      const url = '/api/step3/case/template?fmt=' + encodeURIComponent(fmt);
+      const r = await fetch(url);
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        A.toast('下载失败: ' + (d.error || r.status), 'error');
+        return;
+      }
+      const blob = await r.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'case_template.' + fmt;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      appendLog('✅ 模板已下载 (' + fmt + ')');
+    });
+  } catch (e) {
+    A.toast('下载异常: ' + String(e), 'error');
+  }
+});
+
+// ── 文件选择 ──
+function setFile(file) {
+  if (!/\.(csv|json)$/i.test(file.name)) {
+    A.toast('仅支持 .csv / .json 文件', 'error');
+    return;
+  }
+  state.selectedFile = file;
+  state.lastMatch = null;
+  els.feedback.style.display = 'none';
+  els.btnUpload.disabled = true;
+  appendLog('📎 已选择文件: ' + file.name + ' (' + (file.size/1024).toFixed(1) + ' KB)');
+}
+
+els.dropZone.addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('dragover'); });
+els.dropZone.addEventListener('dragleave', function(e) { e.preventDefault(); this.classList.remove('dragover'); });
+els.dropZone.addEventListener('drop', function(e) {
+  e.preventDefault(); this.classList.remove('dragover');
+  if (e.dataTransfer.files && e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+});
+els.dropZone.addEventListener('click', function() { els.fileInput.click(); });
+els.fileInput.addEventListener('change', function() {
+  if (this.files && this.files.length) setFile(this.files[0]);
+  this.value = '';
+});
+
+// ── 校验反馈渲染 ──
+function renderMatch(match) {
+  els.feedback.style.display = 'block';
+  els.fbTarget.textContent = (match.file_target || '-') + '@' + (match.file_version || '-');
+  els.fbCurrent.textContent = (match.current_target || '-') + '@' + (match.current_version || '-');
+  els.fbStatus.className = 'cu-feedback-status ' + (match.matched ? 'ok' : 'reject');
+  if (match.matched) {
+    els.fbStatus.textContent = (match.policy === 'warn') ? '⚠ 告警模式放行' : '✅ 匹配通过';
+  } else {
+    els.fbStatus.textContent = '❌ 拒绝执行';
+  }
+  els.fbMsg.textContent = match.message || '';
+  // 仅匹配（或 warn）时允许上传
+  els.btnUpload.disabled = !(match.matched);
+}
+
+// ── 仅校验 ──
+els.btnValidate.addEventListener('click', async function() {
+  if (!state.selectedFile) { A.toast('请先选择用例文件', 'error'); return; }
+  const fd = new FormData();
+  fd.append('file', state.selectedFile);
+  fd.append('policy', 'reject');
+  try {
+    A.withBtnLoading(this, '校验中...', async function() {
+      const r = await fetch('/api/step3/case/validate', { method: 'POST', body: fd });
+      const d = await r.json().catch(() => ({}));
+      if (d && d.match) {
+        state.lastMatch = d.match;
+        renderMatch(d.match);
+        if (d.match.matched) appendLog('✅ 校验通过: ' + d.match.message);
+        else appendLog('⚠️ 校验拒绝: ' + d.match.message);
+      } else {
+        A.toast('校验失败: ' + (d.error || '未知'), 'error');
+      }
+    });
+  } catch (e) {
+    A.toast('校验异常: ' + String(e), 'error');
+  }
+});
+
+// ── 台账核对渲染（T1）──
+function renderLedgerCheck(lc) {
+  const card = document.getElementById('ledgerCard');
+  if (!lc || !card) return;
+  card.style.display = 'block';
+  const sum = document.getElementById('ledgerSummary');
+  sum.style.display = 'block';
+  document.getElementById('lgChecked').textContent = lc.checked || 0;
+  document.getElementById('lgOk').textContent = lc.consistent_true || 0;
+  document.getElementById('lgBad').textContent = lc.consistent_false || 0;
+  document.getElementById('lgUnknown').textContent = lc.truth_unavailable || 0;
+  document.getElementById('ledgerBadge').textContent = (lc.checked || 0) + ' 条';
+  const list = document.getElementById('ledgerMismatchList');
+  const mm = lc.mismatches || [];
+  if (mm.length === 0) {
+    list.innerHTML = '<div class="cu-empty-state">无不一致记录（或全部真值缺失）</div>';
+    return;
+  }
+  list.innerHTML = mm.map(function(m) {
+    const tag = (m.status === 'open') ? 'pass' : 'fail';
+    const statusLabel = (m.status || 'open').toUpperCase();
+    return '<div class="cu-hist-item">' +
+      '<span class="cu-hist-name" title="' + escAttr(m.case_id) + '">' + escHtml(m.case_id) + '</span>' +
+      '<span class="cu-hist-tag ' + tag + '">' + statusLabel + '</span>' +
+      '<span class="cu-hist-meta">' + escHtml(m.truth_detail || '—') + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+// ── 上传并执行 ──
+els.btnUpload.addEventListener('click', async function() {
+  if (!state.selectedFile) { A.toast('请先选择用例文件', 'error'); return; }
+  if (!state.lastMatch || !state.lastMatch.matched) {
+    A.toast('请先校验且匹配通过后再上传', 'error');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('file', state.selectedFile);
+  fd.append('policy', state.lastMatch.policy || 'reject');
+  try {
+    A.withBtnLoading(this, '执行中...', async function() {
+      const r = await fetch('/api/step3/case/upload', { method: 'POST', body: fd });
+      const d = await r.json().catch(() => ({}));
+      if (d && d.ok) {
+        appendLog('✅ 上传执行完成: ' + (d.report ? JSON.stringify(d.report) : ''));
+        A.toast('上传执行完成', 'success');
+        renderLedgerCheck(d.ledger_check);
+        await loadHistory();
+      } else {
+        appendLog('⚠️ 上传被拒: ' + (d.error || '未知'));
+        A.toast('上传被拒: ' + (d.error || '未知'), 'error');
+        if (d.match) renderMatch(d.match);
+      }
+    });
+  } catch (e) {
+    A.toast('上传异常: ' + String(e), 'error');
+  }
+});
+
+// ── 历史 ──
+async function loadHistory() {
+  try {
+    const d = await api('GET', '/api/step3/case/uploads?limit=20');
+    if (!d || !d.ok) return;
+    const items = d.items || [];
+    els.histBadge.textContent = items.length;
+    if (items.length === 0) {
+      els.histEmpty.style.display = 'block';
+      els.histList.innerHTML = '';
+      return;
+    }
+    els.histEmpty.style.display = 'none';
+    els.histList.innerHTML = items.map(function(it) {
+      const pass = it.matched;
+      const tag = pass ? 'pass' : 'fail';
+      const label = pass ? 'PASS' : 'REJECT';
+      return '<div class="cu-hist-item">' +
+        '<span class="cu-hist-name" title="' + escAttr(it.filename) + '">' + escHtml(it.filename) + '</span>' +
+        '<span class="cu-hist-tag ' + tag + '">' + label + '</span>' +
+        '<span class="cu-hist-meta">' + escHtml(it.target_key) + '@' + escHtml(it.version) + ' by ' + escHtml(it.uploader) + '</span>' +
+        '<span class="cu-hist-meta">' + (it.uploaded_at || '').replace('T', ' ').substring(0, 19) + '</span>' +
+      '</div>';
+    }).join('');
+  } catch (e) {
+    appendLog('⚠️ 历史加载失败: ' + String(e));
+  }
+}
+
+// ── 进入 ──
+async function loadAll() {
+  await loadContext();
+  await loadHistory();
+  applyReadonlyMode();
+}
+
+// ── 只读模式（无 case.upload 权限时隐藏上传区）──
+function applyReadonlyMode() {
+  if (A.hasPerm('case.upload')) return;
+  var dz = document.getElementById('dropZone');
+  if (dz) dz.style.display = 'none';
+  var ar = document.querySelector('.cu-action-row');
+  if (ar) ar.style.display = 'none';
+  var panel = document.querySelector('.cu-panel');
+  if (panel && !panel.querySelector('.cu-readonly-banner')) {
+    var banner = document.createElement('div');
+    banner.className = 'cu-readonly-banner';
+    banner.style.cssText = 'padding:10px 16px;margin-bottom:12px;background:var(--state-warning-soft);border:1px solid var(--state-warning);border-radius:6px;color:var(--state-warning-text);font-size:13px;text-align:center;font-weight:500;';
+    banner.textContent = '当前账号无「上传用例」权限（case.upload），仅可下载模板与查看历史';
+    panel.insertBefore(banner, panel.firstChild);
+  }
+}
+
+A._onAuthOk = function() {
+  if (A._renderSidebarUser) A._renderSidebarUser();
+  if (A.applyPermissions) A.applyPermissions();
+  loadAll();
+  A._startStepBadgePolling();
+};
+
+if (A._currentUser) {
+  loadAll();
+}
+
+})();
+</script>
+{% endblock %}

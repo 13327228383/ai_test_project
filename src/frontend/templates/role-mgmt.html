@@ -1,0 +1,1051 @@
+{% extends "_layout_base.html" %}
+{% block title %}角色管理 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+角色管理
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnNewRole" data-perm="user.role.set" data-tooltip="新建自定义角色" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  新建角色
+</button>
+<a class="btn-topbar" href="/user-mgmt" id="btnUserMgmt" data-perm="user.manage" data-tooltip="进入用户管理页面" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+  用户管理
+</a>
+<button class="btn-topbar" id="btnRefreshRoles" data-perm="user.role.set" data-tooltip="重新加载角色列表" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  刷新
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════ 统计栏 ════════════ -->
+<div class="rm-stats-bar">
+  <div class="rm-stat-item">
+    <span class="rm-stat-label">总角色</span>
+    <span class="rm-stat-value" id="statTotal">0</span>
+  </div>
+  <div class="rm-stat-item">
+    <span class="rm-stat-label">系统内置</span>
+    <span class="rm-stat-value rm-stat-system" id="statSystem">0</span>
+  </div>
+  <div class="rm-stat-item">
+    <span class="rm-stat-label">自定义</span>
+    <span class="rm-stat-value rm-stat-custom" id="statCustom">0</span>
+  </div>
+</div>
+
+<!-- ════════════ 主体两列布局 ════════════ -->
+<div class="rm-dual-layout">
+
+  <!-- ══════ 左列：角色列表 ══════ -->
+  <div class="rm-col-left">
+    <div class="rm-section-label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      角色列表
+    </div>
+
+    <!-- 角色列表 -->
+    <div class="rm-role-list" id="roleList">
+      <div class="rm-empty">加载中...</div>
+    </div>
+  </div>
+
+  <!-- ══════ 右列：角色详情（信息编辑 + 权限网格 + 危险操作） ══════ -->
+  <div class="rm-col-right">
+    <div id="roleDetailEmpty" class="rm-detail-empty">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <div class="rm-detail-empty-text">请从左侧选择一个角色</div>
+    </div>
+
+    <div id="roleDetail" style="display:none;">
+      <!-- 角色信息卡片 -->
+      <div class="rm-role-card" id="roleCard">
+        <!-- JS 渲染 -->
+      </div>
+
+      <!-- 角色信息编辑区 -->
+      <div class="rm-section">
+        <div class="rm-section-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          角色信息
+          <span class="rm-section-hint" id="readonlyHint">系统内置角色名称不可修改</span>
+        </div>
+        <div class="rm-form-group">
+          <label class="rm-form-label">角色名称</label>
+          <input type="text" id="inputRoleName" class="rm-form-input" placeholder="角色名称" />
+        </div>
+        <div class="rm-form-group">
+          <label class="rm-form-label">角色描述</label>
+          <textarea id="inputRoleDesc" class="rm-form-textarea" rows="2" placeholder="角色描述"></textarea>
+        </div>
+        <button class="rm-btn-save" id="btnSaveInfo" data-tooltip="保存角色名称与描述" data-tooltip-pos="top">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          保存信息
+        </button>
+      </div>
+
+      <!-- 权限网格区 -->
+      <div class="rm-section">
+        <div class="rm-section-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          功能权限
+          <span class="rm-section-hint" id="permHint">勾选权限点分配给当前角色</span>
+          <div class="rm-perm-quick">
+            <button class="rm-quick-btn" id="btnSelectAll" type="button" data-tooltip="勾选全部可授予权限（不含管理员专属）" data-tooltip-pos="top">全选</button>
+            <span class="rm-quick-sep">/</span>
+            <button class="rm-quick-btn" id="btnDeselectAll" type="button" data-tooltip="取消全部可分配权限勾选" data-tooltip-pos="top">全不选</button>
+          </div>
+        </div>
+        <div class="rm-perm-grid" id="permGrid">
+          <div class="rm-empty">请选择角色</div>
+        </div>
+        <button class="rm-btn-save" id="btnSavePerms" data-tooltip="保存当前角色的权限分配" data-tooltip-pos="top">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          保存权限
+        </button>
+      </div>
+
+      <!-- 危险操作区（仅自定义角色可见） -->
+      <div class="rm-section rm-danger-zone" id="dangerZone" style="display:none;">
+        <div class="rm-section-label rm-danger-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          危险操作
+        </div>
+        <div class="rm-danger-row">
+          <div class="rm-danger-text">
+            <div class="rm-danger-title">删除此角色</div>
+            <div class="rm-danger-desc">删除后无法恢复，已分配该角色的用户将失去对应权限。</div>
+          </div>
+          <button class="rm-btn-danger" id="btnDeleteRole" data-tooltip="删除当前自定义角色" data-tooltip-pos="left">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            删除角色
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ 新建角色对话框 ════════════ -->
+<div class="rm-modal-overlay" id="newRoleModal" style="display:none;">
+  <div class="rm-modal">
+    <div class="rm-modal-header">
+      <span class="rm-modal-title">新建自定义角色</span>
+      <button class="rm-modal-close" id="btnCloseNewRole" type="button" data-tooltip="关闭" data-tooltip-pos="left">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="rm-modal-body">
+      <div class="rm-form-group">
+        <label class="rm-form-label">角色名称 <span class="rm-req">*</span></label>
+        <input type="text" id="newRoleName" class="rm-form-input" placeholder="如：测试执行员" maxlength="32" />
+      </div>
+      <div class="rm-form-group">
+        <label class="rm-form-label">角色描述</label>
+        <textarea id="newRoleDesc" class="rm-form-textarea" rows="2" placeholder="角色职责说明" maxlength="200"></textarea>
+      </div>
+    </div>
+    <div class="rm-modal-footer">
+      <button class="rm-btn-ghost" id="btnCancelNewRole" type="button" data-tooltip="取消并关闭" data-tooltip-pos="top">取消</button>
+      <button class="rm-btn-primary" id="btnConfirmNewRole" type="button" data-tooltip="创建新角色" data-tooltip-pos="top">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        创建
+      </button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ════════════ 角色管理页样式 ════════════ */
+.rm-stats-bar {
+  display: flex;
+  gap: 24px;
+  padding: 16px 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+.rm-stat-item { display: flex; flex-direction: column; gap: 4px; }
+.rm-stat-label { font-size: var(--fs-small); color: var(--text-secondary); }
+.rm-stat-value {
+  font-size: var(--fs-h1); font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.rm-stat-system { color: var(--state-info-text); }
+.rm-stat-custom { color: var(--state-warning-text); }
+
+.rm-dual-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+  height: calc(100vh - 220px);
+  min-height: 480px;
+}
+
+/* 窄屏收拢为单列，左栏置顶，避免右区被固定左栏挤压 */
+@media (max-width: 1100px) {
+  .rm-dual-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+}
+
+.rm-col-left, .rm-col-right {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+.rm-col-left { padding: 16px; }
+.rm-col-right { padding: 16px; overflow-y: auto; }
+
+.rm-section-label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: var(--fs-h3); font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+.rm-section-label svg { width: 16px; height: 16px; color: var(--color-primary); }
+.rm-section-hint {
+  margin-left: 8px;
+  font-size: var(--fs-small); font-weight: var(--fw-regular);
+  color: var(--text-tertiary);
+}
+
+/* ── 角色列表 ── */
+.rm-role-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.rm-role-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.rm-role-item:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-hover);
+}
+.rm-role-item.active {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-border);
+}
+.rm-role-dot {
+  width: 8px; height: 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+.rm-role-name {
+  flex: 1;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rm-role-tag {
+  font-size: var(--fs-micro);
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  font-weight: var(--fw-medium);
+}
+.rm-role-tag-system {
+  background: var(--state-info-soft);
+  color: var(--state-info-text);
+  border: 1px solid var(--state-info-border);
+}
+.rm-role-tag-custom {
+  background: var(--state-warning-soft);
+  color: var(--state-warning-text);
+  border: 1px solid var(--state-warning-border);
+}
+.rm-role-count {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+}
+
+/* ── 详情空态 ── */
+.rm-detail-empty {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px;
+  color: var(--text-tertiary);
+}
+.rm-detail-empty-text { font-size: var(--fs-body); }
+
+/* ── 角色卡片 ── */
+.rm-role-card {
+  padding: 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+.rm-role-card-header {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 8px;
+}
+.rm-role-card-icon {
+  width: 40px; height: 40px;
+  border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.rm-role-card-name {
+  font-size: var(--fs-h1); font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.rm-role-card-meta {
+  display: flex; gap: 12px;
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+}
+.rm-role-card-meta span { display: inline-flex; align-items: center; gap: 4px; }
+
+/* ── 表单 ── */
+.rm-section { margin-bottom: 20px; }
+.rm-form-group { margin-bottom: 12px; }
+.rm-form-label {
+  display: block;
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.rm-req { color: var(--state-error-text); }
+.rm-form-input, .rm-form-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--fs-body);
+  font-family: var(--font-sans);
+  transition: border-color 0.15s;
+}
+.rm-form-input:focus, .rm-form-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+.rm-form-input:read-only, .rm-form-textarea:read-only {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
+.rm-form-textarea { resize: vertical; min-height: 60px; }
+
+.rm-btn-save {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px;
+  background: var(--color-primary);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.rm-btn-save:hover { background: var(--color-primary-hover); }
+.rm-btn-save:disabled {
+  background: var(--bg-elevated);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
+/* ── 权限网格 ── */
+.rm-perm-quick {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 4px;
+}
+.rm-quick-btn {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: var(--fs-small);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+}
+.rm-quick-btn:hover { background: var(--color-primary-soft); }
+.rm-quick-sep { color: var(--text-tertiary); font-size: var(--fs-small); }
+
+.rm-perm-grid {
+  display: grid;
+  /* ★ 布局优化(2026-08-31)：降低卡片最小宽，每行容纳更多权限点，减少卡片间大块留白 */
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.rm-perm-category {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 0 4px 0;
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-default);
+  margin-top: 8px;
+}
+.rm-perm-category:first-child { margin-top: 0; }
+.rm-perm-category svg { width: 14px; height: 14px; color: var(--color-primary); }
+
+.rm-perm-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.rm-perm-item:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-elevated);
+}
+.rm-perm-item.checked {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-border);
+}
+.rm-perm-item.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+/* B方案：管理员专属权限锁定样式（自定义角色下只读） */
+.rm-perm-item.admin-only {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--bg-base);
+  border-style: dashed;
+  border-color: var(--border-hover);
+}
+.rm-perm-item.admin-only:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-base);
+}
+.rm-perm-checkbox.rm-perm-lock {
+  border-style: dashed;
+  color: var(--text-tertiary);
+}
+.rm-perm-lock svg {
+  width: 12px; height: 12px;
+  display: block;
+}
+.rm-perm-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 4px;
+  font-family: var(--font-base);
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--text-tertiary);
+  background: var(--border-default);
+  border-radius: var(--radius-xs);
+  vertical-align: 1px;
+}
+.rm-perm-checkbox {
+  width: 16px; height: 16px;
+  border: 1.5px solid var(--border-hover);
+  border-radius: var(--radius-xs);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  background: var(--bg-base);
+}
+.rm-perm-item.checked .rm-perm-checkbox {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.rm-perm-checkbox svg {
+  width: 12px; height: 12px;
+  color: var(--text-inverse);
+  display: none;
+}
+.rm-perm-item.checked .rm-perm-checkbox svg { display: block; }
+.rm-perm-info { flex: 1; min-width: 0; }
+.rm-perm-key {
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rm-perm-label {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ── 危险操作 ── */
+.rm-danger-zone {
+  border: 1px solid var(--state-error-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  background: var(--state-error-soft);
+}
+.rm-danger-label { color: var(--state-error-text); }
+.rm-danger-label svg { color: var(--state-error-text); }
+.rm-danger-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px;
+}
+.rm-danger-title {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.rm-danger-desc {
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+}
+.rm-btn-danger {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px;
+  background: transparent;
+  color: var(--state-error-text);
+  border: 1px solid var(--state-error-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.rm-btn-danger:hover {
+  background: var(--state-error);
+  color: var(--text-inverse);
+  border-color: var(--state-error);
+}
+
+/* ── 模态对话框 ── */
+.rm-modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--bg-overlay);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+.rm-modal {
+  width: 440px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--surface-shadow-float);
+  display: flex; flex-direction: column;
+}
+.rm-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-default);
+}
+.rm-modal-title {
+  font-size: var(--fs-h2);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.rm-modal-close {
+  background: none; border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-xs);
+  display: flex; align-items: center; justify-content: center;
+}
+.rm-modal-close:hover { background: var(--bg-elevated); color: var(--text-primary); }
+.rm-modal-body { padding: 20px; }
+.rm-modal-footer {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-default);
+}
+.rm-btn-ghost {
+  padding: 8px 16px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+.rm-btn-ghost:hover { background: var(--bg-elevated); color: var(--text-primary); }
+.rm-btn-primary {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px;
+  background: var(--color-primary);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+}
+.rm-btn-primary:hover { background: var(--color-primary-hover); }
+.rm-btn-primary:disabled { background: var(--bg-elevated); color: var(--text-tertiary); cursor: not-allowed; }
+
+/* ── 通用 ── */
+.rm-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: var(--fs-small);
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  'use strict';
+  var A = window._A;
+  if (!A) return;
+  var $ = A.$, esc = A.escHtml;
+
+  // ── 状态 ──
+  var allRoles = [];
+  var currentRoleId = '';
+  var currentRoleData = null;       // 来自 /api/roles 的角色对象
+  var currentPerms = null;          // 来自 /api/roles/<id>/permissions 的权限数据
+  var pendingPermChanges = {};      // {perm_id: bool} 临时修改
+  var adminOnlyPerms = {};          // {perm_id: true} 管理员专属权限（不可授予/不参与全选）B方案
+
+  // ── 角色颜色映射 ──
+  var ROLE_COLORS = {
+    'admin': 'var(--state-error)',
+    'project_admin': 'var(--color-primary)',
+    'project_member': 'var(--state-info)',
+    'viewer': 'var(--state-warning)'
+  };
+  var CUSTOM_COLOR = 'var(--state-warning)';
+
+  function getRoleColor(role) {
+    return ROLE_COLORS[role.id] || CUSTOM_COLOR;
+  }
+
+  // ── 加载角色列表 ──
+  async function loadRoles() {
+    var list = $('roleList');
+    if (list) list.innerHTML = '<div class="rm-empty">加载中...</div>';
+    var r = await A.api('GET', '/api/roles');
+    if (r && r.roles) {
+      allRoles = r.roles || [];
+      renderRoleList();
+      updateStats();
+      // 自动选中第一个角色
+      if (allRoles.length > 0) {
+        selectRole(allRoles[0].id);
+      } else {
+        showEmpty();
+      }
+    } else {
+      if (list) list.innerHTML = '<div class="rm-empty rm-empty-error">' + esc((r && r.error) || '加载失败') + '</div>';
+    }
+  }
+
+  // ── 渲染角色列表 ──
+  function renderRoleList() {
+    var list = $('roleList');
+    if (!list) return;
+    if (allRoles.length === 0) {
+      list.innerHTML = '<div class="rm-empty">暂无角色</div>';
+      return;
+    }
+    var html = allRoles.map(function(role) {
+      var isActive = role.id === currentRoleId;
+      var color = getRoleColor(role);
+      var tagHtml = role.is_system
+        ? '<span class="rm-role-tag rm-role-tag-system">内置</span>'
+        : '<span class="rm-role-tag rm-role-tag-custom">自定义</span>';
+      var count = role.user_count != null ? role.user_count : 0;
+      return '<div class="rm-role-item' + (isActive ? ' active' : '') + '" data-role-id="' + esc(role.id) + '">'
+        + '<span class="rm-role-dot" style="background:' + color + '"></span>'
+        + '<span class="rm-role-name">' + esc(role.name) + '</span>'
+        + tagHtml
+        + '<span class="rm-role-count">' + count + ' 用户</span>'
+        + '</div>';
+    }).join('');
+    list.innerHTML = html;
+  }
+
+  // ── 更新统计 ──
+  function updateStats() {
+    var total = allRoles.length;
+    var system = allRoles.filter(function(r) { return r.is_system; }).length;
+    var custom = total - system;
+    if ($('statTotal')) $('statTotal').textContent = total;
+    if ($('statSystem')) $('statSystem').textContent = system;
+    if ($('statCustom')) $('statCustom').textContent = custom;
+  }
+
+  // ── 选中角色 ──
+  async function selectRole(roleId) {
+    if (!roleId) return;
+    currentRoleId = roleId;
+    renderRoleList();
+    // 显示详情区
+    if ($('roleDetailEmpty')) $('roleDetailEmpty').style.display = 'none';
+    if ($('roleDetail')) $('roleDetail').style.display = 'block';
+    // 找到角色数据
+    var role = null;
+    for (var i = 0; i < allRoles.length; i++) {
+      if (allRoles[i].id === roleId) { role = allRoles[i]; break; }
+    }
+    if (!role) return;
+    currentRoleData = role;
+    renderRoleCard(role);
+    renderRoleForm(role);
+    // 危险操作区：仅自定义角色可见
+    if ($('dangerZone')) {
+      $('dangerZone').style.display = role.is_system ? 'none' : 'block';
+    }
+    // 加载权限
+    await loadPermissions(roleId);
+  }
+
+  // ── 渲染角色卡片 ──
+  function renderRoleCard(role) {
+    var card = $('roleCard');
+    if (!card) return;
+    var color = getRoleColor(role);
+    var tagHtml = role.is_system
+      ? '<span class="rm-role-tag rm-role-tag-system">系统内置</span>'
+      : '<span class="rm-role-tag rm-role-tag-custom">自定义</span>';
+    var count = role.user_count != null ? role.user_count : 0;
+    var iconSvg = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>';
+    card.innerHTML = ''
+      + '<div class="rm-role-card-header">'
+        + '<div class="rm-role-card-icon" style="background:' + color + '22; color:' + color + '">' + iconSvg + '</div>'
+        + '<div>'
+          + '<div class="rm-role-card-name">' + esc(role.name) + '</div>'
+          + '<div class="rm-role-card-meta">'
+            + '<span>' + tagHtml + '</span>'
+            + '<span>· ' + count + ' 用户</span>'
+            + '<span>· ID: ' + esc(role.id) + '</span>'
+          + '</div>'
+        + '</div>'
+      + '</div>';
+  }
+
+  // ── 渲染角色表单 ──
+  function renderRoleForm(role) {
+    var inputName = $('inputRoleName');
+    var inputDesc = $('inputRoleDesc');
+    var btnSaveInfo = $('btnSaveInfo');
+    var readonlyHint = $('readonlyHint');
+    if (inputName) {
+      inputName.value = role.name || '';
+      inputName.readOnly = !!role.is_system;
+    }
+    if (inputDesc) {
+      inputDesc.value = role.description || '';
+      inputDesc.readOnly = false; // 描述始终可改
+    }
+    if (btnSaveInfo) btnSaveInfo.disabled = false;
+    if (readonlyHint) readonlyHint.style.display = role.is_system ? 'inline' : 'none';
+  }
+
+  // ── 加载权限 ──
+  async function loadPermissions(roleId) {
+    var grid = $('permGrid');
+    if (grid) grid.innerHTML = '<div class="rm-empty">加载权限中...</div>';
+    var r = await A.api('GET', '/api/roles/' + encodeURIComponent(roleId) + '/permissions');
+    if (!r || !r.permissions) {
+      if (grid) grid.innerHTML = '<div class="rm-empty">' + esc((r && r.error) || '加载权限失败') + '</div>';
+      return;
+    }
+    currentPerms = r;
+    pendingPermChanges = {};
+    renderPermGrid(r, currentRoleData);
+  }
+
+  // ── 权限分类名映射 ──
+  // ★ 全局修复(2026-09-01): 补全 case 等缺失映射，避免权限网格头部显示英文分类
+  var PERM_CATEGORY_NAMES = {
+    'user': '用户管理',
+    'system': '系统管理',
+    'project': '项目管理',
+    'execution': '执行控制',
+    'case': '用例模板',
+    'file': '文件管理',
+    'datasource': '数据源',
+    'docs': '文档中心',
+    'health': '健康监控'
+  };
+
+  // ── 渲染权限网格 ──
+  function renderPermGrid(permData, role) {
+    var grid = $('permGrid');
+    if (!grid) return;
+    var groups = permData.groups || {};
+    var perms = permData.permissions || {};
+    var isAdmin = (role && role.id === 'admin');
+    var isSystem = !!(role && role.is_system);
+    var locked = isAdmin || isSystem; // admin 和系统角色权限不可改
+
+    var hint = $('permHint');
+    if (hint) {
+      if (isAdmin) hint.textContent = '系统管理员拥有全部权限，不可修改';
+      else if (isSystem) hint.textContent = '系统内置角色权限不可修改';
+      else hint.textContent = '勾选普通权限分配给当前角色（管理员专属权限已锁定，不可授予）';
+    }
+
+    var html = '';
+    var checkSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    var lockSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+    // 记录管理员专属权限，供全选/保存时排除（B方案：专属权限锁定，不可授予自定义角色）
+    adminOnlyPerms = {};
+
+    Object.keys(groups).forEach(function(cat) {
+      var catName = PERM_CATEGORY_NAMES[cat] || cat;
+      html += '<div class="rm-perm-category">'
+        + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg>'
+        + esc(catName)
+        + '</div>';
+      var items = groups[cat] || [];
+      items.forEach(function(item) {
+        var granted = item.granted;
+        var adminOnly = !!item.admin_only;
+        if (adminOnly) adminOnlyPerms[item.id] = true;
+        // 自定义角色下，管理员专属权限禁用锁定（不可勾选、不参与全选）
+        var isLocked = locked || adminOnly;
+        var cls = 'rm-perm-item'
+          + (granted ? ' checked' : '')
+          + (isLocked ? ' disabled' : '')
+          + (adminOnly ? ' admin-only' : '');
+        var lockTip = '管理员专属权限，不可授予自定义角色';
+        html += '<div class="' + cls + '" data-perm="' + esc(item.id) + '"' + (adminOnly ? ' title="' + lockTip + '"' : '') + '>'
+          + (adminOnly
+              ? '<div class="rm-perm-checkbox rm-perm-lock">' + lockSvg + '</div>'
+              : '<div class="rm-perm-checkbox">' + checkSvg + '</div>')
+          + '<div class="rm-perm-info">'
+            + '<div class="rm-perm-key">' + esc(item.id) + (adminOnly ? ' <span class="rm-perm-badge">专属</span>' : '') + '</div>'
+            // ★ hover 提示全文；与管理员专属锁定提示（挂在整项 item 上）区分——内容提示只挂在描述文本上
+            + '<div class="rm-perm-label" title="' + esc(item.description || '') + '">' + esc(item.description || '') + '</div>'
+          + '</div>'
+        + '</div>';
+      });
+    });
+
+    if (!html) {
+      grid.innerHTML = '<div class="rm-empty">无权限定义</div>';
+      return;
+    }
+    grid.innerHTML = html;
+  }
+
+  // ── 权限勾选交互 ──
+  function bindPermGridClick() {
+    var grid = $('permGrid');
+    if (!grid) return;
+    grid.addEventListener('click', function(e) {
+      var item = e.target.closest('.rm-perm-item');
+      if (!item) return;
+      if (item.classList.contains('disabled')) return;
+      var permId = item.getAttribute('data-perm');
+      if (!permId) return;
+      item.classList.toggle('checked');
+      pendingPermChanges[permId] = item.classList.contains('checked');
+    });
+  }
+
+  // ── 全选/全不选 ──
+  function bindQuickActions() {
+    var btnAll = $('btnSelectAll');
+    var btnNone = $('btnDeselectAll');
+    if (btnAll) btnAll.addEventListener('click', function() {
+      var items = document.querySelectorAll('.rm-perm-item:not(.disabled):not(.admin-only)');
+      items.forEach(function(item) {
+        item.classList.add('checked');
+        pendingPermChanges[item.getAttribute('data-perm')] = true;
+      });
+    });
+    if (btnNone) btnNone.addEventListener('click', function() {
+      var items = document.querySelectorAll('.rm-perm-item:not(.disabled):not(.admin-only)');
+      items.forEach(function(item) {
+        item.classList.remove('checked');
+        pendingPermChanges[item.getAttribute('data-perm')] = false;
+      });
+    });
+  }
+
+  // ── 保存角色信息 ──
+  function saveRoleInfo() {
+    if (!currentRoleId || !currentRoleData) return;
+    var name = $('inputRoleName').value.trim();
+    var desc = $('inputRoleDesc').value.trim();
+    if (!name) { A.toast && A.toast('角色名称不能为空', 'error'); return; }
+    var body = { description: desc };
+    if (!currentRoleData.is_system) body.name = name;
+    A.withBtnLoading($('btnSaveInfo'), '保存中...', async function() {
+      var r = await A.api('PUT', '/api/roles/' + encodeURIComponent(currentRoleId), body);
+      if (r && r.ok) {
+        A.toast && A.toast('保存成功', 'success');
+        await loadRoles();
+        // 重新选中当前角色
+        selectRole(currentRoleId);
+      } else {
+        A.toast && A.toast((r && r.error) || '保存失败', 'error');
+      }
+    });
+  }
+
+  // ── 保存权限 ──
+  function savePermissions() {
+    if (!currentRoleId || !currentPerms) return;
+    // 合并 pendingPermChanges 和原始权限（跳过管理员专属权限，避免触发后端拦截器）
+    var perms = {};
+    Object.keys(currentPerms.permissions || {}).forEach(function(pid) {
+      if (adminOnlyPerms[pid]) return;
+      perms[pid] = currentPerms.permissions[pid];
+    });
+    Object.keys(pendingPermChanges).forEach(function(pid) {
+      if (adminOnlyPerms[pid]) return;
+      perms[pid] = pendingPermChanges[pid];
+    });
+    A.withBtnLoading($('btnSavePerms'), '保存中...', async function() {
+      var r = await A.api('PUT', '/api/roles/' + encodeURIComponent(currentRoleId) + '/permissions', { permissions: perms });
+      if (r && r.ok) {
+        A.toast && A.toast('权限保存成功（已授予 ' + (r.updated || 0) + '/' + (r.total || 0) + '）', 'success');
+        pendingPermChanges = {};
+        await loadPermissions(currentRoleId);
+      } else {
+        A.toast && A.toast((r && r.error) || '保存失败', 'error');
+      }
+    });
+  }
+
+  // ── 删除角色 ──
+  // T05/P2-2：内部改用 await A.confirm(...)（Promise），函数必须声明为 async
+  async function deleteRole() {
+    if (!currentRoleId || !currentRoleData) return;
+    if (currentRoleData.is_system) {
+      A.toast && A.toast('系统内置角色不可删除', 'error');
+      return;
+    }
+    if (!(await A.confirm('确认删除角色「' + currentRoleData.name + '」？\n删除后无法恢复，已分配该角色的用户将失去对应权限。', { danger: true }))) return;
+    A.withBtnLoading($('btnDeleteRole'), '删除中...', async function() {
+      var r = await A.api('DELETE', '/api/roles/' + encodeURIComponent(currentRoleId));
+      if (r && r.ok) {
+        A.toast && A.toast('角色已删除', 'success');
+        currentRoleId = '';
+        currentRoleData = null;
+        await loadRoles();
+      } else {
+        A.toast && A.toast((r && r.error) || '删除失败', 'error');
+      }
+    });
+  }
+
+  // ── 新建角色 ──
+  function openNewRoleModal() {
+    if ($('newRoleName')) $('newRoleName').value = '';
+    if ($('newRoleDesc')) $('newRoleDesc').value = '';
+    if ($('newRoleModal')) $('newRoleModal').style.display = 'flex';
+    if ($('newRoleName')) setTimeout(function() { $('newRoleName').focus(); }, 50);
+  }
+  function closeNewRoleModal() {
+    if ($('newRoleModal')) $('newRoleModal').style.display = 'none';
+  }
+  function confirmNewRole() {
+    var name = $('newRoleName').value.trim();
+    var desc = $('newRoleDesc').value.trim();
+    if (!name) { A.toast && A.toast('角色名称不能为空', 'error'); return; }
+    A.withBtnLoading($('btnConfirmNewRole'), '创建中...', async function() {
+      var r = await A.api('POST', '/api/roles', { name: name, description: desc });
+      if (r && r.ok) {
+        A.toast && A.toast('角色创建成功', 'success');
+        closeNewRoleModal();
+        await loadRoles();
+        // 选中新建的角色
+        if (r.role_id) selectRole(r.role_id);
+      } else {
+        A.toast && A.toast((r && r.error) || '创建失败', 'error');
+      }
+    });
+  }
+
+  function showEmpty() {
+    if ($('roleDetailEmpty')) $('roleDetailEmpty').style.display = 'flex';
+    if ($('roleDetail')) $('roleDetail').style.display = 'none';
+  }
+
+  // ── 绑定事件 ──
+  function bindEvents() {
+    // 角色列表点击
+    var list = $('roleList');
+    if (list) {
+      list.addEventListener('click', function(e) {
+        var item = e.target.closest('.rm-role-item');
+        if (!item) return;
+        var roleId = item.getAttribute('data-role-id');
+        if (roleId) selectRole(roleId);
+      });
+    }
+    // 顶部按钮
+    var btnRefresh = $('btnRefreshRoles');
+    if (btnRefresh) btnRefresh.addEventListener('click', function() {
+      A.withBtnLoading(btnRefresh, '加载中...', loadRoles);
+    });
+    var btnNew = $('btnNewRole');
+    if (btnNew) btnNew.addEventListener('click', openNewRoleModal);
+    // 保存
+    var btnSaveInfo = $('btnSaveInfo');
+    if (btnSaveInfo) btnSaveInfo.addEventListener('click', saveRoleInfo);
+    var btnSavePerms = $('btnSavePerms');
+    if (btnSavePerms) btnSavePerms.addEventListener('click', savePermissions);
+    // 删除
+    var btnDelete = $('btnDeleteRole');
+    if (btnDelete) btnDelete.addEventListener('click', deleteRole);
+    // 新建对话框
+    var btnCloseNew = $('btnCloseNewRole');
+    if (btnCloseNew) btnCloseNew.addEventListener('click', closeNewRoleModal);
+    var btnCancelNew = $('btnCancelNewRole');
+    if (btnCancelNew) btnCancelNew.addEventListener('click', closeNewRoleModal);
+    var btnConfirmNew = $('btnConfirmNewRole');
+    if (btnConfirmNew) btnConfirmNew.addEventListener('click', confirmNewRole);
+    // 点击遮罩关闭
+    var modal = $('newRoleModal');
+    if (modal) {
+      modal.addEventListener('click', function(e) {
+        if (e.target === modal) closeNewRoleModal();
+      });
+    }
+    // 权限网格交互
+    bindPermGridClick();
+    bindQuickActions();
+  }
+
+  // ── 登录态守卫 ──
+  A._onAuthOk = function() {
+    A._renderSidebarUser();
+    A.applyPermissions();
+    // 控制新建角色按钮权限
+    var btnNew = $('btnNewRole');
+    if (btnNew) {
+      if (!A.hasPerm('user.role.set')) {
+        btnNew.style.display = 'none';
+      }
+    }
+    loadRoles();
+    A._startStepBadgePolling();
+  };
+  if (A._currentUser) {
+    loadRoles();
+  }
+
+  bindEvents();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,1913 @@
+{% extends "_layout_base.html" %}
+{% block head_extra %}
+<style>
+/* ════════════ Full-Height Layout ════════════ */
+.content-body {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+.docs-wrapper {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.docs-stats-row { flex-shrink: 0; margin-bottom: 0; }
+.docs-filter-row { flex-shrink: 0; }
+.docs-main { flex: 1; min-height: 0; height: auto; }
+
+/* ════════════ 文档中心专属样式 ════════════ */
+.docs-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.docs-stat-card {
+  flex: 1 1 180px;
+  min-width: 140px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+.docs-stat-label {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-1);
+}
+.docs-stat-value {
+  font-size: var(--fs-h1);
+  font-weight: var(--fw-bold);
+  font-family: var(--font-mono);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.docs-stat-sub {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  margin-top: var(--space-1);
+}
+
+.docs-filter-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.docs-tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.docs-tab:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+.docs-tab.active {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-border);
+  color: var(--color-primary);
+}
+.docs-tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+/* ── 令牌化工具类（批1：内联样式下沉） ── */
+.docs-stat-total { color: var(--color-primary); }
+.docs-stat-raw { color: var(--step1-color); }
+.docs-stat-proc { color: var(--step2-color); }
+.docs-stat-test { color: var(--step4-color); }
+.docs-stat-ver { color: var(--step5-color); }
+.docs-dt-primary { background: var(--color-primary); }
+.docs-dt-step1 { background: var(--step1-color); }
+.docs-dt-step2 { background: var(--step2-color); }
+.docs-dt-step4 { background: var(--step4-color); }
+.docs-dt-step5 { background: var(--step5-color); }
+.docs-dt-log { background: var(--text-tertiary); }
+.docs-select-auto { width: auto; min-width: 150px; }
+.docs-hide { display: none; }
+.docs-op-40 { opacity: 0.4; }
+.docs-op-30 { opacity: 0.3; }
+.docs-row-aic-g2 { display: flex; align-items: center; gap: var(--space-2); }
+.docs-row-aic-g3 { display: flex; align-items: center; gap: var(--space-3); }
+.docs-row-aic-g6-cur { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.docs-mt-3 { margin-top: var(--space-3); }
+.docs-mt-4 { margin-top: var(--space-4); }
+.docs-my-2 { margin: var(--space-2) 0; }
+.docs-tool-row { display: flex; gap: var(--space-2); align-items: center; margin-bottom: var(--space-3); }
+.docs-count-label { font-size: var(--fs-xs); color: var(--text-tertiary); }
+.docs-toggle-btn { padding: 4px 12px; font-size: var(--fs-xs); background: var(--color-primary-soft); color: var(--color-primary); border: 1px solid var(--color-primary-border); border-radius: var(--radius-sm); cursor: pointer; }
+.docs-api-row { display: flex; align-items: center; gap: var(--space-2); padding: 6px 10px; border: 1px solid var(--border-default); border-radius: var(--radius-sm); margin-bottom: 4px; font-family: var(--font-mono); font-size: var(--fs-xs); }
+.docs-api-method { display: inline-block; min-width: 56px; padding: 2px 6px; border-radius: var(--radius-xs); font-weight: var(--fw-semibold); text-align: center; }
+.docs-api-path { color: var(--text-primary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.docs-api-title { color: var(--text-tertiary); font-family: var(--font-sans); font-size: var(--fs-micro); flex-shrink: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.docs-api-cat { color: var(--text-tertiary); font-family: var(--font-sans); font-size: var(--fs-micro); flex-shrink: 0; }
+.docs-sheet-row { margin-bottom: var(--space-3); }
+.docs-sheet-label { font-size: var(--fs-xs); color: var(--text-tertiary); margin-bottom: var(--space-1); }
+.docs-tab-count {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  background: var(--bg-base);
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  min-width: 18px;
+  text-align: center;
+}
+.docs-tab.active .docs-tab-count {
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+.docs-search-wrapper {
+  margin-left: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.docs-search-wrapper svg {
+  position: absolute;
+  left: var(--space-2);
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+.docs-search {
+  height: var(--control-height-sm);
+  width: 220px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-2) 0 var(--space-6);
+  font-size: var(--fs-xs);
+  color: var(--text-primary);
+  outline: none;
+}
+.docs-search:focus {
+  border-color: var(--color-primary);
+}
+
+.docs-main {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  /* ★ 根因修复(2026-09-21)：原 height: calc(100% - 180px) 用魔法数猜头部高度，
+       猜错即整体溢出且被 .content-body overflow:hidden 永久裁剪（底部不可达、
+       tab-bar 被 flex 压缩到 1px）。改为 flex 弹性分配，高度由真实布局决定。 */
+  height: auto;
+  min-height: 0;
+  flex: 1;
+}
+/* ★ 根因修复(2026-09-21)：补齐高度链 —— wrapper 允许收缩、tab-bar 不参与压缩、
+     激活面板接管剩余高度并成为唯一滚动 owner（消除双层裁剪与底部不可达）。 */
+.docs-wrapper { min-height: 0; }
+.docs-wrapper .tab-bar { flex-shrink: 0; }
+.docs-wrapper .tab-panel.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* 左侧文档列表：面板内自滚，列表短时贴顶（不再靠面板拉伸撑出底部空白） */
+.docs-wrapper .docs-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+}
+.docs-grid-panel,
+.docs-preview-panel {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.docs-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-default);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  flex-shrink: 0;
+}
+.docs-panel-hint {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  font-weight: var(--fw-regular);
+}
+
+.docs-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-3);
+  align-content: start;
+}
+.docs-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-4);
+  color: var(--text-tertiary);
+  font-size: var(--fs-small);
+}
+.docs-empty-sub {
+  font-size: var(--fs-micro);
+  opacity: 0.7;
+}
+
+.doc-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.doc-card:hover {
+  border-color: var(--color-primary-border);
+  background: var(--color-primary-soft);
+  transform: translateY(-1px);
+}
+.doc-card.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+.doc-card-icon {
+  width: 36px;
+  height: 36px;
+  background: var(--color-primary-soft);
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--color-primary);
+  font-size: 16px;
+}
+/* 原始数据 - 青色 */
+.doc-card-icon.icon-raw { background: var(--step1-soft); border-color: var(--step1-border); color: var(--step1-color); }
+/* 过程产物 - 紫色 */
+.doc-card-icon.icon-proc { background: var(--step2-soft); border-color: var(--step2-border); color: var(--step2-color); }
+/* 测试结果 - 橙色（与紫色区分度更高） */
+.doc-card-icon.icon-test { background: var(--state-warning-soft); border-color: var(--state-warning-border); color: var(--state-warning); }
+.doc-card-body {
+  flex: 1;
+  min-width: 0;
+}
+.doc-card-title {
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-card-desc {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-card-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+}
+.doc-card-badge {
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  font-size: 9px;
+}
+.doc-card-delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  opacity: 0.5;
+  transition: opacity 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.doc-card:hover .doc-card-delete {
+  opacity: 1;
+}
+.doc-card-delete:hover {
+  background: var(--state-error-soft);
+}
+
+.docs-preview-body {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  line-height: var(--lh-relaxed);
+  color: var(--text-secondary);
+}
+.docs-preview-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--space-3);
+  color: var(--text-tertiary);
+  font-size: var(--fs-small);
+  font-family: var(--font-sans);
+}
+.docs-preview-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-size: var(--fs-small);
+}
+.docs-preview-loading::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--text-tertiary);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.preview-md {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-secondary);
+}
+.preview-md h1, .preview-md h2, .preview-md h3 {
+  color: var(--text-primary);
+  margin: var(--space-3) 0 var(--space-2);
+}
+.preview-md h1 { font-size: var(--fs-h1); }
+.preview-md h2 { font-size: var(--fs-h2); }
+.preview-md h3 { font-size: var(--fs-h3); }
+.preview-md code {
+  background: var(--bg-base);
+  padding: 1px 4px;
+  border-radius: var(--radius-xs);
+  font-size: var(--fs-xs);
+  color: var(--text-primary);
+}
+.preview-md pre {
+  background: var(--bg-base);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  margin: var(--space-2) 0;
+}
+/* ★ fix: 文件预览字段级配色（像日志那样），统一 JSON/MD 预览配色 */
+.preview-md pre code { color: var(--text-secondary); }       /* 默认文本：灰 */
+.preview-md .tok-key   { color: var(--color-primary); font-weight: var(--fw-semibold); }  /* 键名：主色 */
+.preview-md .tok-str   { color: var(--state-success-text); }  /* 字符串：绿 */
+.preview-md .tok-num   { color: var(--state-warning-text); }  /* 数字：橙 */
+.preview-md .tok-bool  { color: var(--state-info-text); }  /* 布尔：蓝 */
+.preview-md .tok-null  { color: var(--text-tertiary); }       /* null：灰 */
+.preview-md .tok-punct { color: var(--text-tertiary); }       /* 标点：灰 */
+.preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-xs);
+  border: 1px solid var(--text-tertiary);
+}
+.preview-table th,
+.preview-table td {
+  border: 1px solid var(--text-tertiary);
+  padding: var(--space-1) var(--space-2);
+  text-align: left;
+}
+.preview-table th {
+  background: var(--bg-surface);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.preview-image {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+  display: block;
+  margin: var(--space-2) 0;
+}
+.preview-tree {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+}
+.preview-tree ul {
+  list-style: none;
+  padding-left: var(--space-4);
+}
+.preview-tree li {
+  padding: 1px 0;
+}
+.preview-tree li::before {
+  content: '├─ ';
+  color: var(--text-tertiary);
+}
+
+@media (max-width: 1200px) {
+  .docs-stat-card { flex: 1 1 160px; min-width: 120px; }
+  .docs-main { grid-template-columns: 1fr; height: auto; }
+}
+@media (max-width: 768px) {
+  .docs-stat-card { flex: 1 1 140px; min-width: 100px; }
+}
+
+/* ★ 关系链路面板（07-05h）*/
+.docs-chain-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--color-primary-soft);
+  border: 1px solid var(--color-primary-glow);
+  border-radius: var(--radius-sm);
+  color: var(--color-primary);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.docs-chain-btn:hover {
+  background: var(--color-primary-tint);
+  border-color: var(--color-primary);
+}
+.docs-chain-btn.active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-hover);
+}
+
+.docs-chain-panel {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.docs-chain-loading {
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  text-align: center;
+  padding: 24px;
+}
+
+.docs-chain-section {
+  margin-bottom: 16px;
+}
+
+.docs-chain-section-title {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border-default);
+  padding-bottom: 4px;
+  margin-bottom: 8px;
+}
+
+.docs-chain-item {
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border-left: 2px solid var(--color-primary);
+  font-size: var(--fs-xs);
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.docs-chain-item:hover { background: var(--color-primary-soft); }
+
+.docs-chain-item-title {
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.docs-chain-item-meta {
+  color: var(--text-secondary);
+  font-size: var(--fs-micro);
+  font-family: var(--font-sans);
+}
+
+.docs-chain-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-medium);
+  margin-right: 4px;
+}
+.docs-chain-tag-req { background: var(--step2-soft); color: var(--step2-color); }
+.docs-chain-tag-case { background: var(--step3-soft); color: var(--step3-color); }
+.docs-chain-tag-slice { background: var(--state-info-tint); color: var(--state-info); }
+.docs-chain-tag-figma { background: var(--color-figma-soft); color: var(--color-figma); }
+.docs-chain-tag-api { background: var(--state-success-tint); color: var(--state-success); }
+.docs-chain-tag-db { background: var(--state-warning-tint); color: var(--state-warning); }
+
+.docs-chain-empty {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  font-style: italic;
+  padding: 16px;
+  text-align: center;
+}
+
+/* ════════════ 文档工具条（P2-6 H22/H23/H24/H26） ════════════ */
+.docs-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  flex-wrap: wrap;
+}
+.docs-toolbar .btn {
+  height: 30px;
+  padding: 0 10px;
+  font-size: var(--fs-small);
+}
+
+/* ════════════ 编辑态 textarea（P2-6 H25） ════════════ */
+.docs-edit-textarea {
+  width: 100%;
+  min-height: 480px;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  line-height: 1.6;
+  resize: vertical;
+}
+.docs-edit-textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-primary-soft);
+}
+.doc-card.batch-selected {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+</style>
+{% endblock %}
+{% block title %}文档中心 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+文档中心
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnRefreshDocs" data-perm="docs.view" data-tooltip="刷新文档列表与存储统计" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  刷新
+</button>
+<a class="btn-topbar" href="/nav-tree" data-perm="docs.view" data-tooltip="查看系统导航功能清单（Excel 导出）" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+  导航树
+</a>
+<button class="btn-topbar" id="btnDownloadTestCases" data-perm="docs.export" data-tooltip="下载测试用例 Excel" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+  测试用例
+</button>
+<button class="btn-topbar" id="btnDownloadSmoke" data-perm="docs.export" data-tooltip="下载冒烟用例 Excel" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+  冒烟用例
+</button>
+<a class="btn-topbar" href="/file-upload" data-perm="file.upload" data-tooltip="跳转至文件上传页面" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+  上传文档
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="docs-wrapper">
+
+<!-- ════════════════════════════════════════════════════════════════════
+     T03 / P1-2：5 Tab 文档工作台
+     —— 「文件浏览」面板完整保留原有 DOM 与样式（一个字节都不动），
+        仅在其外层包一个 .tab-panel；新增 4 个面板作为兄弟节点追加，
+        全部由 /static/docs-workbench.js 懒加载（首次激活才发请求）。
+     ════════════════════════════════════════════════════════════════════ -->
+<div class="tab-bar" id="docsTabBar" role="tablist">
+  <button type="button" class="tab-bar-item active" data-tab="files" role="tab" aria-selected="true">文件浏览</button>
+  <button type="button" class="tab-bar-item" data-tab="trace" role="tab" aria-selected="false">需求追溯</button>
+  <button type="button" class="tab-bar-item" data-tab="coverage" role="tab" aria-selected="false">覆盖缺口</button>
+  <button type="button" class="tab-bar-item" data-tab="smoke" role="tab" aria-selected="false">冒烟与资产</button>
+  <button type="button" class="tab-bar-item" data-tab="versions" role="tab" aria-selected="false">版本与变更</button>
+</div>
+
+<!-- ════════════ TAB 1: 文件浏览（原有内容原样保留） ════════════ -->
+<div class="tab-panel active" data-tab-panel="files">
+
+<!-- ════════════ LAYER 1: 存储统计概览 ════════════ -->
+<div class="docs-stats-row">
+  <div class="docs-stat-card">
+    <div class="docs-stat-label">总用量</div>
+    <div class="docs-stat-value docs-stat-total" id="docsStatTotal"><div class="skeleton skeleton-value"></div></div>
+    <div class="docs-stat-sub" id="docsStatFiles"><div class="skeleton skeleton-text narrow"></div></div>
+  </div>
+  <div class="docs-stat-card">
+    <div class="docs-stat-label">原始数据</div>
+    <div class="docs-stat-value docs-stat-raw" id="docsStatRaw"><div class="skeleton skeleton-value"></div></div>
+    <div class="docs-stat-sub" id="docsStatRawSub"><div class="skeleton skeleton-text narrow"></div></div>
+  </div>
+  <div class="docs-stat-card">
+    <div class="docs-stat-label">过程产物</div>
+    <div class="docs-stat-value docs-stat-proc" id="docsStatProc"><div class="skeleton skeleton-value"></div></div>
+    <div class="docs-stat-sub" id="docsStatProcSub"><div class="skeleton skeleton-text narrow"></div></div>
+  </div>
+  <div class="docs-stat-card">
+    <div class="docs-stat-label">测试结果</div>
+    <div class="docs-stat-value docs-stat-test" id="docsStatTest"><div class="skeleton skeleton-value"></div></div>
+    <div class="docs-stat-sub" id="docsStatTestSub"><div class="skeleton skeleton-text narrow"></div></div>
+  </div>
+  <div class="docs-stat-card">
+    <div class="docs-stat-label">版本数</div>
+    <div class="docs-stat-value docs-stat-ver" id="docsStatVer"><div class="skeleton skeleton-value"></div></div>
+    <div class="docs-stat-sub">历史版本</div>
+  </div>
+</div>
+
+<!-- ════════════ LAYER 2: 分类筛选 ════════════ -->
+<div class="docs-filter-row">
+  <div class="docs-tab active" data-cat="all">
+    <div class="docs-tab-dot docs-dt-primary"></div>
+    全部
+    <span class="docs-tab-count" id="cntAll">0</span>
+  </div>
+  <div class="docs-tab" data-cat="原始数据">
+    <div class="docs-tab-dot docs-dt-step1"></div>
+    原始数据
+    <span class="docs-tab-count" id="cntRaw">0</span>
+  </div>
+  <div class="docs-tab" data-cat="过程产物">
+    <div class="docs-tab-dot docs-dt-step2"></div>
+    过程产物
+    <span class="docs-tab-count" id="cntProc">0</span>
+  </div>
+  <div class="docs-tab" data-cat="测试结果">
+    <div class="docs-tab-dot docs-dt-step4"></div>
+    测试结果
+    <span class="docs-tab-count" id="cntTest">0</span>
+  </div>
+  <div class="docs-tab" data-cat="执行截图">
+    <div class="docs-tab-dot docs-dt-step5"></div>
+    执行截图
+    <span class="docs-tab-count" id="cntScreenshots">0</span>
+  </div>
+  <div class="docs-tab" data-cat="执行日志">
+    <div class="docs-tab-dot docs-dt-log"></div>
+    执行日志
+    <span class="docs-tab-count" id="cntLogs">0</span>
+  </div>
+  <div class="docs-search-wrapper">
+    <input type="text" id="docsSearch" class="docs-search" placeholder="搜索文档名 / 类型...">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  </div>
+  <!-- ★ P2-6 H22/H23/H24/H26: 文档工具条 -->
+  <div class="docs-toolbar">
+    <select id="docsSubdirSelect" class="docs-search docs-select-auto" title="按子目录浏览（H24）">
+      <option value="">按子目录浏览...</option>
+      <option value="过程产物/需求拆解">过程产物/需求拆解</option>
+      <option value="过程产物/测试用例">过程产物/测试用例</option>
+      <option value="执行截图">执行截图</option>
+      <option value="执行日志">执行日志</option>
+    </select>
+    <button type="button" class="btn btn-sm" id="btnXmindExport" data-perm="docs.view" title="生成 XMind 测试设计并下载（H22）">🧠 导出 XMind</button>
+    <button type="button" class="btn btn-sm docs-hide" id="btnBatchDelete" data-perm="admin" title="批量删除选中文件（H23）">🗑️ 批量删除</button>
+  </div>
+</div>
+
+<!-- ════════════ LAYER 3: 双栏布局（文档卡片 + 预览） ════════════ -->
+<div class="docs-main">
+  <!-- 左侧：文档卡片网格 -->
+  <div class="docs-grid-panel">
+    <div class="docs-panel-header">
+      <span>文档列表</span>
+      <span class="docs-panel-hint" id="docsGridHint">点击卡片预览</span>
+    </div>
+    <div class="docs-grid" id="docsGrid">
+      <div class="docs-empty" id="docsEmpty">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="docs-op-40"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <div>暂无文档</div>
+        <div class="docs-empty-sub">请先选择项目或上传数据源文档</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右侧：预览面板 -->
+  <div class="docs-preview-panel">
+    <div class="docs-panel-header">
+      <div class="docs-row-aic-g2">
+        <span id="previewTitle">文件预览</span>
+        <button class="docs-chain-btn docs-hide" id="docsChainBtn" type="button" data-tooltip="查看本文档关联的需求/切片/用例链路" data-tooltip-pos="bottom">
+          🔗 关系链路
+        </button>
+        <button class="docs-chain-btn docs-hide" id="btnEditPreview" type="button" data-perm="docs.edit" data-tooltip="编辑当前 Markdown/JSON 文档（H25）" data-tooltip-pos="bottom">
+          ✏️ 编辑
+        </button>
+      </div>
+      <span class="docs-panel-hint" id="previewHint">选择左侧文件</span>
+    </div>
+    <div class="docs-preview-body" id="previewBody">
+      <div class="docs-preview-empty">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="docs-op-30"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        <div>选择一个文件以预览内容</div>
+      </div>
+    </div>
+    <!-- ★ 关系链路展示面板（07-05h）-->
+    <div class="docs-chain-panel docs-hide" id="docsChainPanel">
+      <div class="docs-chain-loading">加载中...</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /tab-panel: files -->
+
+<!-- ════════════ TAB 2: 需求追溯矩阵 ════════════ -->
+<div class="tab-panel" data-tab-panel="trace">
+  <div id="traceSummaryHost"></div>
+  <div class="docs-panel-header docs-mt-4">
+    <span>需求追溯矩阵</span>
+    <span class="docs-row-aic-g3">
+      <label class="docs-panel-hint docs-row-aic-g6-cur">
+        <input type="checkbox" id="traceOnlyGap"> 仅看未覆盖
+      </label>
+      <button type="button" class="btn btn-sm" id="btnReload_trace" data-perm="docs.view">刷新</button>
+    </span>
+  </div>
+  <div class="docs-panel-hint docs-my-2">
+    API / DB / 设计页面 / 测试用例 四个维度，计数为 <strong>0</strong> 的单元格标红即为未覆盖；表格可横向滚动，需求 ID 列已冻结。
+  </div>
+  <div id="traceMatrixHost"></div>
+</div>
+
+<!-- ════════════ TAB 3: 覆盖缺口 ════════════ -->
+<div class="tab-panel" data-tab-panel="coverage">
+  <div id="covSummaryHost"></div>
+  <div class="docs-panel-header docs-mt-4">
+    <span>需求 → 用例覆盖明细</span>
+    <span class="docs-row-aic-g3">
+      <label class="docs-panel-hint docs-row-aic-g6-cur">
+        <input type="checkbox" id="covOnlyGap"> 仅看缺口
+      </label>
+      <button type="button" class="btn btn-sm" id="btnReload_coverage" data-perm="docs.view">刷新</button>
+    </span>
+  </div>
+  <div class="docs-panel-hint docs-my-2">
+    判定口径：用例数 ≥ 3 为「充分」，1~2 为「偏低」，0 为「缺口」（与后端 <code>/api/docs/coverage</code> 一致）。
+  </div>
+  <div id="covTableHost"></div>
+</div>
+
+<!-- ════════════ TAB 4: 冒烟与资产 ════════════ -->
+<div class="tab-panel" data-tab-panel="smoke">
+  <div class="docs-panel-header">
+    <span>冒烟用例与文档资产</span>
+    <span class="docs-row-aic-g2">
+      <button type="button" class="btn btn-sm" id="btnClearSmokeCache" data-perm="execution.run" title="清除冒烟用例 Excel 缓存（H21）">🧹 清除缓存</button>
+      <button type="button" class="btn btn-sm" id="btnReload_smoke" data-perm="docs.view">刷新</button>
+    </span>
+  </div>
+  <div id="smokeHost" class="docs-mt-3"></div>
+</div>
+
+<!-- ════════════ TAB 5: 版本与变更 ════════════ -->
+<div class="tab-panel" data-tab-panel="versions">
+  <div class="docs-panel-header">
+    <span>版本快照 / 变更对比 / 影响分析</span>
+    <span class="docs-row-aic-g3">
+      <select id="verDocType" class="docs-search docs-select-auto">
+        <option value="requirement">需求文档</option>
+        <option value="breakdown">需求拆解</option>
+        <option value="test_intents">测试用例</option>
+        <option value="yapi">API 文档</option>
+        <option value="db_schema">数据库结构</option>
+        <option value="figma">设计稿</option>
+      </select>
+      <button type="button" class="btn btn-sm" id="btnReload_versions" data-perm="docs.view">刷新</button>
+    </span>
+  </div>
+  <div id="verHost" class="docs-mt-3"></div>
+</div>
+
+<!-- ════════════ 下钻抽屉（与 diagnostics 复用同一套 .drilldown-* 样式） ════════════ -->
+<div class="drilldown-backdrop" id="docsDrawerBackdrop"></div>
+<aside class="drilldown-drawer" id="docsDrawer" role="dialog" aria-modal="true" aria-labelledby="docsDrawerTitle">
+  <div class="drilldown-header">
+    <span class="drilldown-title" id="docsDrawerTitle">明细</span>
+    <button type="button" class="drilldown-close" id="docsDrawerClose" aria-label="关闭">✕</button>
+  </div>
+  <div class="drilldown-body" id="docsDrawerBody"></div>
+</aside>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+
+<script>
+(function() {
+  'use strict';
+
+  var A = window._A = window._A || {};
+  var $ = A.$;
+  var escHtml = A.escHtml;
+  var api = A.dedupedApi || A.api;
+
+  var allFiles = [];
+  var currentCategory = 'all';
+  var currentSearch = '';
+  var currentSelectedPath = null;
+  // ★ P2-6 H25: 编辑态全局（供 loadPreview / initDocs 共享）
+  var _editPath = null;
+  var _editSourceHash = null;
+  var _editExt = null;
+
+  // doc_type 中文映射
+  var DOC_TYPE_NAMES = {
+    'requirement': '需求文档',
+    'confluence': 'Confluence 文档',
+    'yapi': 'YAPI 接口文档',
+    'db_schema': '数据库 Schema',
+    'figma': 'Figma 设计稿',
+    'xmind': 'XMind 设计',
+    'smoke': '冒烟测试',
+    'smoke_excel': '冒烟用例 Excel',
+    'smoke_intent': '冒烟意图',
+    'test_case': '测试用例',
+    'test_data_excel': '测试数据',
+    'report': '执行报告',
+    'upload_md': '上传 Markdown',
+    'upload_pdf': '上传 PDF',
+    'upload_docx': '上传 Word'
+  };
+
+  function getDocTypeName(dt) {
+    return DOC_TYPE_NAMES[dt] || dt || '未知';
+  }
+
+  function getCategoryIconClass(cat) {
+    if (cat === '原始数据') return 'icon-raw';
+    if (cat === '过程产物') return 'icon-proc';
+    if (cat === '测试结果') return 'icon-test';
+    return '';
+  }
+
+  // 数据驱动内联样式装配器：运行期依数据拼接 style，避免静态模板内联样式漂移
+  function dS(props) { return ' style="' + props + '"'; }
+
+  // 文件类型 → 颜色方案（每种扩展名独立颜色，统一走设计令牌）
+  var EXT_COLORS = {
+    '.md':   { bg: 'var(--step1-soft)',  border: 'var(--step1-border)',  color: 'var(--step1-color)' },          // 青色 - Markdown
+    '.png':  { bg: 'var(--state-success-soft)',  border: 'var(--state-success-border)',  color: 'var(--state-success-text)' },  // 绿色 - 图片
+    '.log':  { bg: 'var(--state-warning-soft)',  border: 'var(--state-warning-border)',  color: 'var(--state-warning-text)' },  // 黄色 - 日志
+    '.json': { bg: 'var(--step3-soft)', border: 'var(--step3-border)', color: 'var(--step3-color)' },             // 粉色 - JSON
+    '.xlsx': { bg: 'var(--step2-soft)', border: 'var(--step2-border)', color: 'var(--step2-color)' },             // 紫色 - Excel
+    '.xmind':{ bg: 'var(--step5-soft)', border: 'var(--step5-border)', color: 'var(--step5-color)' },             // 橙色 - XMind
+    '.html': { bg: 'var(--state-info-soft)', border: 'var(--state-info-border)', color: 'var(--state-info-text)' }, // 天蓝 - HTML
+  };
+
+  function getIconSvg(ext) {
+    var icons = {
+      '.md': '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+      '.json': '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>',
+      '.xlsx': '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>',
+      '.png': '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>',
+      '.log': '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+      '.xmind': '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33"/></svg>'
+    };
+    return icons[ext] || icons['.md'];
+  }
+
+  function getExtColor(ext) {
+    return EXT_COLORS[ext] || EXT_COLORS['.md'];
+  }
+
+  // ── 加载文件树 ──
+  async function loadFiles() {
+    var grid = $('docsGrid');
+    if (grid) {
+      grid.innerHTML = '<div class="docs-empty"><div class="docs-preview-loading"></div><div>正在加载文档列表...</div></div>';
+    }
+    var data = null;
+    try {
+      data = await api('GET', '/api/docs/files');
+    } catch (e) {
+      data = { error: '请求超时或网络异常' };
+    }
+    if (!data || data.error) {
+      if (grid) {
+        grid.innerHTML = '<div class="docs-empty"><div>' + escHtml((data && data.error) || '加载失败') + '</div><div class="docs-empty-sub">请检查项目是否已选择</div></div>';
+      }
+      return;
+    }
+    // 展开文件树为扁平列表
+    allFiles = [];
+    (data.tree || []).forEach(function(cat) {
+      if (cat.type === 'dir' && cat.children) {
+        cat.children.forEach(function(item) {
+          if (item.type === 'file') {
+            allFiles.push({
+              category: cat.name,
+              name: item.name,
+              path: item.path,
+              ext: item.ext,
+              size: item.size,
+              mtime: item.mtime,
+              icon: item.icon,
+              previewable: item.previewable,
+              editable: item.editable,
+              deletable: item.deletable,
+              source_url: item.source_url || ''
+            });
+          } else if (item.type === 'dir' && item.children) {
+            // 二级目录（如：测试结果/执行截图）
+            item.children.forEach(function(sub) {
+              allFiles.push({
+                category: cat.name,
+                subCategory: item.name,
+                name: sub.name,
+                path: sub.path,
+                ext: sub.ext,
+                size: sub.size,
+                mtime: sub.mtime,
+                icon: sub.icon,
+                previewable: sub.previewable,
+                editable: sub.editable,
+                deletable: sub.deletable,
+                source_url: sub.source_url || ''
+              });
+            });
+          }
+        });
+      }
+    });
+    renderGrid();
+    updateCounts();
+  }
+
+  // ── 加载存储统计 ──
+  async function loadStorageStats() {
+    // ★ 显示加载态
+    ['docsStatTotal', 'docsStatFiles', 'docsStatRaw', 'docsStatRawSub',
+     'docsStatProc', 'docsStatProcSub', 'docsStatTest', 'docsStatTestSub', 'docsStatVer'].forEach(function(id) {
+      var el = $(id);
+      if (el) el.innerHTML = '<span class="inline-loading"></span>';
+    });
+    var data = null;
+    try {
+      data = await A.api('GET', '/api/docs/storage-stats');
+    } catch (e) { data = null; }
+    // ★ 统计为后台刷新、非首屏阻塞；失败/无数据都给出明确空态，不再无限转圈（死等）
+    if (!data || data.error) {
+      var statErr = (data && data.error) || '统计加载失败';
+      ['docsStatTotal', 'docsStatRaw', 'docsStatProc', 'docsStatTest', 'docsStatVer'].forEach(function(id) {
+        var el = $(id);
+        if (el) el.textContent = '—';
+      });
+      ['docsStatFiles', 'docsStatRawSub', 'docsStatProcSub', 'docsStatTestSub'].forEach(function(id) {
+        var el = $(id);
+        if (el) el.textContent = statErr;
+      });
+      return;
+    }
+    var total = $('docsStatTotal');
+    if (total) total.textContent = (data.total_size_mb || 0) + ' MB';
+    $('docsStatFiles').textContent = (data.total_files || 0) + ' 个文件';
+    var dirs = data.directories || {};
+    function setStat(el, sub, key, label) {
+      var d = dirs[key];
+      if (d) {
+        $(el).textContent = d.files > 0 ? d.size_mb + ' MB' : '—';
+        $(sub).textContent = d.files + ' 个' + (label ? ' ' + label : '');
+      } else {
+        $(el).textContent = '—';
+        $(sub).textContent = '0 个';
+      }
+    }
+    setStat('docsStatRaw', 'docsStatRawSub', '原始数据', '');
+    // 过程产物 = 需求 + 意图
+    var procFiles = (dirs['过程产物-需求'] || {}).files + (dirs['过程产物-意图'] || {}).files;
+    var procSize = (dirs['过程产物-需求'] || {}).size_mb + (dirs['过程产物-意图'] || {}).size_mb;
+    $('docsStatProc').textContent = procFiles > 0 ? procSize + ' MB' : '—';
+    $('docsStatProcSub').textContent = procFiles + ' 个产物';
+    // 测试结果 = 截图 + 日志
+    var testFiles = (dirs['测试结果-截图'] || {}).files + (dirs['测试结果-日志'] || {}).files;
+    var testSize = (dirs['测试结果-截图'] || {}).size_mb + (dirs['测试结果-日志'] || {}).size_mb;
+    $('docsStatTest').textContent = testFiles > 0 ? testSize + ' MB' : '—';
+    $('docsStatTestSub').textContent = testFiles + ' 个结果';
+    $('docsStatVer').textContent = data.version_count || 0;
+  }
+
+  // ── 渲染网格 ──
+  function renderGrid() {
+    var grid = $('docsGrid');
+    if (!grid) return;
+    var filtered = allFiles.filter(function(f) {
+      if (currentCategory !== 'all' && f.category !== currentCategory) return false;
+      if (currentSearch) {
+        var kw = currentSearch.toLowerCase();
+        if (f.name.toLowerCase().indexOf(kw) < 0 &&
+            getDocTypeName(f.path.split('/').pop()).toLowerCase().indexOf(kw) < 0) {
+          return false;
+        }
+      }
+      return true;
+    });
+    if (filtered.length === 0) {
+      grid.innerHTML = '<div class="docs-empty"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="docs-op-40"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><div>未找到匹配的文档</div><div class="docs-empty-sub">尝试更改筛选条件或搜索关键词</div></div>';
+      $('docsGridHint').textContent = '0 个文件';
+      return;
+    }
+    $('docsGridHint').textContent = filtered.length + ' 个文件 · 点击预览';
+    // ★ 使用批量渲染，避免阻塞主线程
+    var html = filtered.map(function(f) {
+      var dtName = f.path.indexOf('source_documents/') >= 0
+        ? getDocTypeName(f.path.split('source_documents/').pop())
+        : (f.subCategory || f.category);
+      var isActive = currentSelectedPath === f.path ? ' active' : '';
+      var c = getExtColor(f.ext);
+      var iconStyle = 'background:' + c.bg + ';border-color:' + c.border + ';color:' + c.color + ';';
+      var deleteBtn = f.deletable
+        ? '<button class="doc-card-delete" data-path="' + escHtml(f.path) + '" title="删除" onclick="event.stopPropagation();">🗑️</button>'
+        : '';
+      return '<div class="doc-card' + isActive + '" data-path="' + escHtml(f.path) + '" data-ext="' + escHtml(f.ext) + '" data-previewable="' + (f.previewable ? '1' : '0') + '" data-source_url="' + escHtml(f.source_url || '') + '" data-tooltip="' + (f.source_url ? '来源: ' + escHtml(f.source_url) : '点击预览文档内容') + '" data-tooltip-pos="top">' +
+        ('<div class="doc-card-icon"' + dS(iconStyle) + '>' + getIconSvg(f.ext) + '</div>' +
+        '<div class="doc-card-body">' +
+          '<div class="doc-card-title">' + escHtml(dtName) + '</div>' +
+          '<div class="doc-card-desc">' + escHtml(f.name) + '</div>' +
+          '<div class="doc-card-meta">' +
+            '<span class="doc-card-badge"' + dS('color:' + c.color) + '>' + escHtml(f.ext) + '</span>' +
+            (f.mtime ? '<span>' + escHtml(f.mtime) + '</span>' : '') +
+            (f.source_url ? '<span class="doc-card-url" title="' + escHtml(f.source_url) + '">🔗</span>' : '') +
+          '</div>' +
+        '</div>' +
+        deleteBtn +
+      '</div>');
+    }).join('');
+    // ★ 修复：将生成的 html 写入 grid（原代码遗漏此行，导致 grid 一直显示"正在加载文档列表..."）
+    grid.innerHTML = html;
+    // 绑定点击
+    grid.querySelectorAll('.doc-card').forEach(function(card) {
+      card.addEventListener('click', function() {
+        var path = this.getAttribute('data-path');
+        var ext = this.getAttribute('data-ext');
+        var previewable = this.getAttribute('data-previewable') === '1';
+        var sourceUrl = this.getAttribute('data-source_url') || '';
+        // 高亮选中
+        grid.querySelectorAll('.doc-card').forEach(function(c) { c.classList.remove('active'); });
+        this.classList.add('active');
+        currentSelectedPath = path;
+        if (previewable) {
+          loadPreview(path, ext, sourceUrl);
+        } else {
+          showPreviewEmpty('该文件类型不支持预览');
+        }
+        // ★ 文档选中后显示关系链路按钮（07-05h）
+        showChainButton(path);
+      });
+    });
+    // 绑定删除按钮
+    grid.querySelectorAll('.doc-card-delete').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        var path = this.getAttribute('data-path');
+        if (!(await A.confirm('确定删除该文件？此操作不可恢复。', { danger: true }))) return;
+        try {
+          var resp = await fetch('/api/docs/delete', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: path })
+          });
+          var d = await resp.json();
+          if (d && d.ok) {
+            loadFiles();
+            loadStorageStats();
+          } else {
+            A.toast('删除失败: ' + (d && d.error || '未知错误'), 'error');
+          }
+        } catch (e) {
+          A.toast('删除请求失败: ' + e, 'error');
+        }
+      });
+    });
+    // ★ 布局优化(2026-08-31)：预览面板默认空态会造成大面积留白。
+    //   尚未选中任何文件时，自动选中首个可预览文件来填充预览面板。
+    if (!currentSelectedPath) {
+      var firstPreviewCard = grid.querySelector('.doc-card[data-previewable="1"]');
+      if (firstPreviewCard) {
+        currentSelectedPath = firstPreviewCard.getAttribute('data-path');
+        firstPreviewCard.classList.add('active');
+        loadPreview(
+          currentSelectedPath,
+          firstPreviewCard.getAttribute('data-ext'),
+          firstPreviewCard.getAttribute('data-source_url') || ''
+        );
+        showChainButton(currentSelectedPath);
+      }
+    }
+  }
+  function updateCounts() {
+    var cnt = { all: 0, raw: 0, proc: 0, test: 0, screenshots: 0, logs: 0 };
+    allFiles.forEach(function(f) {
+      cnt.all++;
+      if (f.category === '原始数据') cnt.raw++;
+      else if (f.category === '过程产物') cnt.proc++;
+      else if (f.category === '测试结果') cnt.test++;
+      else if (f.category === '执行截图') cnt.screenshots++;
+      else if (f.category === '执行日志') cnt.logs++;
+    });
+    $('cntAll').textContent = cnt.all;
+    $('cntRaw').textContent = cnt.raw;
+    $('cntProc').textContent = cnt.proc;
+    $('cntTest').textContent = cnt.test;
+    $('cntScreenshots').textContent = cnt.screenshots;
+    $('cntLogs').textContent = cnt.logs;
+  }
+
+  // ── 加载预览 ──
+  async function loadPreview(path, ext, sourceUrl) {
+    var body = $('previewBody');
+    var title = $('previewTitle');
+    var hint = $('previewHint');
+    if (!body) return;
+    body.innerHTML = '<div class="docs-preview-loading"></div>';
+    title.textContent = '加载中...';
+    // ★ 07-08: 显示来源 URL（如果有）
+    hint.textContent = sourceUrl ? '来源: ' + sourceUrl : path;
+    // ★ P2-6 H25: 记录当前预览路径与扩展名，控制编辑按钮显隐
+    _editPath = path;
+    _editExt = ext;
+    var editBtn = $('btnEditPreview');
+    if (editBtn) {
+      var extLower = (ext || '').toLowerCase();
+      var editable = (extLower === '.md' || extLower === '.json');
+      editBtn.style.display = editable ? 'inline-flex' : 'none';
+      editBtn.textContent = '✏️ 编辑';
+    }
+    var data = await api('GET', '/api/docs/preview?path=' + encodeURIComponent(path));
+    if (!data || data.error) {
+      body.innerHTML = '<div class="docs-preview-empty"><div>' + escHtml((data && data.error) || '预览失败') + '</div></div>';
+      title.textContent = '预览失败';
+      return;
+    }
+    title.textContent = path.split('/').pop();
+    hint.textContent = (data.size || 0) + ' 字节 · ' + (data.type || ext) + (sourceUrl ? ' · 来源: ' + sourceUrl : '');
+    renderPreview(data, body, ext, path);
+  }
+
+  // ★ fix: JSON 字段级语法高亮（像日志那样），返回带 span 的 HTML 字符串
+  function highlightJson(obj) {
+    var jsonStr = JSON.stringify(obj, null, 2);
+    // 转义 HTML 特殊字符
+    jsonStr = jsonStr.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // 按字段类型着色：键名、字符串、数字、布尔、null、标点
+    return jsonStr.replace(
+      /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false)\b|\bnull\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?|[{}\[\],:])/g,
+      function(match) {
+        var cls = 'tok-punct';
+        if (/^"/.test(match)) {
+          if (/:$/.test(match)) {
+            cls = 'tok-key';           // 键名（带冒号）
+          } else {
+            cls = 'tok-str';            // 字符串值
+          }
+        } else if (/^(true|false)$/.test(match)) {
+          cls = 'tok-bool';
+        } else if (/^null$/.test(match)) {
+          cls = 'tok-null';
+        } else if (/^-?\d/.test(match)) {
+          cls = 'tok-num';
+        }
+        return '<span class="' + cls + '">' + match + '</span>';
+      }
+    );
+  }
+
+  // ★ fix: YAPI 接口文档格式化渲染 — 一接口一行 + 显示原文/美化切换
+  function renderYapiPreview(data, body) {
+    var raw = data.data;
+    // ★ YAPI 有两种存储：
+    //   - yapi (文本版): content 是 Markdown 字符串，json.loads 失败后 data 为字符串
+    //   - yapi_structured (结构化版): content 是 JSON，data 为 {project, interfaces, summary}
+    var apis = [];
+    if (typeof raw === 'string') {
+      // 文本版：尝试解析为 JSON，失败则无法格式化，提示用户查看结构化版
+      try {
+        var parsed = JSON.parse(raw);
+        raw = parsed;
+      } catch (e) {
+        // 纯文本 Markdown，无法一接口一行
+        body.innerHTML = '<div class="docs-preview-empty">此为 YAPI 文本版（用于 AI 需求拆解），不支持接口级格式化。<br>请预览 <b>yapi_structured (结构化版)</b> 查看一接口一行视图。</div>';
+        return;
+      }
+    }
+    if (Array.isArray(raw)) {
+      apis = raw;
+    } else if (raw && Array.isArray(raw.interfaces)) {
+      apis = raw.interfaces;           // yapi_structured 标准结构
+    } else if (raw && Array.isArray(raw.list)) {
+      apis = raw.list;                  // 兼容 YAPI 原生 list 字段
+    } else if (raw && typeof raw === 'object') {
+      apis = [raw];                     // 单个接口对象
+    }
+
+    // 工具栏：显示原文 / 一键美化
+    var html = '<div class="docs-tool-row">';
+    html += '<button class="docs-toggle-btn" id="yapiToggleBtn" type="button">一键美化</button>';
+    html += '<span class="docs-count-label" id="yapiCount">' + apis.length + ' 个接口</span>';
+    html += '</div>';
+
+    // 原文区（默认隐藏，切换显示）— 同样应用字段级高亮
+    html += '<pre class="preview-md yapi-raw docs-hide"><code>' + highlightJson(raw).substring(0, 50000) + '</code></pre>';
+
+    // 美化区（默认显示）：一接口一行卡片
+    html += '<div class="yapi-formatted">';
+    if (apis.length === 0) {
+      html += '<div class="docs-preview-empty">无可解析的接口数据</div>';
+    } else {
+      apis.forEach(function(api, i) {
+        var method = (api.method || api.RequestMethod || 'GET').toUpperCase();
+        var path = api.path || api.Path || api.url || '';
+        var title = api.title || api.desc || api.description || api.name || '';
+        var cat = api.cat || api.category || api.catname || '';
+        var methodColor = {
+          'GET': 'var(--state-success-text)',
+          'POST': 'var(--color-primary)',
+          'PUT': 'var(--state-warning-text)',
+          'DELETE': 'var(--state-error-text)',
+          'PATCH': 'var(--state-info-text)'
+        }[method] || 'var(--text-secondary)';
+        var methodBg = {
+          'GET': 'var(--state-success-soft)',
+          'POST': 'var(--color-primary-soft)',
+          'PUT': 'var(--state-warning-soft)',
+          'DELETE': 'var(--state-error-soft)',
+          'PATCH': 'var(--state-info-soft)'
+        }[method] || 'var(--border-default)';
+
+        html += '<div class="yapi-api-row docs-api-row">';
+        html += '<span class="docs-api-method"' + dS('background:' + methodBg + ';color:' + methodColor) + '>' + escHtml(method) + '</span>';
+        html += '<span class="docs-api-path" title="' + escHtml(path) + '">' + escHtml(path) + '</span>';
+        if (title) {
+          html += '<span class="docs-api-title" title="' + escHtml(title) + '">' + escHtml(title) + '</span>';
+        }
+        if (cat) {
+          html += '<span class="docs-api-cat">[' + escHtml(cat) + ']</span>';
+        }
+        html += '</div>';
+      });
+    }
+    html += '</div>';
+
+    body.innerHTML = html;
+
+    // 切换按钮逻辑
+    var toggleBtn = document.getElementById('yapiToggleBtn');
+    var rawEl = body.querySelector('.yapi-raw');
+    var fmtEl = body.querySelector('.yapi-formatted');
+    var isFormatted = true;
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', function() {
+        isFormatted = !isFormatted;
+        if (isFormatted) {
+          rawEl.style.display = 'none';
+          fmtEl.style.display = 'block';
+          toggleBtn.textContent = '显示原文';
+        } else {
+          rawEl.style.display = 'block';
+          fmtEl.style.display = 'none';
+          toggleBtn.textContent = '一键美化';
+        }
+      });
+      // 初始按钮文案
+      toggleBtn.textContent = '显示原文';
+    }
+  }
+
+  function renderPreview(data, body, ext, path) {
+    if (data.type === 'markdown') {
+      body.innerHTML = '<div class="preview-md">' + escHtml(data.content || '').substring(0, 50000) + '</div>';
+    } else if (data.type === 'json') {
+      // ★ fix: YAPI 接口文档走专用格式化渲染（一接口一行 + 美化切换）
+      if (path && (path.indexOf('yapi') >= 0 || path.indexOf('YAPI') >= 0)) {
+        renderYapiPreview(data, body);
+      } else {
+        body.innerHTML = '<pre class="preview-md"><code>' + highlightJson(data.data).substring(0, 50000) + '</code></pre>';
+      }
+    } else if (data.type === 'excel') {
+      var sheets = data.sheets || [];
+      var html = '';
+      sheets.forEach(function(s) {
+        html += '<div class="docs-sheet-row"><div class="docs-sheet-label">Sheet: ' + escHtml(s.name) + ' (' + s.rows.length + ' 行)</div>';
+        html += '<table class="preview-table"><thead><tr>';
+        if (s.rows[0]) {
+          s.rows[0].forEach(function(c) { html += '<th>' + escHtml(c) + '</th>'; });
+        }
+        html += '</tr></thead><tbody>';
+        s.rows.slice(1, 50).forEach(function(r) {
+          html += '<tr>';
+          r.forEach(function(c) { html += '<td>' + escHtml(c) + '</td>'; });
+          html += '</tr>';
+        });
+        html += '</tbody></table></div>';
+      });
+      body.innerHTML = html || '<div class="docs-preview-empty">空表格</div>';
+    } else if (data.type === 'xmind') {
+      function renderTree(node, depth) {
+        if (!node) return '';
+        var html = '<li>' + escHtml(node.title || '');
+        if (node.children && node.children.length) {
+          html += '<ul>';
+          node.children.forEach(function(c) { html += renderTree(c, depth + 1); });
+          html += '</ul>';
+        }
+        html += '</li>';
+        return html;
+      }
+      body.innerHTML = '<div class="preview-tree"><ul>' + renderTree(data.tree, 0) + '</ul></div>';
+    } else if (data.type === 'image') {
+      body.innerHTML = '<img class="preview-image" src="' + escHtml(data.data_url) + '" alt="截图预览">';
+    } else if (data.type === 'binary') {
+      body.innerHTML = '<div class="docs-preview-empty"><div>二进制文件 · ' + escHtml(data.ext || ext) + '</div><div>' + (data.size || 0) + ' 字节</div></div>';
+    } else {
+      body.innerHTML = '<div class="docs-preview-empty">不支持预览此类型</div>';
+    }
+  }
+
+  function showPreviewEmpty(msg) {
+    var body = $('previewBody');
+    if (body) body.innerHTML = '<div class="docs-preview-empty"><div>' + escHtml(msg || '选择左侧文件以预览内容') + '</div></div>';
+    $('previewTitle').textContent = '文件预览';
+    $('previewHint').textContent = '选择左侧文件';
+  }
+
+  // ★ 关系链路展开/折叠（07-05h）
+  var _docsChainExpanded = false;
+
+  async function toggleDocsChain() {
+    var panel = $('docsChainPanel');
+    var btn = $('docsChainBtn');
+    if (!panel || !btn) return;
+
+    _docsChainExpanded = !_docsChainExpanded;
+
+    if (_docsChainExpanded) {
+      panel.style.display = 'block';
+      btn.classList.add('active');
+      panel.innerHTML = '<div class="docs-chain-loading">加载中...</div>';
+
+      // 当前文档路径
+      var docPath = window._currentDocPath || '';
+      if (!docPath) {
+        panel.innerHTML = '<div class="docs-chain-empty">请先选择文档</div>';
+        return;
+      }
+
+      try {
+        // 通过文档路径查找关联需求
+        // 支持两种模式：
+        // 1. 顶层文档: mysql://figma_pages / mysql://source_documents/confluence → 匹配 slice_id 前缀 = doc_type
+        // 2. 具体文件: ... → 原有的名称匹配逻辑
+        var r = await A.api('GET', '/api/requirements');
+        if (r && r.requirements) {
+          // 提取文档路径信息
+          var matchedReqs = [];
+          if (docPath.startsWith('mysql://figma_pages')) {
+            // 顶层 figma_pages → 匹配所有需求中 slice_id 前缀为 figma_pages 或 doc_type = figma_pages
+            matchedReqs = r.requirements.filter(function(req) {
+              var sliceId = req.slice_id || '';
+              var sourceAnchor = req.source_anchor || '';
+              return sliceId.startsWith('figma_pages:') || sourceAnchor.startsWith('figma_pages:');
+            });
+          } else if (docPath.startsWith('mysql://source_documents/')) {
+            // 顶层 source_documents/doc_type → doc_type = 文档名
+            var docType = docPath.split('/').pop() || '';
+            matchedReqs = r.requirements.filter(function(req) {
+              var sliceId = req.slice_id || '';
+              var sourceAnchor = req.source_anchor || '';
+              return sliceId.startsWith(docType + ':') || sourceAnchor.startsWith(docType + ':');
+            });
+          } else if (docPath.startsWith('mysql://requirements')) {
+            // 需求汇总 → 全部需求都在这个文档里，显示全部（最多20条）
+            matchedReqs = r.requirements.slice(0, 20);
+          } else if (docPath.startsWith('mysql://test_cases')) {
+            // 测试用例汇总 → 关系链路从用例反查需求，不在这里处理
+            panel.innerHTML = '<div class="docs-chain-empty">测试用例汇总文档，请在测试用例页面查看关系链路</div>';
+            return;
+          } else {
+            // 普通文件 → 原名称匹配逻辑
+            var docName = docPath.split('/').pop() || docPath;
+            matchedReqs = r.requirements.filter(function(req) {
+              var anchor = req.source_anchor || req.module || '';
+              return anchor.indexOf(docName) >= 0 || anchor.indexOf(docPath) >= 0;
+            });
+          }
+
+          if (matchedReqs.length === 0) {
+            panel.innerHTML = '<div class="docs-chain-empty">未找到与本文档关联的需求</div>';
+            return;
+          }
+
+          // 对每个需求调用 /api/trace/req/<id> 获取完整链路
+          var allChains = [];
+          // 限制最多10条避免 API 调用过多
+          var sliceReqs = matchedReqs.slice(0, 10);
+          // ★ 性能修复：改并行请求，避免串行 for-await 导致 10 次串行往返
+          // 配合后端 _get_requirement 单条 SQL 优化，整体从 ~10×全表扫描 降到 1×并行
+          var chainPromises = sliceReqs.map(function(r) {
+            return A.api('GET', '/api/trace/req/' + encodeURIComponent(r.req_id))
+              .then(function(tr) { return (tr && !tr.error) ? tr : null; })
+              .catch(function() { return null; });
+          });
+          var chainResults = await Promise.all(chainPromises);
+          chainResults.forEach(function(tr) { if (tr) allChains.push(tr); });
+
+          renderDocsChain(allChains, panel);
+        } else {
+          panel.innerHTML = '<div class="docs-chain-empty">无需求数据</div>';
+        }
+      } catch (e) {
+        panel.innerHTML = '<div class="docs-chain-empty">异常: ' + A.escHtml(String(e)) + '</div>';
+      }
+    } else {
+      panel.style.display = 'none';
+      btn.classList.remove('active');
+    }
+  }
+
+  function renderDocsChain(chains, panel) {
+    var html = '';
+
+    // 汇总所有需求
+    var allReqs = [];
+    chains.forEach(function(c) { if (c.requirement) allReqs.push(c.requirement); });
+    if (allReqs.length > 0) {
+      html += '<div class="docs-chain-section">';
+      html += '<div class="docs-chain-section-title">关联需求 (' + allReqs.length + ')</div>';
+      allReqs.forEach(function(r) {
+        html += '<div class="docs-chain-item" data-req-id="' + A.escAttr(r.req_id) + '">';
+        html += '<span class="docs-chain-tag docs-chain-tag-req">REQ</span>';
+        html += '<span class="docs-chain-item-title">' + A.escHtml(r.req_id) + '</span>';
+        if (r.operation) html += '<div class="docs-chain-item-meta">操作: ' + A.escHtml(r.operation.slice(0, 50)) + '</div>';
+        if (r.feature_label) html += '<div class="docs-chain-item-meta">功能: ' + A.escHtml(r.feature_label) + '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    // 汇总所有切片
+    var allSlices = [];
+    chains.forEach(function(c) { if (c.slice && c.slice.slice_id) allSlices.push(c.slice); });
+    if (allSlices.length > 0) {
+      html += '<div class="docs-chain-section">';
+      html += '<div class="docs-chain-section-title">需求切片 (' + allSlices.length + ')</div>';
+      allSlices.forEach(function(s) {
+        html += '<div class="docs-chain-item">';
+        html += '<span class="docs-chain-tag docs-chain-tag-slice">SLICE</span>';
+        html += '<span class="docs-chain-item-title">' + A.escHtml(s.slice_id) + '</span>';
+        if (s.section) html += '<div class="docs-chain-item-meta">章节: ' + A.escHtml(s.section) + '</div>';
+        html += '<div class="docs-chain-item-meta">' + (s.char_count || 0) + '字</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    // ★ H1: 汇总原文档来源（source_documents）
+    var allSrcDocs = [];
+    chains.forEach(function(c) { if (c.source_document && c.source_document.doc_type) allSrcDocs.push(c.source_document); });
+    if (allSrcDocs.length > 0) {
+      var _seen = {};
+      allSrcDocs = allSrcDocs.filter(function(d) { var k=d.doc_type; if(_seen[k])return false; _seen[k]=true; return true; });
+      html += '<div class="docs-chain-section">';
+      html += '<div class="docs-chain-section-title">原文档来源 (' + allSrcDocs.length + ')</div>';
+      allSrcDocs.forEach(function(d) {
+        html += '<div class="docs-chain-item">';
+        html += '<span class="docs-chain-tag">DOC</span>';
+        html += '<span class="docs-chain-item-title">' + A.escHtml(d.filename || d.doc_type) + '</span>';
+        if (d.category) html += '<div class="docs-chain-item-meta">分类: ' + A.escHtml(d.category) + '</div>';
+        if (d.source_url) html += '<div class="docs-chain-item-meta"><a href="' + A.escAttr(d.source_url) + '" target="_blank" rel="noopener">查看原文档 ↗</a></div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    // 汇总所有用例
+    var allCases = [];
+    chains.forEach(function(c) { if (c.test_cases) Array.prototype.push.apply(allCases, c.test_cases); });
+    if (allCases.length > 0) {
+      html += '<div class="docs-chain-section">';
+      html += '<div class="docs-chain-section-title">测试用例 (' + allCases.length + ')</div>';
+      // 限制显示前20条
+      var showCases = allCases.slice(0, 20);
+      // ★ 归一化(2026-08-04): 方法论/分类与 action/check taxonomy 对齐展示
+      var _TAXONOMY_CAT = {
+        mouse: '鼠标操作', form: '表单输入', keyboard: '键盘操作',
+        navigation: '页面导航', advanced: '高级交互',
+        import_export: '导入导出工作流', verification: '断言校验'
+      };
+      function _taxonomyLabel(v) {
+        if (!v) return '';
+        var s = String(v).toLowerCase().trim();
+        if (_TAXONOMY_CAT[s]) return _TAXONOMY_CAT[s];
+        if (/(check|verify|assert|style|toast|refresh|position|download|element_|text_|url_|api_|db_|no_error)/.test(s)) return '断言校验';
+        return '';
+      }
+      showCases.forEach(function(c) {
+        html += '<div class="docs-chain-item">';
+        html += '<span class="docs-chain-tag docs-chain-tag-case">CASE</span>';
+        html += '<span class="docs-chain-item-title">' + A.escHtml(c.case_id) + '</span>';
+        html += '<div class="docs-chain-item-meta">' + A.escHtml((c.title || '').slice(0, 60)) + '</div>';
+        if (c.test_method) {
+          html += '<div class="docs-chain-item-meta">方法论: ' + A.escHtml(c.test_method) + '</div>';
+          var _tcat = _taxonomyLabel(c.test_method);
+          if (_tcat) html += '<div class="docs-chain-item-meta">体系分类: ' + _tcat + '</div>';
+        }
+        html += '</div>';
+      });
+      if (allCases.length > 20) {
+        html += '<div class="docs-chain-empty">...还有 ' + (allCases.length - 20) + ' 条用例</div>';
+      }
+      html += '</div>';
+    }
+
+    if (!html) {
+      html = '<div class="docs-chain-empty">暂无关联关系数据</div>';
+    }
+
+    panel.innerHTML = html;
+  }
+
+  // 文档选中时显示链路按钮
+  function showChainButton(docPath) {
+    window._currentDocPath = docPath;
+    var btn = $('docsChainBtn');
+    if (btn) {
+      btn.style.display = docPath ? 'inline-flex' : 'none';
+      btn.classList.remove('active');
+    }
+    var panel = $('docsChainPanel');
+    if (panel) {
+      panel.style.display = 'none';
+    }
+    _docsChainExpanded = false;
+  }
+
+  // ── 初始化 ──
+  // ★ 防重入标志：避免 initDocs 被执行两次（A._currentUser 恢复时一次 + _onAuthOk 一次）
+  // 重复执行会发起重复 API 请求 + 重复渲染，导致页面加载卡顿
+  var _docsInitStarted = false;
+  function initDocs() {
+    if (_docsInitStarted) return;
+    _docsInitStarted = true;
+    // ★ 立即显示骨架屏，避免白屏
+    var grid = $('docsGrid');
+    if (grid) A.skeleton(grid, 'list');
+    $('cntAll').textContent = '...';
+    $('cntRaw').textContent = '...';
+    $('cntProc').textContent = '...';
+    $('cntTest').textContent = '...';
+    $('cntScreenshots').textContent = '...';
+    $('cntLogs').textContent = '...';
+    // 筛选标签
+    document.querySelectorAll('.docs-tab').forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        document.querySelectorAll('.docs-tab').forEach(function(t) { t.classList.remove('active'); });
+        this.classList.add('active');
+        currentCategory = this.getAttribute('data-cat');
+        renderGrid();
+      });
+    });
+    // 搜索
+    var search = $('docsSearch');
+    if (search) {
+      search.addEventListener('input', function() {
+        currentSearch = this.value.trim();
+        renderGrid();
+      });
+    }
+    // ★ P2-6 H26: 服务端全文搜索（防抖 300ms，仅当关键词 ≥2 字符时触发）
+    var serverSearchTimer = null;
+    if (search) {
+      search.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          var q = search.value.trim();
+          if (q.length >= 2) {
+            serverSearchDocs(q);
+          }
+        }
+      });
+    }
+    function serverSearchDocs(q) {
+      A.api('GET', '/api/docs/search?q=' + encodeURIComponent(q) + '&type=all').then(function(r) {
+        if (!r || !r.ok) {
+          if (A.toast) A.toast((r && r.error) || '搜索失败', 'error');
+          return;
+        }
+        var results = r.results || [];
+        var grid = $('docsGrid');
+        if (!grid) return;
+        if (results.length === 0) {
+          grid.innerHTML = '<div class="docs-empty"><div>未找到匹配的文档</div></div>';
+          return;
+        }
+        var html = results.map(function(x) {
+          var name = x.name || '';
+          var snippet = x.snippet || '';
+          var ext = (name.split('.').pop() || 'md');
+          var dotExt = '.' + ext.toLowerCase();
+          var c = getExtColor(dotExt);
+          return '<div class="doc-card" data-path="" data-ext="' + escHtml(dotExt) + '">' +
+            '<div class="doc-card-icon"' + dS('background:' + c.bg + ';border-color:' + c.border + ';color:' + c.color) + '>' + getIconSvg(dotExt) + '</div>' +
+            '<div class="doc-card-body">' +
+              '<div class="doc-card-title">' + escHtml(name) + '</div>' +
+              '<div class="doc-card-desc">' + escHtml(snippet) + '</div>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+        grid.innerHTML = html;
+      });
+    }
+    // ★ P2-6 H24: 子目录浏览 — GET /api/docs/file-list?dir=
+    var subdirSelect = $('docsSubdirSelect');
+    if (subdirSelect) {
+      subdirSelect.addEventListener('change', function() {
+        var dir = subdirSelect.value;
+        if (!dir) { loadFiles(); return; }
+        A.api('GET', '/api/docs/file-list?dir=' + encodeURIComponent(dir)).then(function(r) {
+          if (!r || !r.ok) {
+            if (A.toast) A.toast((r && r.error) || '子目录加载失败', 'error');
+            return;
+          }
+          var files = r.files || [];
+          var grid = $('docsGrid');
+          if (!grid) return;
+          if (files.length === 0) {
+            grid.innerHTML = '<div class="docs-empty"><div>子目录为空</div></div>';
+            return;
+          }
+          var html = files.map(function(name) {
+            var ext = (name.split('.').pop() || 'xlsx');
+            var dotExt = '.' + ext.toLowerCase();
+            var c = getExtColor(dotExt);
+            return '<div class="doc-card" data-path="" data-ext="' + escHtml(dotExt) + '">' +
+              '<div class="doc-card-icon"' + dS('background:' + c.bg + ';border-color:' + c.border + ';color:' + c.color) + '>' + getIconSvg(dotExt) + '</div>' +
+              '<div class="doc-card-body">' +
+                '<div class="doc-card-title">' + escHtml(name) + '</div>' +
+                '<div class="doc-card-desc">' + escHtml(dir) + '</div>' +
+              '</div>' +
+            '</div>';
+          }).join('');
+          grid.innerHTML = html;
+        });
+      });
+    }
+    // ★ P2-6 H22: 导出 XMind — POST /api/docs/xmind-design（下载）
+    var xmindBtn = $('btnXmindExport');
+    if (xmindBtn) {
+      xmindBtn.addEventListener('click', function() {
+        A.withBtnLoading(xmindBtn, '生成中...', function() {
+          return fetch('/api/docs/xmind-design', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+          }).then(function(resp) {
+            var ct = resp.headers.get('Content-Type') || '';
+            if (ct.indexOf('application/json') >= 0) {
+              return resp.json().then(function(r) {
+                if (A.toast) A.toast((r && r.error) || 'XMind 生成失败', 'error');
+                return null;
+              });
+            }
+            return resp.blob().then(function(blob) {
+              var url = URL.createObjectURL(blob);
+              var a = document.createElement('a');
+              a.href = url;
+              a.download = 'xmind-design.xmind';
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+              if (A.toast) A.toast('XMind 已生成并开始下载', 'success');
+              return null;
+            });
+          }).catch(function(e) {
+            if (A.toast) A.toast('XMind 导出失败: ' + e, 'error');
+            return null;
+          });
+        });
+      });
+    }
+    // ★ P2-6 H23: 批量删除 — 支持多选 + POST /api/docs/batch-delete
+    var batchBtn = $('btnBatchDelete');
+    if (batchBtn) {
+      batchBtn.addEventListener('click', function() {
+        var sel = Array.prototype.slice.call(document.querySelectorAll('.doc-card.batch-selected'));
+        if (sel.length === 0) {
+          if (A.toast) A.toast('请先勾选要删除的文件（点击卡片右上角选择）', 'warning');
+          return;
+        }
+        var paths = sel.map(function(c) { return c.getAttribute('data-path'); }).filter(Boolean);
+        if (paths.length === 0) {
+          if (A.toast) A.toast('所选文件不支持批量删除（仅支持截图/日志/文档）', 'warning');
+          return;
+        }
+        A.confirm('确定删除选中的 ' + paths.length + ' 个文件？此操作不可恢复。', {
+          danger: true,
+          title: '批量删除文件',
+          warning: '该操作会从 MySQL 中永久删除所选文件记录。'
+        }).then(function(ok) {
+          if (!ok) return;
+          A.api('POST', '/api/docs/batch-delete', { paths: paths }).then(function(r) {
+            if (r && r.ok) {
+              if (A.toast) A.toast('已删除 ' + (r.deleted || 0) + ' 个，失败 ' + (r.failed || 0) + ' 个', 'success');
+              batchBtn.style.display = 'none';
+              loadFiles();
+              loadStorageStats();
+            } else {
+              if (A.toast) A.toast((r && r.error) || '批量删除失败', 'error');
+            }
+          });
+        });
+      });
+      // 网格卡片多选（长按 Ctrl/Shift 点击切换选择态）
+      document.addEventListener('click', function(e) {
+        var card = e.target.closest('.doc-card');
+        if (!card) return;
+        if (e.ctrlKey || e.shiftKey) {
+          e.stopPropagation();
+          card.classList.toggle('batch-selected');
+          var cnt = document.querySelectorAll('.doc-card.batch-selected').length;
+          batchBtn.style.display = cnt > 0 ? 'inline-flex' : 'none';
+          if (cnt > 0) batchBtn.textContent = '🗑️ 批量删除 (' + cnt + ')';
+        }
+      });
+    }
+    // ★ P2-6 H21: 清除冒烟缓存 — POST /api/docs/smoke-intents/clear
+    var clearSmokeBtn = $('btnClearSmokeCache');
+    if (clearSmokeBtn) {
+      clearSmokeBtn.addEventListener('click', function() {
+        A.withBtnLoading(clearSmokeBtn, '清理中...', function() {
+          return A.api('POST', '/api/docs/smoke-intents/clear', {}).then(function(r) {
+            if (r && r.ok) {
+              if (A.toast) A.toast(r.message || '缓存已清除', 'success');
+              return null;
+            }
+            if (A.toast) A.toast((r && r.error) || '清除失败', 'error');
+            return null;
+          });
+        });
+      });
+    }
+    // ★ P2-6 H25: 编辑/保存 Markdown/JSON — POST /api/docs/save（乐观锁）
+    var editBtn = $('btnEditPreview');
+    if (editBtn) {
+      editBtn.addEventListener('click', function() {
+        if (!_editPath) return;
+        var body = $('previewBody');
+        if (editBtn.textContent.indexOf('保存') >= 0) {
+          // 保存模式
+          var ta = $('editPreviewTextarea');
+          if (!ta) return;
+          var content = ta.value;
+          A.withBtnLoading(editBtn, '保存中...', function() {
+            return A.api('POST', '/api/docs/save', {
+              path: _editPath,
+              content: content,
+              source_hash: _editSourceHash || ''
+            }).then(function(r) {
+              if (r && r.ok) {
+                if (A.toast) A.toast('已保存 ' + (r.size || 0) + ' 字节', 'success');
+                editBtn.textContent = '✏️ 编辑';
+                loadPreview(_editPath, _editExt || '.md', '');
+                return null;
+              }
+              if (r && r.conflict) {
+                if (A.toast) A.toast(r.error || '文件已被他人修改', 'error');
+                _editSourceHash = r.current_hash || _editSourceHash;
+                return null;
+              }
+              if (A.toast) A.toast((r && r.error) || '保存失败', 'error');
+              return null;
+            });
+          });
+          return;
+        }
+        // 进入编辑模式：读取当前预览内容 → textarea
+        var data = null;
+        A.api('GET', '/api/docs/preview?path=' + encodeURIComponent(_editPath)).then(function(d) {
+          if (!d || d.error) {
+            if (A.toast) A.toast((d && d.error) || '加载失败', 'error');
+            return;
+          }
+          data = d;
+          _editSourceHash = d.source_hash || '';
+          var content = (d.type === 'json') ? JSON.stringify(d.data, null, 2) : (d.content || '');
+          body.innerHTML = '<textarea id="editPreviewTextarea" class="docs-edit-textarea" spellcheck="false">' + escHtml(content) + '</textarea>';
+          editBtn.textContent = '💾 保存';
+          var ta = $('editPreviewTextarea');
+          if (ta) ta.focus();
+        });
+      });
+    }
+    // 刷新按钮
+    var refreshBtn = $('btnRefreshDocs');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', function() {
+        A.withBtnLoading(refreshBtn, '刷新中...', async function() {
+          await Promise.all([loadFiles(), loadStorageStats()]);
+        });
+      });
+    }
+    // 下载测试用例 Excel
+    var dlCasesBtn = $('btnDownloadTestCases');
+    if (dlCasesBtn) {
+      dlCasesBtn.addEventListener('click', function() {
+        window.open('/api/docs/file?path=mysql://test_cases', '_blank');
+      });
+    }
+    // 下载冒烟用例 Excel
+    var dlSmokeBtn = $('btnDownloadSmoke');
+    if (dlSmokeBtn) {
+      dlSmokeBtn.addEventListener('click', function() {
+        window.open('/api/docs/file?path=mysql://source_documents/smoke_excel', '_blank');
+      });
+    }
+    // ★ 关系链路按钮绑定（07-05h）
+    var docsChainBtn = $('docsChainBtn');
+    if (docsChainBtn) {
+      docsChainBtn.addEventListener('click', function() {
+        A.withBtnLoading(docsChainBtn, '加载中...', toggleDocsChain);
+      });
+    }
+    // ★ 首屏只等轻量文件树（docsGrid 内容）；存储统计为非阻塞后台刷新——
+    //   文件树到即上屏，统计卡片就其自身节奏更新，不参与首屏等待（对照 charts 页 metrics-summary 教训）。
+    loadFiles();
+    loadStorageStats();
+  }
+
+  // 接入鉴权回调
+  A._onAuthOk = function() {
+    A._renderSidebarUser();
+    A.applyPermissions();
+    initDocs();
+    A._startStepBadgePolling();
+  };
+
+  // 已登录用户直接初始化
+  if (A._currentUser) {
+    initDocs();
+  }
+})();
+</script>
+<!-- T03/P1-2：5 Tab 工作台（Tab2~Tab5 的数据加载与渲染，懒加载） -->
+<script src="{{ static_ver('docs-workbench.js') }}"></script>
+{% endblock %}

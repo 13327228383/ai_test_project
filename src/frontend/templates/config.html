@@ -1,0 +1,2454 @@
+{% extends "_layout_base.html" %}
+{% block title %}项目配置 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+项目配置
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnSaveConfig" data-perm="project.config.edit" data-tooltip="保存当前修改的配置字段&#10;写入 project_configs 表并按项目隔离" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+  保存配置
+</button>
+<button class="btn-topbar" id="btnReloadConfig" data-perm="project.config.view" data-tooltip="重新从数据库加载配置&#10;会覆盖当前未保存的修改" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  重新加载
+</button>
+<a class="btn-topbar" href="/config-history" id="btnConfigHistory" data-perm="project.config.history" data-tooltip="查看配置变更历史&#10;支持按版本回滚" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  配置历史
+</a>
+<button class="btn-topbar" id="btnCopyCred" data-perm="project.config.edit" data-tooltip="从其他项目复制凭证（账密/Key）到当前项目&#10;仅填充空字段，不覆盖已有值" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+  复制凭证
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="config-wrapper">
+
+<!-- ════════════ 项目信息栏 ════════════ -->
+<div class="cfg-info-bar">
+  <div class="cfg-info-item">
+    <span class="cfg-info-label tooltip-wide" data-tooltip="配置字段&#10;取值逻辑：/api/config 返回的字段总数&#10;默认值：0&#10;大小影响：反映当前项目配置完整度" data-tooltip-pos="right">配置字段</span>
+    <span class="cfg-info-value" id="fieldCount">0</span>
+  </div>
+</div>
+
+<div class="cfg-scroll-area">
+<!-- ════════════ 数据源配置 Tab 面板 ════════════ -->
+<div class="cfg-section-wrap" id="datasourceSection" hidden>
+  <div class="cfg-section-title">数据源配置<span class="cfg-section-hint">项目接入所需的外部资源</span></div>
+  <div class="ds-tab-panel mt-4">
+    <div class="ds-tab-nav" id="dsTabNav"></div>
+    <div class="ds-tab-body" id="dsTabBody"></div>
+  </div>
+</div>
+
+<!-- ════════════ 模型配置 ════════════ -->
+<div class="cfg-section-wrap" id="modelConfigSection" hidden>
+  <div class="cfg-section-title">模型配置<span class="cfg-section-hint">AI 模型选择与连接</span></div>
+
+  <!-- 信息栏：含嵌入模型 -->
+  <div class="mc-info-bar mt-4">
+    <div class="mc-info-item">
+      <span class="mc-info-label">模型来源</span>
+      <span class="mc-info-value mc-info-primary" id="curProvider">-</span>
+    </div>
+    <div class="mc-info-item">
+      <span class="mc-info-label">主模型</span>
+      <span class="mc-info-value" id="curModel">-</span>
+    </div>
+    <div class="mc-info-item">
+      <span class="mc-info-label">校验模型</span>
+      <span class="mc-info-value" id="curVerifyModel">-</span>
+    </div>
+    <div class="mc-info-item">
+      <span class="mc-info-label">嵌入模型</span>
+      <span class="mc-info-value" id="curEmbedModel">-</span>
+    </div>
+    <div class="mc-info-item">
+      <span class="mc-info-label">视觉模型</span>
+      <span class="mc-info-value" id="curVisionModel">-</span>
+    </div>
+  </div>
+
+  <!-- 主面板 -->
+  <div class="mc-section">
+    <div class="mc-tab-nav" id="tabNav">
+      <div class="mc-tab-item active" data-tab="cloud-api">云端API</div>
+      <div class="mc-tab-item" data-tab="task">任务模型</div>
+      <div class="mc-tab-item" data-tab="verification">校验模型</div>
+      <div class="mc-tab-item" data-tab="embed">嵌入模型</div>
+      <div class="mc-tab-item" data-tab="vision">视觉模型</div>
+    </div>
+
+    <div class="mc-tab-body">
+      <!-- TAB: 云端API -->
+      <div class="mc-tab-content active" id="tab-cloud-api">
+        <div class="mc-form-section">
+          <div class="mc-form-section-title">连接设置</div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>API 密钥</span><span class="mc-label-hint">必填</span></div>
+            <input type="text" class="mc-form-input" id="apiKeyInput" placeholder="输入 API Key">
+          </div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>接口地址</span></div>
+            <input type="text" class="mc-form-input" id="baseUrlInput" placeholder="https://api.deepseek.com">
+          </div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>模型来源</span><span class="mc-label-hint" id="providerHint">连接测试后自动识别</span></div>
+            <input type="text" class="mc-form-input mc-provider-input" id="providerInput" readonly placeholder="点击「连接测试」自动识别">
+          </div>
+        </div>
+
+        <div class="mc-connection-row">
+          <button class="mc-btn-test" id="btnTestConnection" type="button">连接测试</button>
+          <button class="mc-btn-test" id="btnPreviewModels" type="button">拉取模型列表</button>
+          <button class="mc-btn-primary mc-btn-save-inline" id="btnSaveCloudApi" type="button">保存连接</button>
+          <div class="mc-connection-status">
+            <div class="mc-status-dot" id="statusDot"></div>
+            <span class="mc-status-label" id="statusLabel">未测试</span>
+          </div>
+        </div>
+
+        <div class="mc-form-section mt-5">
+          <div class="mc-form-section-title">测试结果</div>
+          <div class="mc-test-result" id="testResult">点击"连接测试"按钮验证 API 配置</div>
+          <div class="mc-models-list" id="modelsList" hidden>
+            <div class="mc-models-list-title">已拉取模型列表</div>
+            <div class="mc-models-list-grid">
+              <div class="mc-models-group"><div class="mc-models-group-title">任务模型</div><div class="mc-models-group-body" id="mlTask">-</div></div>
+              <div class="mc-models-group"><div class="mc-models-group-title">校验模型</div><div class="mc-models-group-body" id="mlVerify">-</div></div>
+              <div class="mc-models-group"><div class="mc-models-group-title">视觉模型</div><div class="mc-models-group-body" id="mlVision">-</div></div>
+              <div class="mc-models-group"><div class="mc-models-group-title">嵌入模型</div><div class="mc-models-group-body" id="mlEmbed">-</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: 任务模型 -->
+      <div class="mc-tab-content" id="tab-task">
+        <div class="mc-form-section">
+          <div class="mc-form-section-title">任务模型配置</div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>模型来源</span><span class="mc-label-hint">云端 / Ollama 本地</span></div>
+            <div class="mc-radio-group" id="taskProviderRadios">
+              <label class="mc-radio-label"><input type="radio" name="task-provider" value="cloud"><span class="mc-radio-dot"></span><span class="mc-radio-text">云端</span></label>
+              <label class="mc-radio-label"><input type="radio" name="task-provider" value="ollama"><span class="mc-radio-dot"></span><span class="mc-radio-text">Ollama 本地</span></label>
+            </div>
+          </div>
+          <div class="mc-form-divider"></div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>当前选择</span><span class="mc-label-hint" id="taskModelHint">加载中...</span></div>
+            <select class="mc-form-select" id="taskModelSelect"><option value="">加载中...</option></select>
+          </div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>模型定价</span></div>
+            <div class="mc-pricing-info" id="taskPricing">-</div>
+          </div>
+        </div>
+        <div class="mc-action-row"><button class="mc-btn-primary" id="btnSaveTaskModel" type="button">保存任务模型</button></div>
+      </div>
+
+      <!-- TAB: 校验模型 -->
+      <div class="mc-tab-content" id="tab-verification">
+        <div class="mc-form-section">
+          <div class="mc-form-section-title">校验模型配置</div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>模型来源</span><span class="mc-label-hint">云端 / Ollama 本地</span></div>
+            <div class="mc-radio-group" id="verifyProviderRadios">
+              <label class="mc-radio-label"><input type="radio" name="verify-provider" value="cloud"><span class="mc-radio-dot"></span><span class="mc-radio-text">云端</span></label>
+              <label class="mc-radio-label"><input type="radio" name="verify-provider" value="ollama"><span class="mc-radio-dot"></span><span class="mc-radio-text">Ollama 本地</span></label>
+            </div>
+          </div>
+          <div class="mc-form-divider"></div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>当前选择</span><span class="mc-label-hint" id="verifyModelHint">加载中...</span></div>
+            <select class="mc-form-select" id="verifyModelSelect"><option value="">加载中...</option></select>
+          </div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>模型定价</span></div>
+            <div class="mc-pricing-info" id="verifyPricing">-</div>
+          </div>
+        </div>
+        <div class="mc-action-row"><button class="mc-btn-primary" id="btnSaveVerifyModel" type="button">保存校验模型</button></div>
+      </div>
+
+      <!-- TAB: 嵌入模型 -->
+      <div class="mc-tab-content" id="tab-embed">
+        <div class="mc-form-section">
+          <div class="mc-form-section-title">嵌入模型配置</div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>模型来源</span></div>
+            <div class="mc-radio-group" id="embedProviderRadios">
+              <label class="mc-radio-label"><input type="radio" name="embed-provider" value="disk" checked><span class="mc-radio-dot"></span><span class="mc-radio-text">磁盘模型</span></label>
+              <label class="mc-radio-label"><input type="radio" name="embed-provider" value="ollama"><span class="mc-radio-dot"></span><span class="mc-radio-text">Ollama 本地</span></label>
+              <label class="mc-radio-label"><input type="radio" name="embed-provider" value="cloud"><span class="mc-radio-dot"></span><span class="mc-radio-text">云端</span></label>
+            </div>
+          </div>
+          <div class="mc-form-divider"></div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>嵌入模型</span><span class="mc-label-hint">由 provider 决定数据源</span></div>
+            <select class="mc-form-select" id="embedModelSelect"><option value="">加载中...</option></select>
+          </div>
+          <div class="mc-form-divider"></div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>当前配置</span></div>
+            <div class="mc-pricing-info" id="embedCurrentInfo">加载中...</div>
+          </div>
+        </div>
+        <div class="mc-action-row"><button class="mc-btn-primary" id="btnSaveEmbedModel" type="button">保存嵌入模型</button></div>
+      </div>
+
+      <!-- TAB: 视觉模型 -->
+      <div class="mc-tab-content" id="tab-vision">
+        <div class="mc-form-section">
+          <div class="mc-form-section-title">视觉模型配置</div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>启用视觉模型</span><span class="mc-label-hint">关闭后将跳过所有视觉相关检查</span></div>
+            <div class="mc-toggle-row">
+              <div class="mc-toggle" id="visionToggle"><div class="mc-toggle-knob"></div></div>
+              <span class="mc-toggle-label" id="visionToggleLabel">已关闭</span>
+            </div>
+          </div>
+          <div class="mc-form-divider"></div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>模型来源</span><span class="mc-label-hint">云端 / Ollama 本地</span></div>
+            <div class="mc-radio-group" id="visionProviderRadios">
+              <label class="mc-radio-label"><input type="radio" name="vision-provider" value="cloud"><span class="mc-radio-dot"></span><span class="mc-radio-text">云端</span></label>
+              <label class="mc-radio-label"><input type="radio" name="vision-provider" value="ollama"><span class="mc-radio-dot"></span><span class="mc-radio-text">Ollama 本地</span></label>
+            </div>
+          </div>
+          <div class="mc-form-divider"></div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>视觉模型选择</span><span class="mc-label-hint" id="visionModelHint">加载中...</span></div>
+            <select class="mc-form-select" id="visionModelSelect"><option value="">加载中...</option></select>
+          </div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>视觉模型 API 密钥</span><span class="mc-label-hint">异构 provider 时必填（如视觉模型为 Gemini 但主 key 为 DeepSeek）</span></div>
+            <input class="mc-form-input" id="visionApiKeyInput" type="password" placeholder="留空则复用主 API 密钥" autocomplete="off">
+          </div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>视觉模型接口地址</span><span class="mc-label-hint">异构 provider 时必填（如 https://generativelanguage.googleapis.com）</span></div>
+            <input class="mc-form-input" id="visionBaseUrlInput" type="text" placeholder="留空则复用主接口地址" autocomplete="off">
+          </div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>模型定价</span></div>
+            <div class="mc-pricing-info" id="visionPricing">-</div>
+          </div>
+        </div>
+        <div class="mc-action-row"><button class="mc-btn-primary" id="btnSaveVisionModel" type="button">保存视觉模型</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ CI/CD 集成（P2-6 H7-H12 + M10） ════════════ -->
+<div class="cfg-section-wrap" id="ciSection" hidden>
+  <div class="cfg-section-title">CI/CD 集成<span class="cfg-section-hint">API Token / 模板 / Webhook</span></div>
+  <div class="ds-tab-panel mt-4">
+    <div class="ds-tab-nav" id="ciTabNav">
+      <div class="ds-tab-item active" data-ci-tab="token">Token 管理</div>
+      <div class="ds-tab-item" data-ci-tab="template">CI 模板</div>
+      <div class="ds-tab-item" data-ci-tab="webhook">Webhook</div>
+    </div>
+    <div class="ds-tab-body" id="ciTabBody">
+      <!-- Token 管理 -->
+      <div class="ds-tab-content active" id="ciTab-token">
+        <div class="ci-toolbar">
+          <button class="mc-btn-primary" id="btnCreateToken" type="button">签发 Token</button>
+          <span class="ci-hint">Token 明文仅显示一次，关闭后不可再查看</span>
+        </div>
+        <div class="ci-token-form" id="ciTokenForm" hidden>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>Token 名称</span></div>
+            <input type="text" class="mc-form-input" id="ciTokenLabel" placeholder="如 GitHub Actions CI" maxlength="255">
+          </div>
+          <div class="mc-form-group">
+            <div class="mc-form-label"><span>作用域（逗号分隔）</span></div>
+            <input type="text" class="mc-form-input" id="ciTokenScopes" placeholder="run" value="run">
+          </div>
+          <div class="mc-connection-row">
+            <button class="mc-btn-primary" id="btnCreateTokenConfirm" type="button">创建</button>
+            <button class="mc-btn-test" id="btnCancelTokenForm" type="button">取消</button>
+          </div>
+        </div>
+        <div class="ci-token-result" id="ciTokenResult" hidden>
+          <div class="mc-form-label"><span>明文 Token（仅此一次，请立即复制）</span></div>
+          <div class="ci-token-raw" id="ciTokenRaw"></div>
+          <div class="mc-connection-row">
+            <button class="mc-btn-primary" id="btnCopyToken" type="button">复制 Token</button>
+          </div>
+        </div>
+        <table class="ci-table" id="ciTokenTable">
+          <thead><tr><th>ID</th><th>名称</th><th>项目</th><th>作用域</th><th>状态</th><th>创建人</th><th>最近使用</th><th>操作</th></tr></thead>
+          <tbody id="ciTokenBody"><tr><td colspan="8" class="ci-empty">加载中...</td></tr></tbody>
+        </table>
+      </div>
+      <!-- CI 模板 -->
+      <div class="ds-tab-content" id="ciTab-template">
+        <div class="ci-toolbar">
+          <button class="mc-btn-test" id="btnJenkinsTemplate" type="button">生成 Jenkins Pipeline 配置</button>
+          <button class="mc-btn-test" id="btnGithubTemplate" type="button">生成 GitHub Actions 配置</button>
+        </div>
+        <div class="mc-form-group">
+          <div class="mc-form-label"><span>配置内容（只读，可复制）</span></div>
+          <textarea class="mc-form-input ci-template-output" id="ciTemplateOutput" rows="18" readonly placeholder="点击上方按钮生成 CI 配置..."></textarea>
+        </div>
+      </div>
+      <!-- Webhook -->
+      <div class="ds-tab-content" id="ciTab-webhook">
+        <div class="ci-hint" id="ciWebhookInfo">加载中...</div>
+        <div class="ci-webhook-endpoints" id="ciWebhookEndpoints"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+</div>
+
+<!-- ════════════ 操作栏（底部浮动） ════════════ -->
+<div class="cfg-action-bar" id="actionBar" hidden>
+  <span class="cfg-action-hint" id="dirtyHint">有未保存的修改</span>
+  <button class="cfg-btn-ghost" id="btnDiscard">放弃修改</button>
+  <button class="cfg-btn-primary" id="btnSaveAll">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    保存全部修改
+  </button>
+</div>
+
+</div>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ════════════ Full-Height Layout ════════════ */
+.content-body {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+.config-wrapper {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.cfg-info-bar {
+  flex-shrink: 0;
+  margin-bottom: 0;
+}
+.cfg-scroll-area {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ════════════ 项目配置页样式 ════════════ */
+.cfg-info-bar {
+  display: flex;
+  gap: 32px;
+  padding: 16px 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+.cfg-info-item { display: flex; flex-direction: column; gap: 4px; }
+.cfg-info-label { font-size: var(--fs-small); color: var(--text-secondary); }
+.cfg-info-value {
+  font-size: var(--fs-h3); font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.cfg-container {
+  display: flex; flex-direction: column;
+  gap: 16px;
+  padding-bottom: 80px;
+}
+
+.cfg-empty {
+  padding: 48px;
+  text-align: center;
+  color: var(--text-tertiary);
+}
+
+/* ── 配置分组卡片 ── */
+.cfg-group {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: visible;
+}
+/* Issue 3b: 分区容器 */
+.cfg-section-wrap {
+  margin-bottom: 24px;
+}
+.cfg-section-title {
+  font-size: var(--fs-h2);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  padding: 0 4px 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.cfg-section-hint {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-regular);
+  color: var(--text-tertiary);
+}
+.cfg-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cfg-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  user-select: none;
+}
+.cfg-section-header:hover { background: var(--bg-base); }
+.cfg-section-toggle {
+  color: var(--text-tertiary);
+  transition: transform 0.2s;
+}
+.cfg-section-header.expanded .cfg-section-toggle {
+  transform: rotate(180deg);
+}
+.cfg-section-runtime .cfg-section-title {
+  font-size: var(--fs-h3);
+}
+/* Issue 3c: 补充文件分组按钮 */
+.cfg-group-action .cfg-group-body {
+  padding: 16px 20px;
+}
+.cfg-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.cfg-action-btn:hover {
+  background: var(--color-primary);
+  color: white;
+}
+.cfg-group-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 20px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-default);
+  cursor: pointer;
+  user-select: none;
+}
+.cfg-group-header:hover { background: var(--bg-base); }
+/* ════════════ 治理原语：config 内联样式下沉 ════════════ */
+.mc-btn-save-inline { margin-left: var(--space-2); }
+.cfg-txt-tertiary { color: var(--text-tertiary); }
+.cfg-txt-success { color: var(--state-success); }
+.cfg-txt-error { color: var(--state-error); }
+.cfg-copy-cred-select { width: 100%; padding: 8px; margin: 8px 0; border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-primary); }
+.cfg-dialog-actions { display: flex; gap: var(--space-2); justify-content: flex-end; margin-top: var(--space-2); }
+.cfg-group-icon {
+  width: 28px; height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.cfg-group-title {
+  flex: 1;
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.cfg-group-count {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  padding: 2px 8px;
+  background: var(--bg-base);
+  border-radius: var(--radius-xs);
+}
+.cfg-group-toggle {
+  color: var(--text-tertiary);
+  transition: transform 0.2s;
+}
+.cfg-group.collapsed .cfg-group-toggle { transform: rotate(-90deg); }
+.cfg-group-body {
+  padding: 16px 20px;
+  display: grid;
+  /* ★ 2026-09-01：字段宽度按内容自适应（替代固定 320px 均分）
+     短字段并排、长字段独占，放不下自动换行 */
+  grid-template-columns: repeat(auto-fit, minmax(200px, max-content));
+  gap: 12px;
+  justify-content: start;
+}
+.cfg-group.collapsed .cfg-group-body { display: none; }
+
+/* ── 配置字段 ── */
+.cfg-field {
+  display: flex; flex-direction: column;
+  gap: 4px;
+}
+.cfg-field-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-weight: var(--fw-medium);
+}
+.cfg-field-key {
+  color: var(--text-primary);
+}
+.cfg-field-desc {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-weight: var(--fw-regular);
+}
+.cfg-field-input {
+  padding: 8px 12px;
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--fs-small);
+  font-family: var(--font-mono);
+  transition: border-color 0.15s;
+}
+.cfg-field-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+/* select 下拉框样式：确保文字可见 */
+select.cfg-field-input {
+  color: var(--text-primary);
+  background: var(--bg-base);
+  cursor: pointer;
+}
+select.cfg-field-input option {
+  color: var(--text-primary);
+  background: var(--bg-surface);
+}
+.cfg-field-input.dirty {
+  border-color: var(--state-warning);
+  background: var(--state-warning-soft);
+}
+.cfg-field-input[type="checkbox"] {
+  width: 18px; height: 18px;
+  margin: 4px 0;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+
+/* ── 操作栏 ── */
+.cfg-action-bar {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--surface-shadow-float);
+  z-index: 100;
+}
+.cfg-action-hint {
+  font-size: var(--fs-small);
+  color: var(--state-warning-text);
+}
+.cfg-btn-ghost {
+  padding: 8px 16px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-small);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.cfg-btn-ghost:hover { background: var(--bg-base); color: var(--text-primary); }
+.cfg-btn-primary {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px;
+  background: var(--color-primary);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.cfg-btn-primary:hover { background: var(--color-primary-hover); }
+
+/* ── 提示框 ── */
+.cfg-alert {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-small);
+  margin-bottom: 12px;
+  display: none;
+}
+.cfg-alert.show { display: block; }
+.cfg-alert.error {
+  background: var(--state-error-soft);
+  color: var(--state-error-text);
+  border: 1px solid var(--state-error-border);
+}
+.cfg-alert.success {
+  background: var(--state-success-soft);
+  color: var(--state-success-text);
+  border: 1px solid var(--state-success-border);
+}
+/* 复制凭证弹窗 */
+.cfg-copy-cred-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--bg-overlay); z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+}
+.cfg-copy-cred-dialog {
+  background: var(--surface); border-radius: 12px; padding: 24px;
+  min-width: 360px; max-width: 480px;
+  box-shadow: var(--surface-shadow-float);
+}
+.cfg-copy-cred-dialog h3 { margin: 0 0 8px; font-size: 16px; }
+.cfg-copy-cred-dialog p { margin: 0 0 12px; font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+
+/* ════════════ 模型配置 section ════════════ */
+.mc-info-bar {
+  display: flex; gap: 32px; flex-wrap: wrap;
+  padding: 16px 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+.mc-info-item { display: flex; flex-direction: column; gap: 4px; }
+.mc-info-label { font-size: var(--fs-small); color: var(--text-secondary); }
+.mc-info-value {
+  font-size: var(--fs-h3); font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+.mc-info-primary { color: var(--color-primary); }
+
+.mc-section {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--surface-shadow-float);
+  display: flex; flex-direction: column;
+  overflow: visible;
+  margin-bottom: 16px;
+}
+.mc-tab-nav {
+  display: flex; padding: 0 24px;
+  border-bottom: 1px solid var(--border-default);
+  gap: 0; flex-shrink: 0; overflow-x: auto;
+}
+.mc-tab-item {
+  padding: 12px 16px;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  white-space: nowrap; user-select: none;
+}
+.mc-tab-item:hover { color: var(--text-secondary); background: var(--border-faint); }
+.mc-tab-item.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+.mc-tab-item.loading { position: relative; }
+.mc-tab-item.loading::after {
+  content: '';
+  position: absolute; right: 6px; top: 50%;
+  transform: translateY(-50%);
+  width: 6px; height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--state-warning);
+  animation: mc-blink 1s infinite;
+}
+@keyframes mc-blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+.mc-tab-body { padding: 24px; overflow-y: overlay; scrollbar-width: thin; }
+.mc-tab-content { display: none; }
+.mc-tab-content.active { display: block; }
+
+.mc-form-section { margin-bottom: 24px; }
+.mc-form-section:last-child { margin-bottom: 0; }
+.mc-form-section-title {
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+.mc-form-section-title::after {
+  content: ''; flex: 1; height: 1px; background: var(--border-default);
+}
+.mc-form-group { margin-bottom: 16px; }
+.mc-form-group:last-child { margin-bottom: 0; }
+.mc-form-label {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px;
+}
+.mc-form-label span { font-size: var(--fs-small); font-weight: var(--fw-medium); color: var(--text-secondary); }
+.mc-label-hint { font-size: var(--fs-xs); color: var(--text-tertiary); font-weight: var(--fw-regular); }
+.mc-form-input, .mc-form-select {
+  width: 100%; height: var(--control-height);
+  padding: 0 12px;
+  border-radius: var(--control-radius);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.mc-form-input:focus, .mc-form-select:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+.mc-form-input::placeholder { color: var(--text-tertiary); }
+.mc-form-input[readonly] { background: var(--border-faint); color: var(--text-secondary); cursor: not-allowed; }
+.mc-form-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
+  padding-right: 32px; cursor: pointer;
+}
+.mc-input-password-wrap { position: relative; display: flex; align-items: center; }
+.mc-input-password-wrap .mc-form-input { padding-right: 40px; }
+.mc-toggle-visibility {
+  position: absolute; right: 4px;
+  width: 32px; height: 32px;
+  border-radius: var(--radius-sm);
+  border: none; background: transparent;
+  color: var(--text-tertiary); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: color 0.15s;
+}
+.mc-toggle-visibility:hover { color: var(--text-secondary); }
+.mc-connection-row {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 20px; padding: 16px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+}
+.mc-btn-test {
+  height: 32px; padding: 0 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-primary-border);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: var(--fs-small);
+  font-family: var(--font-sans);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: all 0.15s; white-space: nowrap;
+}
+.mc-btn-test:hover { background: var(--color-primary-soft); border-color: var(--color-primary-border); }
+.mc-btn-test:disabled { opacity: 0.5; cursor: not-allowed; }
+.mc-connection-status { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.mc-status-dot {
+  width: 8px; height: 8px; border-radius: var(--radius-full);
+  background: var(--text-tertiary); flex-shrink: 0;
+}
+.mc-status-dot.green { background: var(--state-success); box-shadow: 0 0 6px var(--state-success-border); }
+.mc-status-dot.yellow { background: var(--state-warning); box-shadow: 0 0 6px var(--state-warning-border); }
+.mc-status-dot.red { background: var(--state-error); box-shadow: 0 0 6px var(--state-error-border); }
+.mc-status-label { font-size: var(--fs-small); font-weight: var(--fw-medium); color: var(--text-tertiary); }
+.mc-status-label.green { color: var(--state-success-text); }
+.mc-status-label.yellow { color: var(--state-warning-text); }
+.mc-status-label.red { color: var(--state-error-text); }
+.mc-test-result {
+  padding: 12px 16px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-small); color: var(--text-secondary);
+  font-family: var(--font-mono); line-height: 1.6;
+  min-height: 60px; word-break: break-all;
+}
+.mc-provider-input { transition: border-color 0.2s, background 0.2s; }
+.mc-provider-input.is-identified { border-color: var(--state-success); background: var(--state-success-soft); color: var(--state-success-text); font-weight: var(--fw-semibold); }
+.mc-provider-input.is-unidentified { border-color: var(--state-warning); background: var(--state-warning-soft); color: var(--state-warning-text); }
+.mc-models-list {
+  margin-top: 12px; padding: 12px 16px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+.mc-models-list-title { font-size: var(--fs-xs); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; font-weight: var(--fw-semibold); }
+.mc-models-list-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+.mc-models-group {
+  flex: 1 1 200px; min-width: 160px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm); padding: 8px 10px;
+}
+.mc-models-group-title { font-size: var(--fs-micro); color: var(--color-primary); font-weight: var(--fw-semibold); margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px dashed var(--border-default); }
+.mc-models-group-body { font-family: var(--font-mono); font-size: var(--fs-micro); color: var(--text-secondary); line-height: 1.7; max-height: 140px; overflow-y: auto; word-break: break-all; }
+.mc-radio-group { display: flex; gap: 12px; flex-wrap: wrap; }
+.mc-radio-label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: var(--fs-small); color: var(--text-secondary);
+  cursor: pointer; user-select: none;
+  padding: 8px 16px; border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  transition: all 0.15s;
+}
+.mc-radio-label:hover { border-color: var(--border-hover); }
+.mc-radio-label input[type="radio"] { display: none; }
+.mc-radio-dot {
+  width: 16px; height: 16px; border-radius: var(--radius-full);
+  border: 2px solid var(--text-tertiary);
+  position: relative; transition: border-color 0.15s; flex-shrink: 0;
+}
+.mc-radio-dot::after {
+  content: ''; position: absolute; inset: 3px;
+  border-radius: var(--radius-full); background: var(--color-primary);
+  opacity: 0; transform: scale(0.5); transition: all 0.15s;
+}
+.mc-radio-label input[type="radio"]:checked + .mc-radio-dot { border-color: var(--color-primary); }
+.mc-radio-label input[type="radio"]:checked + .mc-radio-dot::after { opacity: 1; transform: scale(1); }
+.mc-radio-label:has(input:checked) { border-color: var(--color-primary-border); background: var(--color-primary-soft); }
+.mc-toggle-row { display: flex; align-items: center; gap: 8px; height: var(--control-height); }
+.mc-toggle { position: relative; width: 40px; height: 22px; background: var(--bg-elevated); border: 1px solid var(--border-default); border-radius: var(--radius-full); cursor: pointer; transition: all 0.2s; flex-shrink: 0; }
+.mc-toggle.on { background: var(--color-primary); border-color: var(--color-primary); }
+.mc-toggle-knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: var(--radius-full); background: var(--text-on-color); transition: left 0.2s; }
+.mc-toggle.on .mc-toggle-knob { left: 20px; }
+.mc-toggle-label { font-size: var(--fs-small); color: var(--text-secondary); }
+.mc-form-divider { height: 1px; background: var(--border-default); margin: 16px 0; }
+.mc-action-row { margin-top: 16px; display: flex; justify-content: flex-end; }
+.mc-btn-primary {
+  height: 36px; padding: 0 20px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: var(--text-inverse);
+  border: none;
+  font-size: var(--fs-small);
+  font-family: var(--font-sans);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.mc-btn-primary:hover { background: var(--color-primary-hover); }
+.mc-pricing-info { font-size: var(--fs-small); color: var(--text-secondary); font-family: var(--font-mono); }
+
+/* CONFLUENCE_URL 多输入框 */
+.cf-url-list { display: flex; flex-direction: column; gap: 6px; }
+.cf-url-row { display: flex; align-items: center; gap: 6px; }
+.cf-url-row .cfg-field-input { flex: 1; }
+.cf-url-btn {
+  width: 28px; height: 28px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default); background: var(--bg-elevated);
+  color: var(--text-secondary); cursor: pointer;
+  font-size: 16px; line-height: 1; display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; flex-shrink: 0;
+}
+.cf-url-btn:hover { background: var(--bg-hover); border-color: var(--border-hover); }
+.cf-url-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.cf-url-del { color: var(--state-error-text); }
+.cf-url-del:hover:not(:disabled) { background: var(--state-error-soft); }
+.cf-url-add {
+  width: auto; height: 28px; padding: 0 12px; margin-top: 6px;
+  font-size: var(--fs-small); color: var(--color-primary);
+  border-color: var(--color-primary-border);
+}
+.cf-url-add:hover { background: var(--color-primary-soft); }
+/* P0-7：示例地址提示行（系统配置项 CONFLUENCE_URL_EXAMPLE 为空时不渲染） */
+.cf-url-example { margin-top: 6px; font-size: 12px; color: var(--text-secondary); word-break: break-all; }
+.cfg-field-block { flex-direction: column; align-items: stretch; }
+.cfg-field-block .cfg-field-label { margin-bottom: 6px; }
+
+/* Confluence 分组专用：URL 全宽 + 其余字段紧凑 2x2 */
+.cfg-group[data-group="confluence"] .cfg-group-body {
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+}
+.cfg-group[data-group="confluence"] .cfg-field-block {
+  grid-column: 1 / -1;
+}
+
+/* YApi 分组：API_DOCS_URL 独占一行 */
+.cfg-group[data-group="yapi"] .cfg-group-body {
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+}
+.cfg-group[data-group="yapi"] .cfg-field:first-child {
+  grid-column: 1 / -1;
+}
+
+/* Figma 分组：FIGMA_URL 独占一行 */
+.cfg-group[data-group="figma"] .cfg-group-body {
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+}
+.cfg-group[data-group="figma"] .cfg-field:first-child {
+  grid-column: 1 / -1;
+}
+/* 窄屏下固定 2 列栅格收拢为单列，避免控件被挤压换行 */
+@media (max-width: 1000px) {
+  .cfg-group[data-group="confluence"] .cfg-group-body,
+  .cfg-group[data-group="yapi"] .cfg-group-body,
+  .cfg-group[data-group="figma"] .cfg-group-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 数据源 Tab 面板 */
+.ds-tab-panel { margin-bottom: 16px; }
+.ds-tab-nav {
+  display: flex; border-bottom: 1px solid var(--border-default);
+  gap: 0; overflow-x: auto;
+}
+.ds-tab-item {
+  padding: 10px 20px; font-size: var(--fs-small); font-weight: var(--fw-medium);
+  color: var(--text-tertiary); cursor: pointer; border-bottom: 2px solid transparent;
+  transition: all 0.15s; white-space: nowrap; user-select: none;
+}
+.ds-tab-item:hover { color: var(--text-secondary); }
+.ds-tab-item.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+.ds-tab-body { padding: 20px; }
+.ds-tab-content { display: none; }
+.ds-tab-content.active { display: block; }
+.ds-file-upload {
+  margin-bottom: 16px; padding: 12px 16px;
+  background: var(--bg-surface); border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+/* ════════════ CI/CD 集成样式 ════════════ */
+.ci-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.ci-hint {
+  font-size: var(--fs-small);
+  color: var(--text-tertiary);
+}
+.ci-token-form {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  background: var(--bg-elevated);
+}
+.ci-token-result {
+  border: 1px solid var(--state-warning);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  background: var(--state-warning-soft);
+}
+.ci-token-raw {
+  font-family: var(--font-mono);
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+  word-break: break-all;
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  margin: 8px 0;
+}
+.ci-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-small);
+}
+.ci-table th, .ci-table td {
+  border: 1px solid var(--border-default);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+.ci-table th {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-weight: var(--fw-semibold);
+}
+.ci-empty {
+  text-align: center;
+  color: var(--text-tertiary);
+  padding: 16px;
+}
+.ci-mono {
+  font-family: var(--font-mono);
+}
+.ci-btn-danger {
+  background: var(--state-error);
+  border: 1px solid transparent;
+  color: var(--text-on-color);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+.ci-btn-danger:hover { opacity: 0.9; }
+.ci-template-output {
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  min-height: 320px;
+}
+.ci-webhook-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  background: var(--bg-elevated);
+}
+.ci-webhook-name { flex: 1; font-size: var(--fs-small); }
+.ci-webhook-method {
+  font-size: var(--fs-micro);
+  font-family: var(--font-mono);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary-soft);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.ci-webhook-url { font-size: var(--fs-micro); color: var(--text-secondary); }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  'use strict';
+  var A = window._A;
+  if (!A) return;
+  var $ = A.$, esc = A.escHtml;
+
+  // ── 配置分组定义 ──
+  // ★ 项目配置 = 数据源配置（Tab 面板）+ 模型配置（嵌入式）
+  //    系统级配置 → 独立「系统配置」页面
+  var GROUPS = [
+    // ═══ 数据源配置（项目级，项目接入所需） ═══
+    // 排序：Confluence → 接口文档(YApi) → 被测系统 → 被测系统数据库 → Figma → 补充文件
+    {
+      id: 'confluence', title: 'Confluence 数据源', icon: 'book', section: 'datasource',
+      tabLabel: 'Confluence',
+      keys: ['CONFLUENCE_URL', 'CONFLUENCE_MODE', 'CONFLUENCE_USERNAME', 'CONFLUENCE_PAT']
+    },
+    {
+      id: 'yapi', title: '接口文档 (YApi)', icon: 'code', section: 'datasource',
+      tabLabel: 'YApi 接口文档',
+      keys: ['API_DOCS_URL', 'API_DOCS_USERNAME', 'API_DOCS_PASSWORD']
+    },
+    {
+      id: 'target', title: '被测系统', icon: 'monitor', section: 'datasource',
+      tabLabel: '被测系统',
+      keys: ['TARGET_URL', 'TARGET_USERNAME', 'TARGET_PASSWORD']
+    },
+    {
+      id: 'target_db', title: '被测系统数据库', icon: 'database', section: 'datasource',
+      tabLabel: '数据库',
+      keys: ['TARGET_DB_TYPE', 'TARGET_DB_HOST', 'TARGET_DB_PORT', 'TARGET_DB_NAME', 'TARGET_DB_FILE', 'DB_USER', 'DB_PASSWORD', 'TARGET_DB_AUTO_MODE', 'DB_SANDBOX_MODE', 'TARGET_DB_ENABLED']
+    },
+    {
+      id: 'figma', title: 'Figma 数据源', icon: 'figma', section: 'datasource',
+      tabLabel: 'Figma',
+      keys: ['FIGMA_URL', 'FIGMA_USERNAME', 'FIGMA_KEY', 'FIGMA_PASSWORD', 'FIGMA_PARSE_MAX_DEPTH', 'FIGMA_PARSE_MAX_PENETRATION']
+    },
+    {
+      id: 'supplementary_files', title: '补充文件', icon: 'upload', section: 'datasource',
+      keys: [],
+      tabLabel: '补充文件',
+      actionUrl: '/file-upload',
+      actionLabel: '管理上传文件',
+      actionPerm: 'file.upload'
+    },
+    // ═══ 数据源配置完毕 ═══
+  ];
+
+  var BOOL_KEYS = new Set([
+    'TARGET_DB_ENABLED', 'TARGET_DB_AUTO_MODE'
+  ]);
+
+  // ── 枚举字段下拉选项（依据后端代码实际分支验证）──
+  var FIELD_OPTIONS = {
+    'CONFLUENCE_MODE': [
+      {value: 'mcp',  label: 'MCP 协议（默认，使用 PAT）'},
+      {value: 'rest', label: 'REST API（用户名+密码）'},
+      {value: 'file', label: '文件模式'}
+    ],
+    'TARGET_DB_TYPE': [
+      {value: 'mysql',      label: 'MySQL'},
+      {value: 'sqlite',     label: 'SQLite'},
+      {value: 'postgresql', label: 'PostgreSQL'},
+      {value: 'yasdb',      label: 'YasDB'},
+      {value: 'oracle',     label: 'Oracle'}
+    ],
+    'DB_SANDBOX_MODE': [
+      {value: 'none',     label: '不隔离（默认）'},
+      {value: 'detect',   label: '仅检测变更并告警'},
+      {value: 'rollback', label: '回滚（需 DBA 权限）'},
+      {value: 'recreate', label: '删除 TEST_ 前缀数据后重建'}
+    ]
+  };
+
+  var NUMBER_KEYS = new Set([
+    'TARGET_DB_PORT',
+    'FIGMA_PARSE_MAX_DEPTH', 'FIGMA_PARSE_MAX_PENETRATION'
+  ]);
+
+  // ── 分组 tooltip（标题级，pos=bottom）──
+  var GROUP_TOOLTIPS = {
+    target: '被测目标系统连接配置&#10;取值逻辑：project_configs + user_credentials_v2&#10;默认值：admin 账号兜底&#10;大小影响：Step4 Playwright 操作的目标站点',
+    target_db: '被测系统的业务数据库配置&#10;取值逻辑：project_configs 表&#10;默认值：空&#10;大小影响：Step3/4 生成 SQL 校验的目标库',
+    confluence: 'Confluence 需求文档数据源&#10;取值逻辑：project_configs + user_credentials_v2&#10;默认值：空&#10;大小影响：Step1 拉取需求文档的来源之一',
+    figma: 'Figma 设计稿数据源&#10;取值逻辑：project_configs + user_credentials_v2&#10;默认值：空&#10;大小影响：Step1 拉取设计稿用于生成用例',
+    yapi: 'YApi / Swagger 接口文档数据源&#10;取值逻辑：project_configs + user_credentials_v2&#10;默认值：空&#10;大小影响：Step1 拉取接口信息用于 RAG',
+    ai_model: 'AI 模型 API 凭证&#10;取值逻辑：user_credentials_v2（API_KEY/API_BASE_URL）&#10;默认值：空&#10;大小影响：Step2/3/4 所有 AI 调用的云端模型入口'
+  };
+
+  // ── 字段 tooltip（字段级，pos=right）──
+  // ★ 仅保留项目配置页实际渲染的字段；系统级字段见 system-config.html
+  var FIELD_TOOLTIPS = {
+    // ── Confluence 数据源 ──
+    'CONFLUENCE_URL': 'Confluence 页面地址（含 pageId，多个逗号分隔）&#10;取值逻辑：project_configs.CONFLUENCE_URL，pageId 从 URL 自动解析&#10;默认值：空&#10;大小影响：格式为 &lt;协议&gt;://&lt;主机&gt;:&lt;端口&gt;/pages/viewpage.action?pageId=&lt;页面ID&gt;',
+    'CONFLUENCE_MODE': '拉取模式&#10;取值逻辑：project_configs.CONFLUENCE_MODE&#10;默认值：mcp&#10;大小影响：mcp 走 MCP 协议（使用 PAT），rest 走 REST API（用户名+密码），file 按文件解析',
+    'CONFLUENCE_USERNAME': 'Confluence 用户名&#10;取值逻辑：user_credentials_v2.CONFLUENCE_USERNAME&#10;默认值：空&#10;大小影响：MCP/REST 鉴权（敏感字段）',
+    'CONFLUENCE_PAT': 'Confluence Personal Access Token&#10;取值逻辑：user_credentials_v2.CONFLUENCE_PAT&#10;默认值：空&#10;大小影响：MCP 模式鉴权凭据（敏感字段）',
+    
+    // ── AI 模型 ──
+    'API_KEY': 'AI 模型 API Key&#10;取值逻辑：user_credentials_v2.API_KEY（敏感字段）&#10;默认值：空&#10;大小影响：Step2/3/4 所有云端 AI 调用的鉴权凭据',
+    'API_BASE_URL': 'AI 模型 Base URL&#10;取值逻辑：user_credentials_v2.API_BASE_URL&#10;默认值：空&#10;大小影响：云端 AI API 接入点地址',
+    // ── Figma 数据源 ──
+    'FIGMA_URL': 'Figma 文件 URL&#10;取值逻辑：project_configs.FIGMA_URL&#10;默认值：空&#10;大小影响：从中提取 file_key 拉取设计稿',
+    'FIGMA_USERNAME': 'Figma 用户名&#10;取值逻辑：user_credentials_v2.FIGMA_USERNAME&#10;默认值：空&#10;大小影响：登录凭据（敏感字段）',
+    'FIGMA_KEY': 'Figma Personal Access Token&#10;取值逻辑：user_credentials_v2.FIGMA_KEY&#10;默认值：空&#10;大小影响：API 拉取设计稿的凭据（敏感字段）',
+    'FIGMA_PASSWORD': 'Figma 登录密码&#10;取值逻辑：user_credentials_v2.FIGMA_PASSWORD&#10;默认值：空&#10;大小影响：登录凭据（敏感字段）',
+    'FIGMA_PARSE_MAX_DEPTH': 'Figma 解析最大深度&#10;取值逻辑：project_configs.FIGMA_PARSE_MAX_DEPTH&#10;默认值：6&#10;大小影响：越大解析越深但耗时更长',
+    'FIGMA_PARSE_MAX_PENETRATION': 'Figma 解析最大穿透节点数&#10;取值逻辑：project_configs.FIGMA_PARSE_MAX_PENETRATION&#10;默认值：24&#10;大小影响：越大遍历节点越多，耗时越长',
+    // ── 接口文档 (YApi) ──
+    'API_DOCS_URL': '接口文档 URL（YApi/Swagger 项目页）&#10;取值逻辑：project_configs.API_DOCS_URL&#10;默认值：空&#10;大小影响：从中提取 project_id 拉取接口',
+    'API_DOCS_USERNAME': '接口文档用户名&#10;取值逻辑：user_credentials_v2.API_DOCS_USERNAME&#10;默认值：空&#10;大小影响：登录凭据（敏感字段）',
+    'API_DOCS_PASSWORD': '接口文档密码&#10;取值逻辑：user_credentials_v2.API_DOCS_PASSWORD&#10;默认值：空&#10;大小影响：登录凭据（敏感字段）',
+    // ── 被测系统 ──
+    'TARGET_URL': '被测系统 URL&#10;取值逻辑：project_configs.TARGET_URL&#10;默认值：空&#10;大小影响：Playwright 导航的入口地址',
+    'TARGET_USERNAME': '被测系统登录用户名&#10;取值逻辑：user_credentials_v2.TARGET_USERNAME，回退 admin&#10;默认值：admin&#10;大小影响：Step4 登录账号（敏感字段）',
+    'TARGET_PASSWORD': '被测系统主账号登录密码&#10;取值逻辑：user_credentials_v2.TARGET_PASSWORD&#10;默认值：空&#10;大小影响：Step4 Playwright 登录被测系统（敏感字段）',
+    // ── 被测系统数据库 ──
+    'TARGET_DB_ENABLED': '是否启用目标数据库&#10;取值逻辑：project_configs.TARGET_DB_ENABLED，未设置时按字段自动推断&#10;默认值：false（自动推断）&#10;大小影响：关闭后不生成 DB 校验',
+    'TARGET_DB_TYPE': '目标数据库类型&#10;取值逻辑：project_configs.TARGET_DB_TYPE&#10;默认值：空&#10;大小影响：mysql 或 sqlite 选择不同驱动',
+    'TARGET_DB_HOST': '目标数据库主机&#10;取值逻辑：project_configs.TARGET_DB_HOST&#10;默认值：空&#10;大小影响：连接地址',
+    'TARGET_DB_PORT': '目标数据库端口&#10;取值逻辑：project_configs.TARGET_DB_PORT&#10;默认值：空&#10;大小影响：连接端口',
+    'TARGET_DB_NAME': '目标数据库名&#10;取值逻辑：project_configs.TARGET_DB_NAME&#10;默认值：空&#10;大小影响：连接的 schema',
+    'TARGET_DB_FILE': '目标 SQLite 文件路径&#10;取值逻辑：project_configs.TARGET_DB_FILE&#10;默认值：空&#10;大小影响：sqlite 类型时使用',
+    'DB_USER': '被测系统数据库用户名&#10;取值逻辑：user_credentials_v2.DB_USER&#10;默认值：空&#10;大小影响：决定 Step4 DB 轨道连接权限',
+    'DB_PASSWORD': '被测系统数据库密码&#10;取值逻辑：user_credentials_v2.DB_PASSWORD&#10;默认值：空&#10;大小影响：密码错误将导致连接被拒绝',
+    'TARGET_DB_AUTO_MODE': '目标库自动模式&#10;取值逻辑：project_configs.TARGET_DB_AUTO_MODE&#10;默认值：false&#10;大小影响：开启后自动推断连接配置',
+    'DB_SANDBOX_MODE': '被测系统数据库沙箱模式&#10;取值逻辑：project_configs.DB_SANDBOX_MODE&#10;默认值：none&#10;大小影响：控制 Step4 写操作隔离策略（none/detect/rollback/recreate）'
+  };
+
+  var ICON_SVGS = {
+    upload: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
+    book: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+    figma: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5.5A3.5 3.5 0 0 1 8.5 2H12v7H8.5A3.5 3.5 0 0 1 5 5.5z"/><path d="M12 2h3.5a3.5 3.5 0 1 1 0 7H12V2z"/><path d="M12 12.5a3.5 3.5 0 1 1 7 0 3.5 3.5 0 1 1 -7 0z"/><path d="M5 19.5A3.5 3.5 0 0 1 8.5 16H12v3.5a3.5 3.5 0 1 1 -7 0z"/><path d="M5 12.5A3.5 3.5 0 0 1 8.5 9H12v7H8.5A3.5 3.5 0 0 1 5 12.5z"/></svg>',
+    code: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+    monitor: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
+    database: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
+    play: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
+    cpu: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>',
+    settings: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'
+  };
+
+  // ── 凭证字段集合（走 /api/user-credentials，不走 /api/config） ──
+  var CRED_KEYS = new Set([
+    'CONFLUENCE_USERNAME', 'CONFLUENCE_PAT',
+    'FIGMA_KEY', 'FIGMA_USERNAME', 'FIGMA_PASSWORD',
+    'API_DOCS_USERNAME', 'API_DOCS_PASSWORD',
+    'DB_USER', 'DB_PASSWORD',
+    'TARGET_USERNAME', 'TARGET_PASSWORD',
+    'API_KEY', 'API_BASE_URL',
+  ]);
+
+  // ── 状态 ──
+  var allFields = {};        // 原始字段值 {key: string}
+  var dirtyFields = {};      // 修改的字段 {key: new_value}
+
+  // ── 加载配置 ──
+  async function loadConfig() {
+    // ★ 显示初始加载态
+    ['curProject', 'curVersion', 'fieldCount'].forEach(function(id) {
+      var el = $(id);
+      if (el) el.innerHTML = '<span class="inline-loading"></span>';
+    });
+    var body = $('mainConfigBody');
+    if (body) body.innerHTML = '<div class="cfg-loading"><div class="loading-spinner"></div><div class="cfg-loading-text">加载配置中...</div></div>';
+    // ★ 问题2修复：并行加载配置和凭证，减少等待时间
+    var results = await Promise.all([
+      A.api('GET', '/api/config'),
+      A.api('GET', '/api/user-credentials').catch(function() { return null; })
+    ]);
+    var r = results[0];
+    var credResult = results[1];
+    if (!r || r.error) {
+      return;
+    }
+    allFields = r.fields || {};
+    // 合并凭证字段
+    if (credResult && credResult.credentials) {
+      CRED_KEYS.forEach(function(k) {
+        if (credResult.credentials[k] !== undefined && credResult.credentials[k] !== null && credResult.credentials[k] !== '') {
+          allFields[k] = credResult.credentials[k];
+        }
+      });
+    }
+    if ($('curProject')) $('curProject').textContent = r.project || '未选择';
+    if ($('curVersion')) $('curVersion').textContent = allFields['PROJECT_VERSION'] || '-';
+    dirtyFields = {};
+    updateActionBar();
+    renderGroups();
+    // ★ 修复问题3：字段计数以实际渲染的分组字段数为准
+    // 数据源分组即使无值也会强制渲染全部预定义 keys，计数需与之对齐
+    var renderedCount = 0;
+    GROUPS.forEach(function(g) {
+      var keys = g.keys.filter(function(k) { return k in allFields || CRED_KEYS.has(k); });
+      // 数据源分组无值时也渲染全部预定义 keys
+      if (keys.length === 0 && g.section === 'datasource') {
+        keys = g.keys.slice();
+      }
+      // 有 actionUrl 的分组（如补充文件）不渲染字段，只渲染按钮
+      if (keys.length === 0 && g.actionUrl) {
+        keys = [];
+      }
+      renderedCount += keys.length;
+    });
+    if ($('fieldCount')) $('fieldCount').textContent = renderedCount;
+    // ★ 动态元素渲染完成后，重新应用权限显隐（按钮带 data-perm，渲染前不存在）
+    A.applyPermissions();
+    // ★ 在字段渲染完成后应用只读模式（项目成员）
+    applyReadonlyMode();
+  }
+
+  // ── 渲染分组 ──
+  // 按 section 分区渲染 — datasource 使用 Tab 面板
+  function renderGroups() {
+    var dsNav = $('dsTabNav');
+    var dsBody = $('dsTabBody');
+    if (!dsNav || !dsBody) return;
+    // 渲染数据源 Tab 导航
+    var dsGroups = GROUPS.filter(function(g){ return g.section === 'datasource'; });
+    var navHtml = '';
+    var bodyHtml = '';
+    dsGroups.forEach(function(g, i) {
+      var label = g.tabLabel || g.title;
+      navHtml += '<div class="ds-tab-item' + (i === 0 ? ' active' : '') + '" data-tab="' + g.id + '">' + esc(label) + '</div>';
+      bodyHtml += '<div class="ds-tab-content' + (i === 0 ? ' active' : '') + '" id="ds-tab-' + g.id + '">'
+        + renderGroupBody(g) + '</div>';
+    });
+    dsNav.innerHTML = navHtml;
+    dsBody.innerHTML = bodyHtml;
+    // 绑定 Tab 切换 + 字段输入
+    bindDsTabSwitch();
+    bindFieldInputs();
+    bindConfluenceUrlEvents();
+    // 显示 datasource section
+    var dsSection = $('datasourceSection');
+    if (dsSection) dsSection.style.display = 'block';
+  }
+
+  function renderGroupBody(g) {
+    var keys = g.keys.slice();
+    var icon = ICON_SVGS[g.icon] || ICON_SVGS.settings;
+    var bodyContent;
+    if (g.actionUrl) {
+      // 有 actionUrl 的分组（如补充文件）：渲染操作按钮
+      bodyContent = '<div class="ds-file-upload">'
+        + '<button class="cfg-action-btn" type="button" onclick="' + (g.actionUrl === '/file-upload' ? '_A.openUploadModal()' : '') + '" data-perm="' + (g.actionPerm || '') + '">'
+        + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>' + esc(g.actionLabel || '管理上传文件')
+        + '</button>'
+        + '</div>';
+    } else {
+      bodyContent = keys.map(function(k) { return renderField(k); }).join('');
+    }
+    return '<div class="cfg-group" data-group="' + g.id + '">'
+      + '<div class="cfg-group-header" style="display:none;">'
+        + '<div class="cfg-group-icon">' + icon + '</div>'
+        + '<div class="cfg-group-title">' + esc(g.title) + '</div>'
+      + '</div>'
+      + '<div class="cfg-group-body">'
+        + bodyContent
+      + '</div>'
+    + '</div>';
+  }
+
+  function bindDsTabSwitch() {
+    // ★ 范围限定到主数据源标签容器（#dsTabNav / #dsTabBody）。
+    //   原实现用全局 querySelectorAll('.ds-tab-item')，会把 CI/CD 分区的
+    //   .ds-tab-item（data-ci-tab）也误绑定进去：点击 CI 标签时它读取
+    //   this.dataset.tab=undefined，剥掉全部 .ds-tab-content 后找不到目标，
+    //   导致 CI 标签内容区不显示。此处按容器隔离，CI 标签由
+    //   bindCiTabSwitch 独立处理，互不干扰。
+    var nav = $('dsTabNav');
+    var body = $('dsTabBody');
+    if (!nav || !body) return;
+    var tabs = nav.querySelectorAll('.ds-tab-item');
+    tabs.forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        var target = this.dataset.tab;
+        if (!target) return;
+        tabs.forEach(function(t) { t.classList.remove('active'); });
+        this.classList.add('active');
+        body.querySelectorAll('.ds-tab-content').forEach(function(c) { c.classList.remove('active'); });
+        var content = body.querySelector('#ds-tab-' + target);
+        if (content) content.classList.add('active');
+      });
+    });
+  }
+
+  // ── 渲染单个字段 ──
+  function renderField(key) {
+    // CONFLUENCE_URL 特殊处理：多个输入框（可增删，至少保留一个）
+    if (key === 'CONFLUENCE_URL') {
+      return renderConfluenceUrlField();
+    }
+    var val = allFields[key] !== undefined ? allFields[key] : '';
+    // 从 tooltip 提取第一行作为 placeholder
+    var fullTip = FIELD_TOOLTIPS[key] || '';
+    var placeholder = (fullTip.split('&#10;')[0] || '').replace(/^取值逻辑[：:].*?[。.]?\s*/g, '');
+    if (!placeholder) placeholder = '请输入 ' + key;
+    var attrPlaceholder = ' placeholder="' + esc(placeholder) + '"';
+    var input;
+    // 优先级1：枚举字段 → select 下拉
+    if (FIELD_OPTIONS[key]) {
+      var opts = FIELD_OPTIONS[key].map(function(o) {
+        var sel = o.value === val ? ' selected' : '';
+        return '<option value="' + o.value + '"' + sel + '>' + o.label + '</option>';
+      }).join('');
+      input = '<select class="cfg-field-input" data-key="' + esc(key) + '"><option value="" disabled hidden>-- 请选择 --</option>' + opts + '</select>';
+    }
+    // 优先级2：布尔字段 → checkbox
+    else if (BOOL_KEYS.has(key)) {
+      var checked = (val === 'true' || val === 'True' || val === true) ? 'checked' : '';
+      input = '<input type="checkbox" class="cfg-field-input" data-key="' + esc(key) + '" ' + checked + ' />';
+    }
+    // 优先级3：数值字段 → number
+    else if (NUMBER_KEYS.has(key)) {
+      input = '<input type="number" class="cfg-field-input" data-key="' + esc(key) + '" value="' + esc(val) + '"' + attrPlaceholder + ' />';
+    }
+    // 优先级4：全部使用 text 类型（明文展示，不做防肩窥）
+    else {
+      var type = 'text';
+      input = '<input type="' + type + '" class="cfg-field-input" data-key="' + esc(key) + '" value="' + esc(val) + '"' + attrPlaceholder + ' />';
+    }
+    return '<div class="cfg-field">'
+      + '<label class="cfg-field-label tooltip-wide" data-tooltip="' + (FIELD_TOOLTIPS[key] || '') + '" data-tooltip-pos="right">'
+        + '<span class="cfg-field-key">' + esc(key) + '</span>'
+      + '</label>'
+      + input
+    + '</div>';
+  }
+
+  // ── CONFLUENCE_URL 多输入框渲染 ──
+  // ── P0-7：Confluence 示例地址去内网化 ──
+  // 输入框 placeholder 只给「格式说明」，不含任何真实域名 / 真实 pageId。
+  // 真实示例地址改由系统配置项 CONFLUENCE_URL_EXAMPLE 提供（system-config 页可配置）：
+  //   · 已配置  → 在字段下方渲染「示例：xxx」提示行
+  //   · 未配置 / 无 system.settings 权限 / 读取失败 → 该提示行整块隐藏
+  var CONFLUENCE_URL_PLACEHOLDER = '<协议>://<主机>:<端口>/pages/viewpage.action?pageId=<页面ID>';
+  var confluenceUrlExample = '';
+
+  function renderConfluenceUrlExample() {
+    var box = $('cfUrlExample');
+    if (!box) return;
+    if (!confluenceUrlExample) {
+      box.textContent = '';
+      box.style.display = 'none';
+      return;
+    }
+    // textContent 赋值天然免疫 XSS，无需再过 esc()
+    box.textContent = '示例：' + confluenceUrlExample;
+    box.style.display = '';
+  }
+
+  async function loadConfluenceUrlExample() {
+    // 与后端 /api/system-config 的 check_admin_or_permission("system.settings") 权限点保持一致，
+    // 无权限时直接跳过，避免给普通用户刷 403 控制台噪音
+    if (!A.hasPerm || !A.hasPerm('system.settings')) return;
+    // 读取失败视为「未配置」，静默降级为隐藏（与 :1017 既有 catch 降级写法一致）
+    var r = await A.api('GET', '/api/system-config').catch(function() { return null; });
+    if (!r || !r.ok || !r.config) return;
+    var v = String(r.config['CONFLUENCE_URL_EXAMPLE'] || '').trim();
+    if (!v) return;
+    confluenceUrlExample = v;
+    renderConfluenceUrlExample();
+  }
+
+  function renderConfluenceUrlField() {
+    var val = allFields['CONFLUENCE_URL'] || '';
+    var urls = val ? val.split(',').filter(function(u) { return u.trim(); }) : [''];
+    if (urls.length === 0) urls = [''];
+    var rows = urls.map(function(u, i) {
+      return '<div class="cf-url-row" data-index="' + i + '">'
+        + '<input type="text" class="cfg-field-input cf-url-input" data-key="CONFLUENCE_URL" data-index="' + i + '" value="' + esc(u.trim()) + '" placeholder="' + esc(CONFLUENCE_URL_PLACEHOLDER) + '" />'
+        + '<button class="cf-url-btn cf-url-del" type="button" title="删除此行" ' + (urls.length <= 1 ? 'disabled' : '') + '>×</button>'
+        + '</div>';
+    }).join('');
+    return '<div class="cfg-field cfg-field-block" data-field="CONFLUENCE_URL">'
+      + '<label class="cfg-field-label tooltip-wide" data-tooltip="' + (FIELD_TOOLTIPS['CONFLUENCE_URL'] || '') + '" data-tooltip-pos="right">'
+        + '<span class="cfg-field-key">CONFLUENCE_URL</span>'
+      + '</label>'
+      + '<div class="cf-url-list" id="cfUrlList">' + rows + '</div>'
+      + '<button class="cf-url-btn cf-url-add" type="button" id="cfUrlAdd">+ 添加 URL</button>'
+      + '<div class="cf-url-example" id="cfUrlExample" style="display:none;"></div>'
+      + '</div>';
+  }
+
+  // ── 绑定 CONFLUENCE_URL 多输入框事件 ──
+  function bindConfluenceUrlEvents() {
+    var list = $('cfUrlList');
+    if (!list) return;
+    // P0-7：字段渲染完成后拉取系统配置的示例地址（未配置则示例行保持隐藏）
+    renderConfluenceUrlExample();
+    void loadConfluenceUrlExample();
+    // 删除按钮
+    list.querySelectorAll('.cf-url-del').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var row = this.parentElement;
+        var rows = list.querySelectorAll('.cf-url-row');
+        if (rows.length <= 1) return;
+        row.remove();
+        markConfluenceUrlDirty();
+        // 刷新索引和删除按钮状态
+        refreshConfluenceUrlRows();
+      });
+    });
+    // 输入变更
+    list.querySelectorAll('.cf-url-input').forEach(function(input) {
+      input.addEventListener('input', function() {
+        markConfluenceUrlDirty();
+      });
+    });
+    // 添加按钮
+    var addBtn = $('cfUrlAdd');
+    if (addBtn) {
+      addBtn.addEventListener('click', function() {
+        var idx = list.querySelectorAll('.cf-url-row').length;
+        var row = document.createElement('div');
+        row.className = 'cf-url-row';
+        row.setAttribute('data-index', idx);
+        row.innerHTML = '<input type="text" class="cfg-field-input cf-url-input" data-key="CONFLUENCE_URL" data-index="' + idx + '" value="" placeholder="' + esc(CONFLUENCE_URL_PLACEHOLDER) + '" />'
+          + '<button class="cf-url-btn cf-url-del" type="button" title="删除此行">×</button>';
+        list.appendChild(row);
+        // 绑定新行事件
+        row.querySelector('.cf-url-input').addEventListener('input', function() { markConfluenceUrlDirty(); });
+        row.querySelector('.cf-url-del').addEventListener('click', function() {
+          var rows = list.querySelectorAll('.cf-url-row');
+          if (rows.length <= 1) return;
+          row.remove();
+          markConfluenceUrlDirty();
+          refreshConfluenceUrlRows();
+        });
+        refreshConfluenceUrlRows();
+        markConfluenceUrlDirty();
+      });
+    }
+  }
+
+  function refreshConfluenceUrlRows() {
+    var list = $('cfUrlList');
+    if (!list) return;
+    var rows = list.querySelectorAll('.cf-url-row');
+    rows.forEach(function(row, i) {
+      row.setAttribute('data-index', i);
+      var input = row.querySelector('.cf-url-input');
+      if (input) input.setAttribute('data-index', i);
+      var delBtn = row.querySelector('.cf-url-del');
+      if (delBtn) delBtn.disabled = (rows.length <= 1);
+    });
+  }
+
+  function markConfluenceUrlDirty() {
+    var list = $('cfUrlList');
+    if (!list) return;
+    var inputs = list.querySelectorAll('.cf-url-input');
+    var vals = [];
+    inputs.forEach(function(input) { if (input.value.trim()) vals.push(input.value.trim()); });
+    dirtyFields['CONFLUENCE_URL'] = vals.join(',');
+    updateActionBar();
+  }
+
+  // ── 绑定分组折叠 ──
+  function bindGroupToggles() {
+    var headers = document.querySelectorAll('.cfg-group-header');
+    headers.forEach(function(h) {
+      h.addEventListener('click', function() {
+        var group = h.closest('.cfg-group');
+        if (group) group.classList.toggle('collapsed');
+      });
+    });
+  }
+
+  // ── 绑定字段输入 ──
+  function bindFieldInputs() {
+    var inputs = document.querySelectorAll('.cfg-field-input');
+    inputs.forEach(function(inp) {
+      inp.addEventListener('input', function() {
+        markDirty(inp);
+      });
+      inp.addEventListener('change', function() {
+        markDirty(inp);
+      });
+    });
+  }
+
+  function markDirty(inp) {
+    var key = inp.getAttribute('data-key');
+    if (!key) return;
+    var newVal = inp.type === 'checkbox' ? (inp.checked ? 'true' : 'false') : inp.value;
+    var origVal = allFields[key] || '';
+    if (newVal !== origVal) {
+      dirtyFields[key] = newVal;
+      inp.classList.add('dirty');
+    } else {
+      delete dirtyFields[key];
+      inp.classList.remove('dirty');
+    }
+    updateActionBar();
+  }
+
+  // ── 更新操作栏 ──
+  function updateActionBar() {
+    var bar = $('actionBar');
+    var hint = $('dirtyHint');
+    if (!bar) return;
+    var count = Object.keys(dirtyFields).length;
+    if (count > 0) {
+      bar.style.display = 'flex';
+      if (hint) hint.textContent = '有 ' + count + ' 个未保存的修改';
+    } else {
+      bar.style.display = 'none';
+    }
+  }
+
+  // ── 保存配置 ──
+  async function doSaveConfig() {
+    var keys = Object.keys(dirtyFields);
+    if (keys.length === 0) {
+      A.toast && A.toast('无修改需要保存', 'info');
+      return;
+    }
+    // ★ 问题2修复：凭证字段分流到 /api/user-credentials
+    var configFields = {}, credFields = {};
+    keys.forEach(function(k) {
+      if (CRED_KEYS.has(k)) {
+        credFields[k] = dirtyFields[k];
+      } else {
+        configFields[k] = dirtyFields[k];
+      }
+    });
+    var credOk = true;
+    if (Object.keys(credFields).length > 0) {
+      var cr = await A.api('POST', '/api/user-credentials', { fields: credFields });
+      if (!cr || (!cr.ok && !cr.success)) {
+        A.toast && A.toast((cr && cr.error) || '凭证保存失败', 'error');
+        credOk = false;
+      }
+    }
+    var configOk = true;
+    if (Object.keys(configFields).length > 0) {
+      var payload = { fields: configFields };
+      var r = await A.api('POST', '/api/config', payload);
+      if (r && (r.ok || r.success)) {
+        configOk = true;
+      } else {
+        A.toast && A.toast((r && r.error) || '保存失败', 'error');
+        configOk = false;
+      }
+    }
+    if (credOk && configOk) {
+      A.toast && A.toast('配置保存成功（' + keys.length + ' 字段）', 'success');
+      await loadConfig();
+    }
+  }
+
+  function saveConfig(btn) {
+    A.withBtnLoading(btn || $('btnSaveAll') || $('btnSaveConfig'), '保存中...', doSaveConfig);
+  }
+
+  // ── 放弃修改 ──
+  function discardChanges() {
+    dirtyFields = {};
+    renderGroups();
+    updateActionBar();
+    A.toast && A.toast('已放弃修改', 'info');
+  }
+
+  // ── 复制凭证 ──
+  async function showCopyCredential() {
+    var r = await A.api('GET', '/api/user-credential-projects');
+    var projects = (r && r.projects) || [];
+    var curName = ($('curProject') ? $('curProject').textContent : '') || '未选择';
+    var filtered = projects.filter(function(p) { return p !== (r && r.current_project); });
+    if (filtered.length === 0) {
+      A.toast && A.toast('没有可供复制凭证的其他项目', 'info');
+      return;
+    }
+    // 构建下拉选项
+    var options = filtered.map(function(p) {
+      return '<option value="' + esc(p) + '">' + esc(p) + '</option>';
+    }).join('');
+    var html = '<div class="cfg-copy-cred-overlay" id="copyCredOverlay" onclick="if(event.target===this)this.remove()">'
+      + '<div class="cfg-copy-cred-dialog">'
+      + '<h3>复制凭证</h3>'
+      + '<p>选择来源项目，将其凭证（账密/Key）复制到当前项目 <strong>' + esc(curName) + '</strong>。<br>仅填充空字段，已有值不被覆盖。</p>'
+      + '<select id="copyCredSource" class="cfg-copy-cred-select">' + options + '</select>'
+      + '<div class="cfg-dialog-actions">'
+      + '<button class="cfg-btn-ghost" onclick="document.getElementById(\'copyCredOverlay\').remove()">取消</button>'
+      + '<button class="cfg-btn-primary" id="btnCopyCredConfirm">复制</button>'
+      + '</div></div></div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+    var confirmBtn = $('btnCopyCredConfirm');
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', function() {
+        var source = $('copyCredSource').value;
+        if (source) doCopyCredentials(source);
+      });
+    }
+  }
+
+  async function doCopyCredentials(sourceProject) {
+    var overlay = $('copyCredOverlay');
+    var btn = $('btnCopyCredConfirm');
+    if (btn) btn.disabled = true;
+    try {
+      var r = await A.api('POST', '/api/user-credentials/copy', {
+        source_project: sourceProject
+      });
+      if (r && r.ok) {
+        var cnt = (r.copied || []).length;
+        A.toast && A.toast('已复制 ' + cnt + ' 个凭证字段', 'success');
+        loadConfig(); // 刷新页面
+      } else {
+        A.toast && A.toast((r && r.error) || '复制失败', 'error');
+      }
+    } catch(e) {
+      A.toast && A.toast('复制失败: ' + e.message, 'error');
+    }
+    if (overlay) overlay.remove();
+  }
+
+  // ── 模型配置 section 显隐 ──
+  function showModelConfigSection() {
+    var section = $('modelConfigSection');
+    if (section) section.style.display = 'block';
+  }
+
+  // ════════════ 模型配置 JS ════════════
+  var mcState = {
+    aiDefaults: null,
+    credentials: {},
+    taskModels: [],
+    verifyModels: [],
+    visionModels: [],
+    embedModels: [],
+    ollamaModels: [],
+    diskEmbedModels: [],
+    cloudModelList: null,
+    curTaskModel: '',
+    curVerifyModel: '',
+    curVisionModel: '',
+    curVisionProvider: 'cloud',
+    curEmbedProvider: 'disk',
+    curEmbedModel: '',
+    curTaskProvider: 'cloud',
+    curVerifyProvider: 'cloud',
+    visionEnabled: false,
+  };
+
+  var mEls = {};
+  function initMcEls() {
+    mEls = {
+      curProvider: $('curProvider'), curModel: $('curModel'), curVerifyModel: $('curVerifyModel'), curVisionModel: $('curVisionModel'), curEmbedModel: $('curEmbedModel'),
+      tabNav: $('tabNav'),
+      apiKeyInput: $('apiKeyInput'), baseUrlInput: $('baseUrlInput'), providerInput: $('providerInput'), providerHint: $('providerHint'),
+      btnTestConnection: $('btnTestConnection'), btnPreviewModels: $('btnPreviewModels'), btnSaveCloudApi: $('btnSaveCloudApi'),
+      statusDot: $('statusDot'), statusLabel: $('statusLabel'), testResult: $('testResult'),
+      taskModelHint: $('taskModelHint'), taskModelSelect: $('taskModelSelect'), taskPricing: $('taskPricing'), btnSaveTaskModel: $('btnSaveTaskModel'),
+      verifyModelHint: $('verifyModelHint'), verifyModelSelect: $('verifyModelSelect'), verifyPricing: $('verifyPricing'), btnSaveVerifyModel: $('btnSaveVerifyModel'),
+      embedProviderRadios: $('embedProviderRadios'), embedModelSelect: $('embedModelSelect'), embedCurrentInfo: $('embedCurrentInfo'), btnSaveEmbedModel: $('btnSaveEmbedModel'),
+      visionToggle: $('visionToggle'), visionToggleLabel: $('visionToggleLabel'), visionModelHint: $('visionModelHint'), visionModelSelect: $('visionModelSelect'), visionPricing: $('visionPricing'), btnSaveVisionModel: $('btnSaveVisionModel'), visionProviderRadios: $('visionProviderRadios'),
+      taskProviderRadios: $('taskProviderRadios'), verifyProviderRadios: $('verifyProviderRadios'),
+    };
+  }
+
+  // Tab 切换
+  function bindMcTabSwitch() {
+    if (!mEls.tabNav) return;
+    mEls.tabNav.querySelectorAll('.mc-tab-item').forEach(function(tab) {
+      tab.addEventListener('click', async function() {
+        var target = this.dataset.tab;
+        mEls.tabNav.querySelectorAll('.mc-tab-item').forEach(function(t) { t.classList.remove('active'); });
+        this.classList.add('active');
+        document.querySelectorAll('.mc-tab-content').forEach(function(c) { c.classList.remove('active'); });
+        var targetEl = $('tab-' + target);
+        if (targetEl) targetEl.classList.add('active');
+        var needLoad = (target === 'task' && mcState.taskModels.length === 0)
+                    || (target === 'verification' && mcState.verifyModels.length === 0)
+                    || (target === 'embed' && mcState.ollamaModels.length === 0)
+                    || (target === 'vision' && mcState.visionModels.length === 0);
+        if (!needLoad) return;
+        this.classList.add('loading');
+        try {
+          if (target === 'task') await loadMcTaskModels();
+          else if (target === 'verification') await loadMcVerifyModels();
+          else if (target === 'embed') await loadMcEmbedModels();
+          else if (target === 'vision') await loadMcVisionModels();
+        } finally { this.classList.remove('loading'); }
+      });
+    });
+  }
+
+  // 数据加载
+  async function loadMcAIDefaults() {
+    try {
+      var r = await fetch('/api/ai-defaults');
+      if (!r.ok) return;
+      var d = await r.json();
+      if (d.ok) {
+        mcState.aiDefaults = d;
+        if (mEls.curProvider) mEls.curProvider.textContent = d.provider || '-';
+        if (mEls.curModel) mEls.curModel.textContent = d.model || '-';
+        if (mEls.curVerifyModel) mEls.curVerifyModel.textContent = d.verification_model || '-';
+        if (d.embed_model && mEls.curEmbedModel) { mEls.curEmbedModel.textContent = (d.embed_provider || '') + '/' + d.embed_model; }
+        if (d.vision_model && mEls.curVisionModel) { mEls.curVisionModel.textContent = d.vision_model; }
+        if (mEls.providerInput) { mEls.providerInput.value = d.provider || ''; }
+        if (mEls.baseUrlInput) mEls.baseUrlInput.value = d.base_url || '';
+        if (mEls.providerInput && d.provider) { mEls.providerInput.classList.add('is-identified'); mEls.providerInput.classList.remove('is-unidentified'); if (mEls.providerHint) mEls.providerHint.textContent = '已识别'; }
+      }
+    } catch(e) { console.warn('[config.loadMcModelCore] 模型核心信息加载失败:', e); }
+  }
+
+  async function loadMcCredentials() {
+    try {
+      var r = await fetch('/api/user-credentials');
+      if (!r.ok) return;
+      var d = await r.json();
+      mcState.credentials = d.credentials || {};
+      if (mcState.cloudModelList == null) mcState.cloudModelList = d.cloud_model_list || null;
+      var apiKey = mcState.credentials.API_KEY || mcState.credentials.DEEPSEEK_API_KEY || '';
+      if (mEls.apiKeyInput) mEls.apiKeyInput.value = apiKey;
+      if (mcState.credentials.API_BASE_URL && mEls.baseUrlInput) mEls.baseUrlInput.value = mcState.credentials.API_BASE_URL;
+      if (mcState.credentials.API_MODEL) { mcState.curTaskModel = mcState.credentials.API_MODEL; if (mEls.curModel) mEls.curModel.textContent = mcState.curTaskModel; }
+      if (mcState.credentials.VERIFICATION_MODEL) { mcState.curVerifyModel = mcState.credentials.VERIFICATION_MODEL; if (mEls.curVerifyModel) mEls.curVerifyModel.textContent = mcState.curVerifyModel; }
+      if (mcState.credentials.VISION_MODEL) { mcState.curVisionModel = mcState.credentials.VISION_MODEL; if (mEls.curVisionModel) mEls.curVisionModel.textContent = mcState.curVisionModel; }
+      if (mcState.credentials.VISION_PROVIDER) mcState.curVisionProvider = mcState.credentials.VISION_PROVIDER;
+      if (mcState.credentials.VISION_LOCAL_MODEL) { mcState.curVisionModel = mcState.credentials.VISION_LOCAL_MODEL; if (mEls.curVisionModel) mEls.curVisionModel.textContent = mcState.curVisionModel; }
+      var visionRadio = document.querySelector('input[name="vision-provider"][value="' + mcState.curVisionProvider + '"]');
+      if (visionRadio) visionRadio.checked = true;
+      if (mcState.credentials.EMBED_PROVIDER) mcState.curEmbedProvider = mcState.credentials.EMBED_PROVIDER;
+      var _embedModel = '';
+      if (mcState.curEmbedProvider === 'disk') {
+        _embedModel = mcState.credentials.DISK_EMBED_MODEL || '';
+      } else if (mcState.curEmbedProvider === 'ollama') {
+        _embedModel = mcState.credentials.EMBED_LOCAL_MODEL || '';
+      } else {
+        _embedModel = mcState.credentials.EMBED_MODEL || '';
+      }
+      if (_embedModel) { mcState.curEmbedModel = _embedModel; if (mEls.curEmbedModel) mEls.curEmbedModel.textContent = mcState.curEmbedProvider + '/' + mcState.curEmbedModel; }
+      if (mcState.credentials.TASK_PROVIDER) mcState.curTaskProvider = mcState.credentials.TASK_PROVIDER;
+      if (mcState.credentials.VERIFY_PROVIDER) mcState.curVerifyProvider = mcState.credentials.VERIFY_PROVIDER;
+      var taskRadio = document.querySelector('input[name="task-provider"][value="' + mcState.curTaskProvider + '"]');
+      if (taskRadio) taskRadio.checked = true;
+      var verifyRadio = document.querySelector('input[name="verify-provider"][value="' + mcState.curVerifyProvider + '"]');
+      if (verifyRadio) verifyRadio.checked = true;
+    } catch(e) { console.warn('[config.loadMcCredentials] 凭证信息加载失败:', e); }
+  }
+
+  function getMcTaskProvider() {
+    var checked = document.querySelector('input[name="task-provider"]:checked');
+    return checked ? checked.value : (mcState.curTaskProvider || 'cloud');
+  }
+  function getMcVerifyProvider() {
+    var checked = document.querySelector('input[name="verify-provider"]:checked');
+    return checked ? checked.value : (mcState.curVerifyProvider || 'cloud');
+  }
+  function getMcEmbedProvider() {
+    var checked = document.querySelector('input[name="embed-provider"]:checked');
+    return checked ? checked.value : (mcState.curEmbedProvider || 'disk');
+  }
+
+  async function loadMcTaskModels() {
+    try {
+      if (mEls.taskModelSelect) mEls.taskModelSelect.innerHTML = '<option value="">加载中...</option>';
+      var provider = getMcTaskProvider();
+      if (provider === 'ollama') {
+        var od = await A.api('GET', '/api/ollama-models');
+        if (!od || !od.ok) { if (mEls.taskModelSelect) mEls.taskModelSelect.innerHTML = '<option value="">加载失败</option>'; return; }
+        var all = (od.models || []).filter(function(m) { return m.category === 'chat' || !m.category; });
+        mcState.taskModels = all.map(function(m) { return { name: m.name || m, selected: m.name === mcState.curTaskModel }; });
+        if (od.current && od.current.task) { mcState.curTaskProvider = od.current.task.provider || 'ollama'; mcState.curTaskModel = od.current.task.model || mcState.curTaskModel; }
+      } else if (provider === 'cloud' && mcState.cloudModelList && mcState.cloudModelList.task_models) {
+        // ★ 从云端API tab已拉取的缓存中读取，避免重复API调用
+        mcState.taskModels = mcState.cloudModelList.task_models.map(function(m) {
+          var name = typeof m === 'string' ? m : (m.name || m.id || '');
+          return { name: name, selected: name === mcState.curTaskModel };
+        });
+      } else {
+        var d = await A.api('GET', '/api/task-models');
+        if (!d || !d.ok) { if (mEls.taskModelSelect) { mEls.taskModelSelect.innerHTML = '<option value="">加载失败</option>'; if (mEls.taskModelHint) mEls.taskModelHint.textContent = '错误: ' + (d && d.error ? d.error : '未知'); } return; }
+        mcState.taskModels = d.models || [];
+        mcState.curTaskModel = d.current || mcState.curTaskModel;
+      }
+      if (mEls.taskModelHint) mEls.taskModelHint.textContent = '当前: ' + (mcState.curTaskModel || '未选择');
+      if (mcState.taskModels.length === 0) { if (mEls.taskModelSelect) mEls.taskModelSelect.innerHTML = '<option value="">无可用模型</option>'; return; }
+      if (mEls.taskModelSelect) {
+        mEls.taskModelSelect.innerHTML = mcState.taskModels.map(function(m) { var sel = m.selected ? ' selected' : ''; return '<option value="' + esc(m.name) + '"' + sel + '>' + esc(m.name) + '</option>'; }).join('');
+        if (mcState.curTaskModel) mEls.taskModelSelect.value = mcState.curTaskModel;
+      }
+      updateMcPricing('task');
+    } catch(e) { console.warn('[config.loadMcTaskModels] 任务模型列表加载失败:', e); }
+  }
+
+  async function loadMcVerifyModels() {
+    try {
+      if (mEls.verifyModelSelect) mEls.verifyModelSelect.innerHTML = '<option value="">加载中...</option>';
+      var provider = getMcVerifyProvider();
+      if (provider === 'ollama') {
+        var od = await A.api('GET', '/api/ollama-models');
+        if (!od || !od.ok) { if (mEls.verifyModelSelect) mEls.verifyModelSelect.innerHTML = '<option value="">加载失败</option>'; return; }
+        var all = (od.models || []).filter(function(m) { return m.category === 'chat' || !m.category; });
+        mcState.verifyModels = all.map(function(m) { return { name: m.name || m, selected: m.name === mcState.curVerifyModel }; });
+        if (od.current && od.current.verify) { mcState.curVerifyProvider = od.current.verify.provider || 'ollama'; mcState.curVerifyModel = od.current.verify.model || mcState.curVerifyModel; }
+      } else if (provider === 'cloud' && mcState.cloudModelList && mcState.cloudModelList.task_models) {
+        // ★ 从云端API tab已拉取的缓存中读取，避免重复API调用
+        mcState.verifyModels = mcState.cloudModelList.task_models.map(function(m) {
+          var name = typeof m === 'string' ? m : (m.name || m.id || '');
+          return { name: name, selected: name === mcState.curVerifyModel };
+        });
+      } else {
+        var d = await A.api('GET', '/api/verification-models');
+        if (!d || !d.ok) { if (mEls.verifyModelSelect) { mEls.verifyModelSelect.innerHTML = '<option value="">加载失败</option>'; if (mEls.verifyModelHint) mEls.verifyModelHint.textContent = '错误: ' + (d && d.error ? d.error : '未知'); } return; }
+        mcState.verifyModels = d.models || [];
+        mcState.curVerifyModel = d.current || mcState.curVerifyModel;
+      }
+      if (mEls.verifyModelHint) mEls.verifyModelHint.textContent = '当前: ' + (mcState.curVerifyModel || '未选择');
+      if (mcState.verifyModels.length === 0) { if (mEls.verifyModelSelect) mEls.verifyModelSelect.innerHTML = '<option value="">无可用模型</option>'; return; }
+      if (mEls.verifyModelSelect) {
+        mEls.verifyModelSelect.innerHTML = mcState.verifyModels.map(function(m) { var sel = m.selected ? ' selected' : ''; return '<option value="' + esc(m.name) + '"' + sel + '>' + esc(m.name) + '</option>'; }).join('');
+        if (mcState.curVerifyModel) mEls.verifyModelSelect.value = mcState.curVerifyModel;
+      }
+      updateMcPricing('verify');
+    } catch(e) { console.warn('[config.loadMcVerifyModels] 校验模型列表加载失败:', e); }
+  }
+
+  function getMcVisionProvider() {
+    var checked = document.querySelector('input[name="vision-provider"]:checked');
+    return checked ? checked.value : (mcState.curVisionProvider || 'cloud');
+  }
+
+  async function loadMcVisionModels() {
+    try {
+      if (mEls.visionModelSelect) mEls.visionModelSelect.innerHTML = '<option value="">加载中...</option>';
+      var provider = getMcVisionProvider();
+      if (provider === 'ollama') {
+        // ★ Ollama 本地视觉模型：数据源为 Ollama 已安装模型（多模态如 llava / qwen2.5vl）
+        if (mcState.ollamaModels.length === 0) {
+          var od = await A.api('GET', '/api/ollama-models');
+          if (od && od.ok) {
+            mcState.ollamaModels = (od.models || []).map(function(m) { return typeof m === 'string' ? { name: m } : (m || {}); });
+          }
+        }
+        mcState.visionModels = (mcState.ollamaModels || []).filter(function(m) { return m && m.name; }).map(function(m) { return { name: m.name, selected: m.name === mcState.curVisionModel }; });
+        if (mEls.visionModelHint) mEls.visionModelHint.textContent = '当前: ' + (mcState.curVisionModel || '未选择') + '（Ollama 本地）';
+      } else if (mcState.cloudModelList && mcState.cloudModelList.vision_models) {
+        // ★ 从云端API tab已拉取的缓存中读取，避免重复API调用
+        mcState.visionModels = mcState.cloudModelList.vision_models.map(function(m) {
+          var name = typeof m === 'string' ? m : (m.name || m.id || '');
+          return { name: name, selected: name === mcState.curVisionModel };
+        });
+        if (mEls.visionModelHint) mEls.visionModelHint.textContent = '当前: ' + (mcState.curVisionModel || '未选择');
+      } else {
+        var d = await A.api('GET', '/api/vision-models');
+        if (!d || !d.ok) { if (mEls.visionModelSelect) { mEls.visionModelSelect.innerHTML = '<option value="">加载失败</option>'; if (mEls.visionModelHint) mEls.visionModelHint.textContent = '错误: ' + (d && d.error ? d.error : '未知'); } return; }
+        mcState.visionModels = d.models || [];
+        mcState.curVisionModel = d.current || mcState.curVisionModel;
+        mcState.visionEnabled = !!d.enabled;
+        if (mEls.visionModelHint) mEls.visionModelHint.textContent = '当前: ' + (mcState.curVisionModel || '未选择');
+      }
+      if (mEls.visionToggle) { if (mcState.visionEnabled) { mEls.visionToggle.classList.add('on'); } else { mEls.visionToggle.classList.remove('on'); } }
+      if (mEls.visionToggleLabel) mEls.visionToggleLabel.textContent = mcState.visionEnabled ? '已开启' : '已关闭';
+      if (mcState.visionModels.length === 0) { if (mEls.visionModelSelect) mEls.visionModelSelect.innerHTML = '<option value="">无可用模型</option>'; if (mEls.visionPricing) mEls.visionPricing.innerHTML = '<span class="cfg-txt-tertiary">-</span>'; return; }
+      if (mEls.visionModelSelect) {
+        mEls.visionModelSelect.innerHTML = mcState.visionModels.map(function(m) { var sel = m.selected ? ' selected' : ''; return '<option value="' + esc(m.name) + '"' + sel + '>' + esc(m.name) + '</option>'; }).join('');
+        if (mcState.curVisionModel) mEls.visionModelSelect.value = mcState.curVisionModel;
+      }
+      updateMcPricing('vision');
+    } catch(e) {
+      console.error('loadMcVisionModels error:', e);
+      if (mEls.visionModelSelect) mEls.visionModelSelect.innerHTML = '<option value="">加载失败</option>';
+    }
+  }
+
+  async function loadMcEmbedModels() {
+    try {
+      if (mEls.embedModelSelect) mEls.embedModelSelect.innerHTML = '<option value="">加载中...</option>';
+      var results = await Promise.all([A.api('GET', '/api/ollama-models'), A.api('GET', '/api/disk-embed-models')]);
+      var ollamaRes = results[0], diskRes = results[1];
+      if (ollamaRes && ollamaRes.ok) { mcState.ollamaModels = (ollamaRes.models || []).filter(function(m) { return m.category === 'embed' || true; }); }
+      if (diskRes && diskRes.ok) { mcState.diskEmbedModels = diskRes.models || []; }
+      var radio = document.querySelector('input[name="embed-provider"][value="' + mcState.curEmbedProvider + '"]');
+      if (radio) radio.checked = true;
+      refreshMcEmbedModelList();
+      updateMcEmbedInfo();
+    } catch(e) { console.warn('[config.loadMcEmbedModels] 嵌入模型列表加载失败:', e); }
+  }
+
+  function refreshMcEmbedModelList() {
+    var provider = getMcEmbedProvider();
+    var models = [];
+    if (provider === 'ollama') { models = mcState.ollamaModels.filter(function(m) { return m.category === 'embed' || !m.category; }).map(function(m) { return m.name; }); }
+    else if (provider === 'disk') { models = mcState.diskEmbedModels.map(function(m) { return typeof m === 'string' ? m : (m.name || m.id || ''); }); }
+    else if (provider === 'cloud') { if (mcState.cloudModelList && mcState.cloudModelList.embed_models) models = mcState.cloudModelList.embed_models.map(function(m) { return m.name || m; }); }
+    if (mEls.embedModelSelect) {
+      if (models.length === 0) { mEls.embedModelSelect.innerHTML = '<option value="">' + (provider === 'disk' ? '无可用磁盘模型' : '无可用模型') + '</option>'; }
+      else {
+        mEls.embedModelSelect.innerHTML = models.map(function(name) { var sel = name === mcState.curEmbedModel ? ' selected' : ''; return '<option value="' + esc(name) + '"' + sel + '>' + esc(name) + '</option>'; }).join('');
+        if (mcState.curEmbedModel && models.indexOf(mcState.curEmbedModel) >= 0) mEls.embedModelSelect.value = mcState.curEmbedModel;
+      }
+    }
+  }
+
+  function updateMcEmbedInfo() {
+    var provider = getMcEmbedProvider();
+    var model = mEls.embedModelSelect ? mEls.embedModelSelect.value : '';
+    if (mEls.embedCurrentInfo) {
+      if (provider === 'disk' && mcState.diskEmbedModels.length === 0) {
+        // ★ 空态引导：磁盘目录不存在或无模型
+        mEls.embedCurrentInfo.innerHTML = '<span class="cfg-txt-tertiary">未检测到磁盘模型。请将 SentenceTransformer 模型放入 <b>models/sentence-transformers/</b> 目录后刷新，或切换为「Ollama 本地」/「云端」来源。</span>';
+      } else {
+        mEls.embedCurrentInfo.innerHTML = '来源: <b>' + esc(provider) + '</b><br>当前模型: <b>' + esc(model || mcState.curEmbedModel || '未选择') + '</b>';
+      }
+    }
+    if (mEls.curEmbedModel) mEls.curEmbedModel.textContent = provider + '/' + (model || mcState.curEmbedModel || '未选择');
+  }
+
+  function updateMcPricing(type) {
+    var models, selected, target;
+    if (type === 'task') { models = mcState.taskModels; selected = mEls.taskModelSelect ? mEls.taskModelSelect.value : ''; target = mEls.taskPricing; }
+    else if (type === 'verify') { models = mcState.verifyModels; selected = mEls.verifyModelSelect ? mEls.verifyModelSelect.value : ''; target = mEls.verifyPricing; }
+    else if (type === 'vision') { models = mcState.visionModels; selected = mEls.visionModelSelect ? mEls.visionModelSelect.value : ''; target = mEls.visionPricing; }
+    if (!target) return;
+    var m = (models || []).find(function(x) { return x.name === selected; });
+    if (!m) { target.innerHTML = '<span class="cfg-txt-tertiary">未选择模型</span>'; return; }
+    if (type === 'vision') {
+      target.innerHTML = '输入: <b>' + esc(m.input_price != null ? ('$' + m.input_price.toFixed(4) + '/1K') : '-') + '</b> | 输出: <b>' + esc(m.output_price != null ? ('$' + m.output_price.toFixed(4) + '/1K') : '-') + '</b> | 估算/点击: <b>' + esc(m.est_per_click != null ? ('$' + m.est_per_click.toFixed(5) + '/click') : '-') + '</b>';
+    } else {
+      target.innerHTML = '输入: <b>' + esc(m.input != null ? ('$' + Number(m.input).toFixed(2) + '/1M') : '-') + '</b> | 输出: <b>' + esc(m.output != null ? ('$' + Number(m.output).toFixed(2) + '/1M') : '-') + '</b>（每 100 万 tokens 计费）';
+    }
+  }
+
+  function renderMcModelsList(preview) {
+    var list = $('modelsList');
+    if (!list) return;
+    var groups = [
+      { id: 'mlTask', items: preview.task_models || [] },
+      { id: 'mlVerify', items: preview.task_models || [] },
+      { id: 'mlVision', items: preview.vision_models || [] },
+      { id: 'mlEmbed', items: preview.embed_models || [] },
+    ];
+    groups.forEach(function(g) {
+      var el = $(g.id);
+      if (!el) return;
+      if (!g.items || g.items.length === 0) { el.innerHTML = '<span class="cfg-txt-tertiary">无</span>'; return; }
+      el.innerHTML = g.items.map(function(m) { var name = typeof m === 'string' ? m : (m.name || m.id || '-'); return '<div>' + esc(name) + '</div>'; }).join('');
+    });
+    list.style.display = 'block';
+  }
+
+  function setMcStatus(color, label) {
+    if (mEls.statusDot) { mEls.statusDot.classList.remove('green', 'yellow', 'red'); if (color) mEls.statusDot.classList.add(color); }
+    if (mEls.statusLabel) { mEls.statusLabel.classList.remove('green', 'yellow', 'red'); if (color) mEls.statusLabel.classList.add(color); mEls.statusLabel.textContent = label; }
+  }
+
+  function bindMcEvents() {
+    if (mEls.btnTestConnection) {
+      mEls.btnTestConnection.addEventListener('click', function() {
+        var key = mEls.apiKeyInput ? mEls.apiKeyInput.value.trim() : '';
+        var baseUrl = mEls.baseUrlInput ? mEls.baseUrlInput.value.trim() : '';
+        if (!key) { setMcStatus('red', '请输入 API Key'); A.toast && A.toast('请输入 API Key', 'error'); return; }
+        setMcStatus('yellow', '测试中...');
+        if (mEls.testResult) mEls.testResult.textContent = '正在发送测试请求...';
+        A.withBtnLoading(mEls.btnTestConnection, '测试中...', async function() {
+          try {
+            var preview = await A.api('POST', '/api/preview-models', { key: key, base_url: baseUrl });
+            if (preview && preview.ok) {
+              setMcStatus('green', '已连接 (' + preview.provider + ')');
+              var taskCount = (preview.task_models || []).length;
+              if (mEls.testResult) mEls.testResult.textContent = '✅ 连接成功\n模型来源: ' + (preview.provider || '-') + '\n任务模型: ' + taskCount + ' 个\n' + (preview.cached ? '（来自 24h 缓存）' : '（实时拉取）');
+              mcState.cloudModelList = preview;
+              if (preview.provider) { if (mEls.providerInput) { mEls.providerInput.value = preview.provider; mEls.providerInput.classList.add('is-identified'); mEls.providerInput.classList.remove('is-unidentified'); } if (mEls.providerHint) mEls.providerHint.textContent = '已识别'; if (mEls.curProvider) mEls.curProvider.textContent = preview.provider; }
+              renderMcModelsList(preview);
+              A.toast && A.toast('✅ 连接成功: ' + (preview.provider || '-'), 'success');
+            } else {
+              setMcStatus('red', '连接失败');
+              if (mEls.testResult) mEls.testResult.textContent = '❌ 失败: ' + ((preview && preview.error) || '未知错误');
+              if (mEls.providerInput) { mEls.providerInput.classList.add('is-unidentified'); mEls.providerInput.classList.remove('is-identified'); }
+              if (mEls.providerHint) mEls.providerHint.textContent = '连接失败，未能识别';
+              A.toast && A.toast('连接失败', 'error');
+            }
+          } catch(e) {
+            setMcStatus('red', '连接失败');
+            if (mEls.testResult) mEls.testResult.textContent = '❌ 异常: ' + String(e);
+            if (mEls.providerInput) { mEls.providerInput.classList.add('is-unidentified'); mEls.providerInput.classList.remove('is-identified'); }
+            if (mEls.providerHint) mEls.providerHint.textContent = '连接异常，未能识别';
+          }
+        });
+      });
+    }
+    if (mEls.btnPreviewModels) { mEls.btnPreviewModels.addEventListener('click', function() { if (mEls.btnTestConnection) mEls.btnTestConnection.click(); }); }
+    if (mEls.btnSaveCloudApi) mEls.btnSaveCloudApi.addEventListener('click', function() {
+      var key = mEls.apiKeyInput ? mEls.apiKeyInput.value.trim() : '';
+      var baseUrl = mEls.baseUrlInput ? mEls.baseUrlInput.value.trim() : '';
+      if (!key) { A.toast && A.toast('请输入 API Key', 'error'); return; }
+      A.withBtnLoading(mEls.btnSaveCloudApi, '保存中...', async function() {
+        try {
+          var fields = { API_KEY: key };
+          if (baseUrl) fields.API_BASE_URL = baseUrl;
+          var d = await A.api('POST', '/api/user-credentials', { fields: fields, project: '*' });
+          if (d && d.ok) {
+            mcState.credentials.API_KEY = key;
+            if (baseUrl) mcState.credentials.API_BASE_URL = baseUrl;
+            A.toast && A.toast('✅ 云端API配置已保存', 'success');
+          } else { A.toast && A.toast('保存失败: ' + (d && d.error ? d.error : '未知错误'), 'error'); }
+        } catch(e) { A.toast && A.toast('保存异常: ' + String(e), 'error'); }
+      });
+    });
+    if (mEls.taskModelSelect) mEls.taskModelSelect.addEventListener('change', function() { updateMcPricing('task'); });
+    if (mEls.verifyModelSelect) mEls.verifyModelSelect.addEventListener('change', function() { updateMcPricing('verify'); });
+    if (mEls.visionModelSelect) mEls.visionModelSelect.addEventListener('change', function() { updateMcPricing('vision'); });
+    if (mEls.embedModelSelect) mEls.embedModelSelect.addEventListener('change', updateMcEmbedInfo);
+    if (mEls.embedProviderRadios) mEls.embedProviderRadios.addEventListener('change', function(e) { if (e.target.name === 'embed-provider') { mcState.curEmbedProvider = e.target.value; refreshMcEmbedModelList(); updateMcEmbedInfo(); } });
+    if (mEls.taskProviderRadios) mEls.taskProviderRadios.addEventListener('change', function(e) { if (e.target.name === 'task-provider') loadMcTaskModels(); });
+    if (mEls.verifyProviderRadios) mEls.verifyProviderRadios.addEventListener('change', function(e) { if (e.target.name === 'verify-provider') loadMcVerifyModels(); });
+    if (mEls.visionProviderRadios) mEls.visionProviderRadios.addEventListener('change', function(e) { if (e.target.name === 'vision-provider') { mcState.curVisionProvider = e.target.value; loadMcVisionModels(); } });
+
+    if (mEls.btnSaveTaskModel) mEls.btnSaveTaskModel.addEventListener('click', function() {
+      var model = mEls.taskModelSelect ? mEls.taskModelSelect.value : '';
+      if (!model) { A.toast && A.toast('请选择模型', 'error'); return; }
+      A.withBtnLoading(mEls.btnSaveTaskModel, '保存中...', async function() {
+        try {
+          var d = await A.api('POST', '/api/task-model', { model: model });
+          if (d && d.ok) {
+            mcState.curTaskModel = model; if (mEls.curModel) mEls.curModel.textContent = model;
+            if (mEls.taskModelHint) mEls.taskModelHint.textContent = '当前: ' + model;
+            var provider = getMcTaskProvider();
+            if (provider !== mcState.curTaskProvider) { await A.api('POST', '/api/user-credentials', { fields: { TASK_PROVIDER: provider }, project: '*' }); mcState.curTaskProvider = provider; }
+            A.toast && A.toast('✅ 任务模型已保存: ' + model, 'success');
+          } else { A.toast && A.toast('保存失败: ' + (d && d.error ? d.error : '未知错误'), 'error'); }
+        } catch(e) { A.toast && A.toast('保存异常: ' + String(e), 'error'); }
+      });
+    });
+    if (mEls.btnSaveVerifyModel) mEls.btnSaveVerifyModel.addEventListener('click', function() {
+      var model = mEls.verifyModelSelect ? mEls.verifyModelSelect.value : '';
+      if (!model) { A.toast && A.toast('请选择模型', 'error'); return; }
+      A.withBtnLoading(mEls.btnSaveVerifyModel, '保存中...', async function() {
+        try {
+          var d = await A.api('POST', '/api/verification-model', { model: model });
+          if (d && d.ok) {
+            mcState.curVerifyModel = model; if (mEls.curVerifyModel) mEls.curVerifyModel.textContent = model;
+            if (mEls.verifyModelHint) mEls.verifyModelHint.textContent = '当前: ' + model;
+            var provider = getMcVerifyProvider();
+            if (provider !== mcState.curVerifyProvider) { await A.api('POST', '/api/user-credentials', { fields: { VERIFY_PROVIDER: provider }, project: '*' }); mcState.curVerifyProvider = provider; }
+            A.toast && A.toast('✅ 校验模型已保存: ' + model, 'success');
+          } else { A.toast && A.toast('保存失败: ' + (d && d.error ? d.error : '未知错误'), 'error'); }
+        } catch(e) { A.toast && A.toast('保存异常: ' + String(e), 'error'); }
+      });
+    });
+    // T05/P2-2：内部改用 await A.confirm(...)（Promise），处理器必须声明为 async
+    if (mEls.btnSaveEmbedModel) mEls.btnSaveEmbedModel.addEventListener('click', async function() {
+      var provider = getMcEmbedProvider();
+      var model = mEls.embedModelSelect ? mEls.embedModelSelect.value : '';
+      if (!model) { A.toast && A.toast('请选择模型', 'error'); return; }
+      /* ★ F1 (2026-07-10): 嵌入模型变更时提示全量重建 RAG */
+      var _changed = (mcState.curEmbedProvider !== provider) || (mcState.curEmbedModel !== model);
+      if (_changed && !(await A.confirm('修改嵌入模型将导致 RAG 索引全量重建（旧向量清空后重新嵌入）。\n\n确认要切换到 ' + provider + '/' + model + ' 吗？', { danger: true }))) {
+        return;
+      }
+      A.withBtnLoading(mEls.btnSaveEmbedModel, '保存中...', async function() {
+        try {
+          var fields = { EMBED_PROVIDER: provider };
+          if (provider === 'disk') {
+            fields.DISK_EMBED_MODEL = model;
+          } else if (provider === 'ollama') {
+            fields.EMBED_LOCAL_MODEL = model;
+          } else {
+            fields.EMBED_MODEL = model;
+          }
+          var d = await A.api('POST', '/api/user-credentials', { fields: fields, project: '*' });
+          if (d && d.ok) {
+            mcState.curEmbedProvider = provider; mcState.curEmbedModel = model;
+            updateMcEmbedInfo();
+            A.toast && A.toast('✅ 嵌入模型已保存: ' + provider + '/' + model, 'success');
+            /* ★ F2: 模型变更后触发 RAG 全量重建 */
+            if (_changed) {
+              A.toast && A.toast('⏳ 正在全量重建 RAG 索引...', 'info');
+              try {
+                var rd = await A.api('POST', '/api/docs/rag/rebuild', {});
+                if (rd && rd.ok) { A.toast && A.toast('✅ RAG 索引已全量重建', 'success'); }
+                else { A.toast && A.toast('RAG 重建失败: ' + (rd && rd.error ? rd.error : '未知'), 'error'); }
+              } catch(re) { A.toast && A.toast('RAG 重建请求异常', 'error'); }
+            }
+          } else { A.toast && A.toast('保存失败: ' + (d && d.error ? d.error : '未知错误'), 'error'); }
+        } catch(e) { A.toast && A.toast('保存异常: ' + String(e), 'error'); }
+      });
+    });
+    if (mEls.visionToggle) mEls.visionToggle.addEventListener('click', function() {
+      var newEnabled = !mcState.visionEnabled;
+      // 先禁用点击，防止重复触发
+      if (mEls.visionToggle) mEls.visionToggle.style.pointerEvents = 'none';
+      (async function() {
+        try {
+          var d = await A.api('POST', '/api/vision-model', { enabled: newEnabled });
+          if (d && d.ok) {
+            mcState.visionEnabled = newEnabled;
+            if (mEls.visionToggle) { if (newEnabled) mEls.visionToggle.classList.add('on'); else mEls.visionToggle.classList.remove('on'); }
+            if (mEls.visionToggleLabel) mEls.visionToggleLabel.textContent = newEnabled ? '已开启' : '已关闭';
+            A.toast && A.toast('✅ 视觉模型 ' + (newEnabled ? '已启用' : '已关闭'), 'success');
+          } else {
+            A.toast && A.toast('视觉模型状态保存失败: ' + (d && d.error ? d.error : '未知错误'), 'error');
+          }
+        } catch(e) { A.toast && A.toast('视觉模型状态保存异常', 'error'); }
+        if (mEls.visionToggle) mEls.visionToggle.style.pointerEvents = '';
+      })();
+    });
+    if (mEls.btnSaveVisionModel) mEls.btnSaveVisionModel.addEventListener('click', function() {
+      var model = mEls.visionModelSelect ? mEls.visionModelSelect.value : '';
+      if (!model) { A.toast && A.toast('请选择模型', 'error'); return; }
+      var provider = getMcVisionProvider();
+      A.withBtnLoading(mEls.btnSaveVisionModel, '保存中...', async function() {
+        try {
+          var payload = { model: model, vision_provider: provider };
+          // ★ Fix: 视觉模型独立 API key / base_url（仅云端异构 provider 需要）
+          var vKey = document.getElementById('visionApiKeyInput');
+          var vBase = document.getElementById('visionBaseUrlInput');
+          if (provider === 'cloud' && vKey && vKey.value.trim()) payload.vision_api_key = vKey.value.trim();
+          if (provider === 'cloud' && vBase && vBase.value.trim()) payload.vision_base_url = vBase.value.trim();
+          var d = await A.api('POST', '/api/vision-model', payload);
+          if (d && d.ok) {
+            mcState.curVisionModel = model; mcState.curVisionProvider = provider; if (mEls.curVisionModel) mEls.curVisionModel.textContent = model;
+            if (mEls.visionModelHint) mEls.visionModelHint.textContent = '当前: ' + model + (provider === 'ollama' ? '（Ollama 本地）' : '');
+            A.toast && A.toast('✅ 视觉模型已保存: ' + provider + '/' + model, 'success');
+          } else { A.toast && A.toast('保存失败: ' + (d && d.error ? d.error : '未知错误'), 'error'); }
+        } catch(e) { A.toast && A.toast('保存异常: ' + String(e), 'error'); }
+      });
+    });
+  }
+
+  async function loadMcAll() {
+    initMcEls();
+    bindMcTabSwitch();
+    bindMcEvents();
+    await Promise.all([loadMcAIDefaults(), loadMcCredentials()]);
+  }
+
+  // 在 loadConfig 完成后加载模型配置 + CI/CD 集成
+  var _origLoadConfig = loadConfig;
+  loadConfig = async function() {
+    await _origLoadConfig();
+    showModelConfigSection();
+    showCiSection();
+    await loadMcAll();
+  };
+
+  // ── 绑定事件 ──
+  function bindEvents() {
+    var btnReload = $('btnReloadConfig');
+    if (btnReload) btnReload.addEventListener('click', function() {
+      A.withBtnLoading(btnReload, '加载中...', loadConfig);
+    });
+    var btnSave = $('btnSaveConfig');
+    if (btnSave) btnSave.addEventListener('click', function() { saveConfig(this); });
+    var btnSaveAll = $('btnSaveAll');
+    if (btnSaveAll) btnSaveAll.addEventListener('click', function() { saveConfig(this); });
+    var btnDiscard = $('btnDiscard');
+    if (btnDiscard) btnDiscard.addEventListener('click', discardChanges);
+    var btnCopyCred = $('btnCopyCred');
+    if (btnCopyCred) btnCopyCred.addEventListener('click', showCopyCredential);
+
+    // 离开页面前提示未保存
+    window.addEventListener('beforeunload', function(e) {
+      if (Object.keys(dirtyFields).length > 0) {
+        e.preventDefault();
+        e.returnValue = '有未保存的配置修改，确定要离开吗？';
+      }
+    });
+  }
+
+  // ── 项目成员只读模式 ──
+  // 无 project.config.edit 权限时：禁用所有配置字段 + 隐藏操作栏 + 插入警告横幅
+  // ★ 必须在 renderGroups() 之后调用，因为字段是动态生成的
+  function applyReadonlyMode() {
+    if (A.hasPerm('project.config.edit')) return; // 管理员无需只读
+    var container = $('datasourceSection');
+    if (!container) container = document.body;
+    // 禁用所有输入控件
+    container.querySelectorAll('input, select, textarea').forEach(function(el) {
+      el.setAttribute('readonly', '');
+      el.setAttribute('disabled', '');
+      el.style.cursor = 'not-allowed';
+      el.style.opacity = '0.6';
+    });
+    // 隐藏底部操作栏（保存全部修改 / 放弃修改）
+    var actionBar = $('actionBar');
+    if (actionBar) actionBar.style.display = 'none';
+    // 隐藏"管理上传文件"按钮（supplementary_files 分组的操作按钮）
+    container.querySelectorAll('.cfg-action-btn').forEach(function(btn) {
+      btn.style.display = 'none';
+    });
+    // 插入只读提示横幅（避免重复插入）
+    if (!container.querySelector('.cfg-readonly-banner')) {
+      var banner = document.createElement('div');
+      banner.className = 'cfg-readonly-banner';
+      banner.style.cssText = 'padding:10px 16px;margin-bottom:12px;background:var(--state-warning-soft);border:1px solid var(--state-warning);border-radius:6px;color:var(--bg-surface);font-size:13px;text-align:center;font-weight:500;';
+      banner.textContent = '当前为执行者身份，配置仅可查看，如需修改请联系项目管理员';
+      container.insertBefore(banner, container.firstChild);
+    }
+  }
+
+  // ── CI/CD 集成（P2-6 H7-H12 + M10） ──
+  function showCiSection() {
+    var section = $('ciSection');
+    if (section) section.style.display = 'block';
+    loadCiTokens();
+    loadCiWebhook();
+  }
+
+  function bindCiTabSwitch() {
+    var nav = $('ciTabNav');
+    if (!nav) return;
+    A.$$('.ds-tab-item', nav).forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        var name = tab.getAttribute('data-ci-tab');
+        A.$$('.ds-tab-item', nav).forEach(function(x) { x.classList.remove('active'); });
+        tab.classList.add('active');
+        A.$$('.ds-tab-content', $('ciTabBody')).forEach(function(c) { c.classList.remove('active'); });
+        var target = $('ciTab-' + name);
+        if (target) target.classList.add('active');
+      });
+    });
+  }
+
+  // ★ H11: GET /api/ci/tokens
+  function loadCiTokens() {
+    var body = $('ciTokenBody');
+    if (!body) return;
+    body.innerHTML = '<tr><td colspan="8" class="ci-empty">加载中...</td></tr>';
+    A.api('GET', '/api/ci/tokens').then(function(r) {
+      if (!r || !r.ok) {
+        body.innerHTML = '<tr><td colspan="8" class="ci-empty">' + esc((r && r.error) || '加载失败') + '</td></tr>';
+        return;
+      }
+      var tokens = r.tokens || [];
+      if (tokens.length === 0) {
+        body.innerHTML = '<tr><td colspan="8" class="ci-empty">暂无 Token，点击「签发 Token」创建</td></tr>';
+        return;
+      }
+      var html = tokens.map(function(t) {
+        var scopeText = (t.scopes || []).join(', ') || '-';
+        var status = t.is_active
+          ? '<span class="cfg-txt-success">启用</span>'
+          : '<span class="cfg-txt-error">已撤销</span>';
+        var revokeBtn = t.is_active
+          ? '<button type="button" class="ci-btn-danger" data-token-id="' + t.id + '" data-token-label="' + esc(t.label || '') + '">吊销</button>'
+          : '';
+        return '<tr>' +
+          '<td class="ci-mono">' + t.id + '</td>' +
+          '<td>' + esc(t.label || '-') + '</td>' +
+          '<td>' + esc(t.project || '-') + '</td>' +
+          '<td>' + esc(scopeText) + '</td>' +
+          '<td>' + status + '</td>' +
+          '<td>' + esc(t.created_by || '-') + '</td>' +
+          '<td class="ci-mono">' + esc(t.last_used_at || '-') + '</td>' +
+          '<td>' + revokeBtn + '</td>' +
+          '</tr>';
+      }).join('');
+      body.innerHTML = html;
+      // ★ H10: DELETE /api/ci/token/<id>
+      A.$$('[data-token-id]', body).forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var id = btn.getAttribute('data-token-id');
+          var label = btn.getAttribute('data-token-label');
+          A.confirm('确定吊销 Token「' + label + '」(#' + id + ')？吊销后使用该 Token 的 CI 任务将立即失败。', {
+            danger: true,
+            title: '吊销 API Token',
+            warning: '该操作会禁用 Token，请确认已更新所有引用该 Token 的 CI 配置。'
+          }).then(function(ok) {
+            if (!ok) return;
+            A.api('DELETE', '/api/ci/token/' + id).then(function(r) {
+              if (r && r.ok) {
+                if (A.toast) A.toast(r.message || '已吊销', 'success');
+                loadCiTokens();
+              } else {
+                if (A.toast) A.toast((r && r.error) || '吊销失败', 'error');
+              }
+            });
+          });
+        });
+      });
+    });
+  }
+
+  // ★ H9: POST /api/ci/token（签发）
+  function bindCiTokenCreate() {
+    var btnOpen = $('btnCreateToken');
+    var btnConfirm = $('btnCreateTokenConfirm');
+    var btnCancel = $('btnCancelTokenForm');
+    if (btnOpen) btnOpen.addEventListener('click', function() {
+      var form = $('ciTokenForm');
+      if (form) form.style.display = 'block';
+      var result = $('ciTokenResult');
+      if (result) result.style.display = 'none';
+    });
+    if (btnCancel) btnCancel.addEventListener('click', function() {
+      var form = $('ciTokenForm');
+      if (form) form.style.display = 'none';
+    });
+    if (btnConfirm) btnConfirm.addEventListener('click', function() {
+      var label = ($('ciTokenLabel').value || '').trim() || 'CI Token';
+      var scopes = ($('ciTokenScopes').value || 'run').split(/[,，]/).map(function(s){ return s.trim(); }).filter(Boolean);
+      A.withBtnLoading(btnConfirm, '创建中...', function() {
+        return A.api('POST', '/api/ci/token', { label: label, scopes: scopes }).then(function(r) {
+          if (r && r.ok) {
+            var form = $('ciTokenForm');
+            if (form) form.style.display = 'none';
+            var result = $('ciTokenResult');
+            var raw = $('ciTokenRaw');
+            if (result) result.style.display = 'block';
+            if (raw) raw.textContent = r.token || '';
+            loadCiTokens();
+            return null;
+          }
+          if (A.toast) A.toast((r && r.error) || '创建失败', 'error');
+          return null;
+        });
+      });
+    });
+    var btnCopy = $('btnCopyToken');
+    if (btnCopy) btnCopy.addEventListener('click', function() {
+      var raw = $('ciTokenRaw');
+      if (!raw || !raw.textContent) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(raw.textContent).then(function() {
+          if (A.toast) A.toast('已复制 Token', 'success');
+        });
+      } else {
+        raw.select();
+        document.execCommand('copy');
+        if (A.toast) A.toast('已复制 Token', 'success');
+      }
+    });
+  }
+
+  // ★ H12: GET /api/ci/webhook-config
+  function loadCiWebhook() {
+    var info = $('ciWebhookInfo');
+    var box = $('ciWebhookEndpoints');
+    if (!info) return;
+    A.api('GET', '/api/ci/webhook-config').then(function(r) {
+      if (!r || !r.ok) {
+        info.textContent = (r && r.error) || '加载失败';
+        return;
+      }
+      info.textContent = '项目: ' + (r.project || '-') + ' · 接口地址: ' + (r.base_url || '-');
+      if (!box) return;
+      var eps = r.endpoints || {};
+      var html = Object.keys(eps).map(function(k) {
+        var ep = eps[k] || {};
+        return '<div class="ci-webhook-item">' +
+          '<div class="ci-webhook-name">' + esc(ep.description || k) + '</div>' +
+          '<div class="ci-webhook-method">' + esc(ep.method || '') + '</div>' +
+          '<div class="ci-webhook-url ci-mono">' + esc(ep.url || '') + '</div>' +
+          '</div>';
+      }).join('');
+      box.innerHTML = html || '<div class="ci-empty">无 Webhook 端点</div>';
+    });
+  }
+
+  // ★ H7: GET /api/ci/template/jenkins
+  function bindCiTemplates() {
+    var btnJenkins = $('btnJenkinsTemplate');
+    var btnGithub = $('btnGithubTemplate');
+    var output = $('ciTemplateOutput');
+    if (btnJenkins) btnJenkins.addEventListener('click', function() {
+      A.withBtnLoading(btnJenkins, '生成中...', function() {
+        return A.api('GET', '/api/ci/template/jenkins').then(function(r) {
+          if (r && r.ok && output) output.value = r.content || '';
+          else if (A.toast) A.toast((r && r.error) || '生成失败', 'error');
+          return null;
+        });
+      });
+    });
+    // ★ H8: GET /api/ci/template/github
+    if (btnGithub) btnGithub.addEventListener('click', function() {
+      A.withBtnLoading(btnGithub, '生成中...', function() {
+        return A.api('GET', '/api/ci/template/github').then(function(r) {
+          if (r && r.ok && output) output.value = r.content || '';
+          else if (A.toast) A.toast((r && r.error) || '生成失败', 'error');
+          return null;
+        });
+      });
+    });
+  }
+
+  // ── 登录态守卫 ──
+  A._onAuthOk = function() {
+    A._renderSidebarUser();
+    A.applyPermissions();
+    loadConfig();
+    A._startStepBadgePolling();
+  };
+  if (A._currentUser) {
+    loadConfig();
+  }
+
+  bindEvents();
+  bindCiTabSwitch();
+  bindCiTokenCreate();
+  bindCiTemplates();
+})();
+</script>
+{% endblock %}

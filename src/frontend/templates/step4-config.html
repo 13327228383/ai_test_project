@@ -1,0 +1,1492 @@
+{# ===========================================================================
+   [B6 契约修复] 转测文档下拉（#deployDoc）原先**从无任何代码填充**，
+   value 恒为 ''，导致"转测文档过滤"整条链路是死的。
+   本轮新增 loadDeploymentDocs()（见文件下方脚本区），拉 /api/deployment/docs
+   填充 option；前端提交的 key 名 deployDoc **保持不变**，
+   由后端 src/backend/executor/_run_step.py::_resolve_doc() 把标识解析为正文。
+
+   [未复核-需 GLM/DeepSeek 把关]
+   =========================================================================== #}
+{% extends "_layout_base.html" %}
+{% block title %}执行配置 — Step4 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+执行配置 — Step4
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnReload" data-perm="execution.step4">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  重新加载
+</button>
+<button class="btn-topbar" id="btnReset" data-perm="execution.step4">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+  重置参数
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════ 信息栏 ════════════ -->
+<div class="s4-info-bar">
+  <div class="s4-info-item">
+    <span class="s4-info-label">可选版本数</span>
+    <span class="s4-info-value" id="versionCount">0</span>
+  </div>
+  <div class="s4-info-item">
+    <span class="s4-info-label">可用浏览器</span>
+    <span class="s4-info-value" id="browserCount">0</span>
+  </div>
+  <!-- ★ 等级筛选置于「可用浏览器」之后同一排，标签标题与等级标签同一行、垂直居中左右对齐 -->
+  <div class="s4-info-item s4-level-filter-item">
+    <div class="s4-level-title-row">
+      <span class="s4-info-label">等级筛选</span>
+      <div class="s4-level-list" id="levelList">
+        <div class="s4-level-tag checked" data-level="P0"><span class="s4-level-dot s4-dot-error"></span>P0</div>
+        <div class="s4-level-tag checked" data-level="P1"><span class="s4-level-dot s4-dot-warning"></span>P1</div>
+        <div class="s4-level-tag checked" data-level="P2"><span class="s4-level-dot s4-dot-success"></span>P2</div>
+        <div class="s4-level-tag" data-level="P3"><span class="s4-level-dot s4-dot-neutral"></span>P3</div>
+      </div>
+    </div>
+    <div class="s4-level-hint" id="levelHint">从后端拉取到的等级会自动追加</div>
+  </div>
+</div>
+
+<!-- ════════════ 主配置区 ════════════ -->
+<div class="s4-modal">
+
+  <!-- HEADER -->
+  <div class="s4-modal-header">
+    <div class="s4-modal-title">
+      <div class="s4-modal-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--step4-color)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+      </div>
+      <div>执行配置 — Step4</div>
+    </div>
+    <div class="s4-modal-subtitle">配置 Step4 Playwright 浏览器执行的参数、版本与等级筛选</div>
+  </div>
+
+  <!-- SCROLLABLE BODY -->
+  <div class="s4-modal-body">
+
+    <!-- Section 1: 版本选择 -->
+    <div class="s4-section">
+      <div class="s4-section-title">版本选择</div>
+      <div class="s4-section-hint">不选则使用当前激活版本；多选时按版本测试用例执行并自动去重</div>
+      <div class="s4-version-list" id="versionList">
+        <div class="s4-empty">加载版本中...</div>
+      </div>
+    </div>
+
+    <hr class="s4-divider"/>
+
+    <!-- Section 2: 转测文档 (collapsible, optional) -->
+    <div class="s4-section">
+      <div class="s4-collapsible-header" id="deployHeader">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="s4-collapsible-title">转测文档</span>
+        <span class="s4-collapsible-optional">（可选）</span>
+      </div>
+      <div class="s4-collapsible-body" id="deployBody">
+        <div class="s4-form-grid">
+          <div>
+            <div class="s4-form-label">转测文档</div>
+            <select class="s4-select" id="deployDoc">
+              <option value="">-- 请选择 --</option>
+            </select>
+          </div>
+          <div>
+            <div class="s4-form-label">转测版本</div>
+            <select class="s4-select" id="deployVersion">
+              <option value="">-- 请选择 --</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="s4-divider"/>
+
+    <!-- Section 3: 执行模式 -->
+    <div class="s4-section">
+      <div class="s4-section-head">
+        <div class="s4-section-title">执行模式</div>
+        <div class="s4-checkbox tooltip-wide" id="includeExecCheckbox" data-tooltip="把上一次已通过 / 已验证的用例也纳入本次执行范围&#10;默认关闭：仅执行未执行 / 未通过的用例，避免重复耗时">
+          <div class="s4-check-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <span>包含已验证用例</span>
+        </div>
+      </div>
+      <div class="s4-mode-list" id="modeCards">
+        <div class="s4-radio-card selected" data-mode="normal">
+          <div class="s4-radio-dot"></div>
+          <div>
+            <div class="s4-radio-label">正常执行</div>
+            <div class="s4-radio-desc">全部用例</div>
+          </div>
+        </div>
+        <div class="s4-radio-card" data-mode="retry">
+          <div class="s4-radio-dot"></div>
+          <div>
+            <div class="s4-radio-label">失败重跑</div>
+            <div class="s4-radio-desc">仅上次失败的用例</div>
+          </div>
+        </div>
+        <div class="s4-radio-card" data-mode="custom">
+          <div class="s4-radio-dot"></div>
+          <div>
+            <div class="s4-radio-label">指定用例</div>
+            <div class="s4-radio-desc">手动选择</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 4: 指定用例 (hidden by default) -->
+    <div class="s4-section" id="customCaseSection" hidden>
+      <hr class="s4-divider mb-5"/>
+      <div class="s4-section-title">指定用例</div>
+      <div class="s4-search-wrapper">
+        <svg class="s4-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="text" class="s4-input s4-search-input" id="caseSearch" placeholder="搜索用例 ID 或标题...">
+      </div>
+      <div class="s4-case-toolbar">
+        <button class="s4-btn-mini" id="btnSelectAll" type="button">全选匹配</button>
+        <button class="s4-btn-mini" id="btnClearAll" type="button">清空选择</button>
+        <span class="s4-case-count">已选 <b id="selectedCount">0</b> 个</span>
+      </div>
+      <div class="s4-case-list" id="caseList">
+        <div class="s4-empty">点击"指定用例"模式后加载用例列表</div>
+      </div>
+    </div>
+
+    <hr class="s4-divider"/>
+
+    <!-- Section 5: 执行参数 -->
+    <div class="s4-section">
+      <div class="s4-section-title">执行参数</div>
+      <div class="s4-section-hint tooltip-wide" data-tooltip="以下参数作用于本次执行（一次性运行选项，不写入持久配置）&#10;如需固化默认值，请到「质量治理 → 流水线配置」Step4 分组调整">悬停每项标题查看说明；这些是本次运行选项，非持久配置</div>
+
+      <!-- 分组 A：浏览器与渲染 -->
+      <div class="s4-subsection">
+        <div class="s4-subsection-title">浏览器与渲染</div>
+        <div class="s4-form-grid">
+          <div>
+            <div class="s4-form-label tooltip-wide" data-tooltip="本次执行使用的 Playwright 浏览器驱动&#10;可选：chromium / firefox / webkit&#10;默认取可用浏览器列表的第一个">浏览器</div>
+            <select class="s4-select" id="browserSelect"><option value="">-- 请选择 --</option></select>
+          </div>
+          <div>
+            <div class="s4-form-label tooltip-wide" data-tooltip="headless 无头模式（运行时不弹出浏览器窗口）&#10;后台 / CI 环境建议开启；本机调试可关闭以实时观察页面">无头模式</div>
+            <div class="s4-toggle-row">
+              <div class="s4-toggle on" id="headlessToggle"><div class="s4-toggle-knob"></div></div>
+              <span class="s4-toggle-label" id="headlessLabel">已开启</span>
+            </div>
+          </div>
+          <div>
+            <div class="s4-form-label tooltip-wide" data-tooltip="浏览器窗口视口宽度（像素）&#10;影响响应式 / 内联宽度相关用例的单击与断言判定">视口宽度</div>
+            <input type="number" class="s4-input s4-input-mono" id="viewportWidthInput" value="1920" min="320" max="3840" step="10">
+          </div>
+          <div>
+            <div class="s4-form-label tooltip-wide" data-tooltip="浏览器窗口视口高度（像素）&#10;影响滚动、弹窗与全屏相关用例的判定">视口高度</div>
+            <input type="number" class="s4-input s4-input-mono" id="viewportHeightInput" value="1080" min="240" max="2160" step="10">
+          </div>
+        </div>
+      </div>
+
+      <!-- 分组 B：执行与超时 -->
+      <div class="s4-subsection">
+        <div class="s4-subsection-title">执行与超时</div>
+        <div class="s4-exec-row">
+          <div class="s4-exec-field">
+            <div class="s4-form-label tooltip-wide" data-tooltip="单个用例的执行超时上限（毫秒）&#10;默认 30000ms；被测系统响应慢可调大到 45000~60000&#10;超时的用例标记为失败并跳过">超时 (毫秒)</div>
+            <input type="number" class="s4-input s4-input-mono" id="timeoutInput" value="30000" min="1000" max="120000" step="5000">
+          </div>
+          <div class="s4-exec-field">
+            <div class="s4-form-label tooltip-wide" data-tooltip="同时最多启动的浏览器实例数（1~8）&#10;越高执行越快但越占内存（每实例约 200~500MB）&#10;建议用右侧“刷新推荐值”给出的值">并发上限</div>
+            <div class="s4-control-row">
+              <input type="number" class="s4-input s4-input-mono" id="parallelInput" value="1" min="1" max="8">
+              <button class="s4-btn-mini" id="btnParallelRefresh" type="button">刷新推荐值</button>
+            </div>
+          </div>
+          <!-- ★ 三区分布局：左=超时设置、中=并发上限配置、最右=推荐说明提示 -->
+          <div class="s4-para-text s4-exec-hint tooltip-wide" id="parallelInfo" data-tooltip="并发推荐由后端按本机可用内存与浏览器单实例占用动态估算&#10;可在“执行与超时 → 并发上限”旁点击“刷新推荐值”重新计算">推荐并发信息加载中...</div>
+        </div>
+
+      <!-- 分组 C：证据与登录 -->
+      <div class="s4-subsection">
+        <div class="s4-subsection-title">证据与登录</div>
+        <div class="s4-form-grid">
+          <div>
+            <div class="s4-form-label tooltip-wide" data-tooltip="用例失败或异常时自动截图留证&#10;截图写入右侧“截图保存目录”&#10;为质量台账 / 假绿审计提供视觉证据">失败时截图</div>
+            <div class="s4-toggle-row">
+              <div class="s4-toggle on" id="screenshotToggle"><div class="s4-toggle-knob"></div></div>
+              <span class="s4-toggle-label" id="screenshotLabel">已开启</span>
+            </div>
+          </div>
+          <div>
+            <div class="s4-form-label tooltip-wide" data-tooltip="失败截图的落盘目录&#10;留空使用默认目录（按项目 / 版本归档）">截图保存目录</div>
+            <input type="text" class="s4-input s4-input-mono" id="screenshotDirInput" placeholder="默认目录">
+          </div>
+          <div>
+            <div class="s4-form-label tooltip-wide" data-tooltip="复用目标系统已登录会话，跳过重复登录步骤以加速执行&#10;需目标系统支持会话保持（Cookie / LocalStorage）">会话感知登录</div>
+            <div class="s4-toggle-row">
+              <div class="s4-toggle on" id="sessionLoginToggle"><div class="s4-toggle-knob"></div></div>
+              <span class="s4-toggle-label" id="sessionLoginLabel">已开启</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <div class="s4-modal-footer">
+    <button class="s4-btn-ghost" id="btnCancel" type="button">取消</button>
+    <button class="s4-btn-primary" id="btnStart" type="button">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+      开始执行
+    </button>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ════════════ 信息栏 ════════════ */
+.s4-info-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 28px 32px;
+  padding: 16px 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+.s4-info-item { display: flex; flex-direction: column; gap: 4px; }
+.s4-info-label { font-size: var(--fs-small); color: var(--text-secondary); }
+.s4-info-value {
+  font-size: var(--fs-h3); font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+.s4-info-success { color: var(--state-success-text); }
+
+/* ★ 等级筛选（置于信息栏「可用浏览器」之后，同一排） */
+.s4-level-filter-item { min-width: 240px; flex: 1 1 auto; }
+/* 标题与等级标签同一行，垂直居中；
+   因信息栏为 flex-wrap 行布局，左右两端信息项天然左对齐、右端随内容收束，等级筛选左右对齐 */
+.s4-level-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+/* 说明紧贴等级标签下方、自身随内容撑开，不用负 margin，避免与等级框重叠 */
+.s4-level-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+/* 并发上限：输入框与「刷新推荐值」按钮同一行，推荐说明在其右侧 */
+.s4-control-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+/* 执行与超时：三区分布局（左=超时、中=并发上限、最右=推荐提示） */
+.s4-exec-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.s4-exec-field {
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.s4-exec-hint {
+  flex: 1 1 240px;
+  min-width: 240px;
+  margin-left: auto;
+  padding-top: 22px;
+}
+.s4-exec-hint b { color: var(--step4-color); }
+/* ════════════ class 治理（下沉内联样式） ════════════ */
+.s4-dot-error { background: var(--state-error); }
+.s4-dot-warning { background: var(--state-warning); }
+.s4-dot-success { background: var(--state-success); }
+.s4-dot-neutral { background: var(--text-tertiary); }
+.s4-error-text { color: var(--state-error-text); }
+.s4-empty-error { color: var(--state-error-text); }
+
+/* ════════════ 主配置区（卡片化容器） ════════════ */
+.s4-modal {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 24px 64px var(--bg-overlay), 0 0 0 1px var(--state-info-soft);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.s4-modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-default);
+  flex-shrink: 0;
+}
+.s4-modal-title {
+  display: flex; align-items: center; gap: 12px;
+  font-size: var(--fs-h2); font-weight: var(--fw-bold);
+  color: var(--text-primary);
+}
+.s4-modal-icon {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--step4-soft);
+  border: 1px solid var(--step4-border);
+  display: flex; align-items: center; justify-content: center;
+}
+.s4-modal-subtitle {
+  margin-top: 6px; margin-left: 48px;
+  font-size: var(--fs-small); color: var(--text-secondary);
+}
+
+.s4-modal-body {
+  padding: 20px 24px;
+  display: flex; flex-direction: column;
+  gap: 20px;
+  /* ★ 修复：body 独立滚动（min-height:0 + overflow-y:auto），避免底部等级筛选与页脚文字重叠 */
+  flex: 1; min-height: 0; overflow-y: auto;
+}
+.s4-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-default);
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 12px; flex-shrink: 0;
+}
+
+/* ════════════ Section ════════════ */
+.s4-section { display: flex; flex-direction: column; }
+/* ★ 修复：`hidden` 属性不再被 .s4-section{display:flex} 覆盖（作者样式优先级高于 UA [hidden]=none），
+     否则「指定用例」区在非 custom 模式初载时也会常显 */
+.s4-section[hidden] { display: none; }
+.s4-section-title {
+  font-size: var(--fs-h3); font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+/* ★ 标题行（标题在左，「包含已验证用例」复选框紧随名称后，不推挤到最右） */
+.s4-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.s4-section-head .s4-section-title { margin-bottom: 0; }
+.s4-section-title::before {
+  content: ''; width: 3px; height: 14px;
+  background: var(--step4-color);
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+.s4-section-hint {
+  font-size: var(--fs-xs); color: var(--text-tertiary);
+  margin-top: -4px; margin-bottom: 12px;
+}
+/* ※ 执行参数二次分组：把参数字段按「浏览器渲染 / 执行超时 / 证据登录」归类，降低视觉密度 */
+.s4-subsection {
+  display: flex; flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+.s4-subsection + .s4-subsection { margin-top: 12px; }
+.s4-subsection-title {
+  font-size: var(--fs-small); font-weight: var(--fw-semibold);
+  color: var(--text-secondary);
+  display: flex; align-items: center; gap: 6px;
+  letter-spacing: 0.02em;
+}
+.s4-subsection-title::before {
+  content: ''; width: 2px; height: 10px;
+  background: var(--step4-color);
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+/* ════════════ 版本列表 ════════════ */
+.s4-version-list {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.s4-version-item {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  transition: all 0.15s;
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+}
+.s4-version-item:hover {
+  border-color: var(--step4-border);
+  background: var(--step4-soft);
+}
+.s4-version-item.checked {
+  border-color: var(--step4-border);
+  background: var(--step4-soft);
+}
+.s4-version-item .s4-check-box {
+  width: 16px; height: 16px;
+  border-radius: var(--radius-xs);
+  border: 1.5px solid var(--text-tertiary);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.s4-version-item.checked .s4-check-box {
+  background: var(--step4-color);
+  border-color: var(--step4-color);
+}
+.s4-version-item .s4-check-box svg {
+  width: 10px; height: 10px;
+  stroke: var(--text-on-color); stroke-width: 3;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.s4-version-item.checked .s4-check-box svg { opacity: 1; }
+.s4-version-name { font-weight: var(--fw-medium); }
+.s4-version-tag {
+  font-size: var(--fs-xs);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-weight: var(--fw-medium);
+}
+.s4-version-tag-active {
+  color: var(--state-success-text);
+  background: var(--state-success-soft);
+}
+.s4-version-tag-archived {
+  color: var(--text-tertiary);
+  background: var(--state-neutral-soft);
+}
+.s4-version-tag-draft {
+  color: var(--state-warning-text);
+  background: var(--state-warning-soft);
+}
+.s4-version-stats {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+}
+
+/* ════════════ 折叠区域 ════════════ */
+.s4-collapsible-header {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer; user-select: none;
+  padding: 8px 0;
+}
+.s4-collapsible-header svg {
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+.s4-collapsible-header.expanded svg { transform: rotate(90deg); }
+.s4-collapsible-title {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.s4-collapsible-optional {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  margin-left: auto;
+}
+.s4-collapsible-body {
+  display: none;
+  padding-top: 12px;
+}
+.s4-collapsible-body.show { display: block; }
+
+/* ════════════ 表单 ════════════ */
+.s4-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px 16px;
+}
+.s4-form-label {
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+.s4-input, .s4-select {
+  width: 100%;
+  height: var(--control-height);
+  padding: 0 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--control-radius);
+  color: var(--text-primary);
+  font-size: var(--fs-body);
+  font-family: var(--font-sans);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.s4-input:focus, .s4-select:focus {
+  border-color: var(--step4-color);
+  box-shadow: 0 0 0 3px var(--step4-soft);
+}
+.s4-input::placeholder { color: var(--text-tertiary); }
+.s4-input-mono { font-family: var(--font-mono); }
+.s4-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%2364748b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+  cursor: pointer;
+}
+
+/* ════════════ Radio cards ════════════ */
+.s4-mode-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+.s4-radio-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+}
+.s4-radio-card:hover { border-color: var(--border-hover); }
+.s4-radio-card.selected {
+  border-color: var(--step4-border);
+  background: var(--step4-soft);
+  color: var(--text-primary);
+}
+.s4-radio-dot {
+  width: 16px; height: 16px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--text-tertiary);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.s4-radio-card.selected .s4-radio-dot { border-color: var(--step4-color); }
+.s4-radio-dot::after {
+  content: '';
+  width: 8px; height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--step4-color);
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all 0.15s;
+}
+.s4-radio-card.selected .s4-radio-dot::after {
+  opacity: 1;
+  transform: scale(1);
+}
+.s4-radio-label { font-weight: var(--fw-medium); }
+.s4-radio-desc {
+  font-size: var(--fs-small);
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+/* ════════════ 指定用例区 ════════════ */
+.s4-search-wrapper { position: relative; margin-bottom: 12px; }
+.s4-search-icon {
+  position: absolute;
+  left: 10px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+.s4-search-input { padding-left: 32px !important; }
+.s4-case-toolbar {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 8px;
+}
+.s4-case-count {
+  margin-left: auto;
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+}
+.s4-case-count b { color: var(--step4-color); }
+.s4-case-list {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  padding: 8px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.s4-case-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-small);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.s4-case-item:hover { background: var(--bg-surface); }
+.s4-case-item input[type="checkbox"] { margin: 0; }
+.s4-case-id {
+  font-family: var(--font-mono);
+  color: var(--step4-color);
+  font-weight: var(--fw-medium);
+}
+.s4-case-title { color: var(--text-secondary); }
+
+/* ════════════ Toggle ════════════ */
+.s4-toggle-row {
+  display: flex; align-items: center; gap: 8px;
+  height: var(--control-height);
+}
+.s4-toggle {
+  position: relative;
+  width: 40px; height: 22px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.s4-toggle.on {
+  background: var(--step4-color);
+  border-color: var(--step4-color);
+}
+.s4-toggle-knob {
+  position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px;
+  border-radius: var(--radius-full);
+  background: var(--text-on-color);
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px var(--bg-overlay);
+}
+.s4-toggle.on .s4-toggle-knob { transform: translateX(18px); }
+.s4-toggle-label {
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+}
+
+/* ════════════ 并发推荐说明（纯文本，不单独成控件，置于「刷新推荐值」右侧占其剩余空间） ════════════ */
+.s4-para-text {
+  flex: 1 1 auto;
+  min-width: 220px;
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.s4-para-text b { color: var(--step4-color); }
+
+.s4-checkbox {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  transition: all 0.15s;
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+  user-select: none;
+}
+.s4-checkbox:hover {
+  border-color: var(--step4-border);
+  background: var(--step4-soft);
+}
+.s4-checkbox.checked {
+  border-color: var(--step4-border);
+  background: var(--step4-soft);
+}
+.s4-check-box {
+  width: 16px; height: 16px;
+  border-radius: var(--radius-xs);
+  border: 1.5px solid var(--text-tertiary);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.s4-checkbox.checked .s4-check-box {
+  background: var(--step4-color);
+  border-color: var(--step4-color);
+}
+.s4-check-box svg {
+  width: 10px; height: 10px;
+  stroke: var(--text-on-color); stroke-width: 3;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.s4-checkbox.checked .s4-check-box svg { opacity: 1; }
+
+/* ════════════ 等级标签 ════════════ */
+.s4-level-list {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.s4-level-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+.s4-level-tag:hover { border-color: var(--border-hover); }
+.s4-level-tag.checked {
+  border-color: var(--step4-border);
+  background: var(--step4-soft);
+  color: var(--step4-color);
+}
+.s4-level-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+}
+
+/* ════════════ 分割线 ════════════ */
+.s4-divider {
+  height: 1px;
+  background: var(--border-default);
+  margin: 0;
+  border: none;
+}
+
+/* ════════════ 按钮 ════════════ */
+.s4-btn-ghost {
+  height: var(--control-height-lg);
+  padding: 0 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.s4-btn-ghost:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+.s4-btn-primary {
+  height: var(--control-height-lg);
+  padding: 0 24px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--step4-color);
+  color: var(--text-inverse);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.s4-btn-primary:hover {
+  background: var(--state-info);
+  box-shadow: 0 0 16px var(--state-info-soft);
+}
+.s4-btn-mini {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: var(--fs-small);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.s4-btn-mini:hover {
+  border-color: var(--step4-border);
+  color: var(--step4-color);
+  background: var(--step4-soft);
+}
+
+/* ════════════ 空状态 ════════════ */
+.s4-empty {
+  padding: 12px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-small);
+  text-align: center;
+}
+
+/* 加载指示点 */
+.s4-loading-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  margin-right: 6px;
+  animation: s4-blink 1s infinite;
+  vertical-align: middle;
+}
+@keyframes s4-blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+'use strict';
+
+const A = window._A;
+if (!A) { console.error('[step4-config] _A 未初始化'); return; }
+const $ = A.$, escHtml = A.escHtml, escAttr = A.escAttr, api = A.api, appendLog = A.appendLog;
+
+// ── 状态 ──
+const state = {
+  versions: [],
+  browsers: [],
+  priorities: [],
+  parallel: null,
+  cases: [],
+  selectedCases: new Set(),
+  selectedVersions: new Set(),
+  selectedLevels: new Set(['P0', 'P1', 'P2']),
+  mode: 'normal',
+  headless: true,
+  screenshotOnFailure: true,
+  sessionAwareLogin: true,
+  includeExec: false,
+};
+
+// ── 元素引用 ──
+const els = {
+  curProject: $('curProject'),
+  versionCount: $('versionCount'),
+  browserCount: $('browserCount'),
+  versionList: $('versionList'),
+  deployHeader: $('deployHeader'),
+  deployBody: $('deployBody'),
+  deployDoc: $('deployDoc'),
+  deployVersion: $('deployVersion'),
+  modeCards: $('modeCards'),
+  customCaseSection: $('customCaseSection'),
+  caseSearch: $('caseSearch'),
+  caseList: $('caseList'),
+  selectedCount: $('selectedCount'),
+  btnSelectAll: $('btnSelectAll'),
+  btnClearAll: $('btnClearAll'),
+  browserSelect: $('browserSelect'),
+  headlessToggle: $('headlessToggle'),
+  headlessLabel: $('headlessLabel'),
+  timeoutInput: $('timeoutInput'),
+  parallelInput: $('parallelInput'),
+  parallelInfo: $('parallelInfo'),
+  btnParallelRefresh: $('btnParallelRefresh'),
+  includeExecCheckbox: $('includeExecCheckbox'),
+  screenshotToggle: $('screenshotToggle'),
+  screenshotLabel: $('screenshotLabel'),
+  screenshotDirInput: $('screenshotDirInput'),
+  viewportWidthInput: $('viewportWidthInput'),
+  viewportHeightInput: $('viewportHeightInput'),
+  sessionLoginToggle: $('sessionLoginToggle'),
+  sessionLoginLabel: $('sessionLoginLabel'),
+  levelList: $('levelList'),
+  levelHint: $('levelHint'),
+  btnCancel: $('btnCancel'),
+  btnStart: $('btnStart'),
+  btnReload: $('btnReload'),
+  btnReset: $('btnReset'),
+};
+
+// ════════════ 渲染 ════════════
+
+function renderVersions(versions, activeId) {
+  if (!versions || versions.length === 0) {
+    els.versionList.innerHTML = '<div class="s4-empty">暂无版本，默认使用当前激活版本</div>';
+    els.versionCount.textContent = '0';
+    return;
+  }
+  els.versionCount.textContent = String(versions.length);
+  // 默认选中 active
+  state.selectedVersions.clear();
+  versions.forEach(v => {
+    if (String(v.id) === String(activeId) || v.status === 'active') {
+      state.selectedVersions.add(String(v.id));
+    }
+  });
+  els.versionList.innerHTML = versions.map(v => {
+    const vid = String(v.id);
+    const checked = state.selectedVersions.has(vid) ? ' checked' : '';
+    const status = (v.status || 'draft').toLowerCase();
+    const tagClass = status === 'active' ? 's4-version-tag-active' :
+                     (status === 'archived' ? 's4-version-tag-archived' : 's4-version-tag-draft');
+    const tagText = status === 'active' ? '激活' :
+                    (status === 'archived' ? '归档' : (status === 'draft' ? '草稿' : status));
+    const label = v.version_label || ('#' + v.id);
+    const reqCount = v.requirement_count != null ? v.requirement_count : '?';
+    const caseCount = v.case_count != null ? v.case_count : '?';
+    return '<div class="s4-version-item' + checked + '" data-vid="' + escAttr(vid) + '">' +
+      '<div class="s4-check-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>' +
+      '<span class="s4-version-name">' + escHtml(label) + '</span>' +
+      '<span class="s4-version-tag ' + tagClass + '">' + escHtml(tagText) + '</span>' +
+      '<span class="s4-version-stats">' + escHtml(String(reqCount)) + '需求 / ' + escHtml(String(caseCount)) + '用例</span>' +
+      '</div>';
+  }).join('');
+  // 绑定点击
+  els.versionList.querySelectorAll('.s4-version-item').forEach(item => {
+    item.addEventListener('click', function() {
+      const vid = this.dataset.vid;
+      if (state.selectedVersions.has(vid)) {
+        state.selectedVersions.delete(vid);
+        this.classList.remove('checked');
+      } else {
+        state.selectedVersions.add(vid);
+        this.classList.add('checked');
+      }
+    });
+  });
+}
+
+function renderBrowsers(browsers) {
+  if (!browsers || browsers.length === 0) {
+    els.browserSelect.innerHTML = '<option value="">无可用浏览器</option>';
+    els.browserCount.textContent = '0';
+    return;
+  }
+  els.browserCount.textContent = String(browsers.length);
+  els.browserSelect.innerHTML = browsers.map(b => {
+    const id = (b && (b.id || b.value)) || '';
+    const name = (b && (b.name || b.label)) || String(id);
+    return '<option value="' + escAttr(id) + '">' + escHtml(name) + '</option>';
+  }).join('');
+  // 默认选第一个
+  if (browsers.length > 0) els.browserSelect.value = (browsers[0].id || browsers[0].value || '');
+}
+
+function renderPriorities(priorities) {
+  // 合并后端返回的等级与默认 P0-P3
+  const defaultLevels = ['P0', 'P1', 'P2', 'P3'];
+  const allLevels = new Set([...defaultLevels, ...(priorities || [])]);
+  els.levelList.innerHTML = '';
+  allLevels.forEach(level => {
+    const lvl = String(level).trim();
+    if (!lvl) return;
+    const colorMap = { 'P0': 'var(--state-error)', 'P1': 'var(--state-warning)', 'P2': 'var(--state-success)', 'P3': 'var(--text-tertiary)' };
+    const color = colorMap[lvl] || 'var(--text-tertiary)';
+    const checked = state.selectedLevels.has(lvl) ? ' checked' : '';
+    const html = '<div class="s4-level-tag' + checked + '" data-level="' + escAttr(lvl) + '">' +
+      '<span class="s4-level-dot" style="background: ' + color + ';"></span>' + escHtml(lvl) +
+      '</div>';
+    els.levelList.insertAdjacentHTML('beforeend', html);
+  });
+  els.levelList.querySelectorAll('.s4-level-tag').forEach(tag => {
+    tag.addEventListener('click', function() {
+      const lvl = this.dataset.level;
+      if (state.selectedLevels.has(lvl)) {
+        state.selectedLevels.delete(lvl);
+        this.classList.remove('checked');
+      } else {
+        state.selectedLevels.add(lvl);
+        this.classList.add('checked');
+      }
+      scheduleSaveRunOptions();
+    });
+  });
+  const extra = (priorities || []).filter(p => !defaultLevels.includes(p));
+  els.levelHint.textContent = extra.length > 0
+    ? '后端额外返回等级: ' + extra.join(', ')
+    : '从后端拉取到的等级会自动追加';
+}
+
+function renderParallel(rec) {
+  rec = rec || {};
+  const available = rec.available_mb == null ? '未知' : (rec.available_mb + 'MB');
+  const avg = rec.browser_avg_mb == null ? '未知' : (rec.browser_avg_mb + 'MB');
+  const recommended = rec.recommended || 1;
+  const effective = rec.effective || recommended;
+  const configured = rec.configured_max || (parseInt(els.parallelInput.value, 10) || 1);
+  const color = effective < configured ? 'var(--state-warning-text)' : 'var(--state-success-text)';
+  els.parallelInfo.innerHTML =
+    '<span style="color:' + color + '">推荐并发：<b>' + escHtml(String(recommended)) + '</b>，实际执行：<b>' + escHtml(String(effective)) + '</b></span> ' +
+    '<span class="text-tertiary">（配置上限 ' + escHtml(String(configured)) + '）</span><br>' +
+    '<span>理由：' + escHtml(rec.reason || '暂无推荐理由') + '</span><br>' +
+    '<span class="text-tertiary">可用内存 ' + escHtml(String(available)) + '；浏览器单实例估算 ' + escHtml(String(avg)) + '；自动限流 ' + (rec.auto_limit ? '开启' : '关闭') + '</span>';
+}
+
+function renderCases(cases) {
+  state.cases = Array.isArray(cases) ? cases : (cases && cases.intents) || [];
+  if (state.cases.length === 0) {
+    els.caseList.innerHTML = '<div class="s4-empty">无验证意图，请先执行 Step3</div>';
+    return;
+  }
+  state.selectedCases.clear();
+  renderCaseList('');
+  updateSelectedCount();
+}
+
+function renderCaseList(filter) {
+  const f = (filter || '').toLowerCase();
+  const html = state.cases.map(c => {
+    if (!c) return '';
+    const iid = String(c.case_id || c.id || '');
+    const ttl = String(c.title || c.name || '');
+    if (f && iid.toLowerCase().indexOf(f) < 0 && ttl.toLowerCase().indexOf(f) < 0) return '';
+    const checked = state.selectedCases.has(iid) ? ' checked' : '';
+    return '<label class="s4-case-item">' +
+      '<input type="checkbox" value="' + escAttr(iid) + '"' + checked + '> ' +
+      '<span class="s4-case-id">' + escHtml(iid) + '</span>' +
+      '<span class="s4-case-title">' + escHtml(ttl) + '</span>' +
+      '</label>';
+  }).join('');
+  els.caseList.innerHTML = html || '<div class="s4-empty">无匹配用例</div>';
+  // 绑定 change
+  els.caseList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', function() {
+      const iid = this.value;
+      if (this.checked) state.selectedCases.add(iid);
+      else state.selectedCases.delete(iid);
+      updateSelectedCount();
+    });
+  });
+}
+
+function updateSelectedCount() {
+  els.selectedCount.textContent = String(state.selectedCases.size);
+}
+
+// ════════════ 事件绑定 ════════════
+
+function bindEvents() {
+  // 折叠区域
+  els.deployHeader.addEventListener('click', function() {
+    this.classList.toggle('expanded');
+    els.deployBody.classList.toggle('show');
+  });
+
+  // 执行模式
+  els.modeCards.querySelectorAll('.s4-radio-card').forEach(card => {
+    card.addEventListener('click', function() {
+      els.modeCards.querySelectorAll('.s4-radio-card').forEach(c => c.classList.remove('selected'));
+      this.classList.add('selected');
+      state.mode = this.dataset.mode;
+      els.customCaseSection.style.display = state.mode === 'custom' ? 'flex' : 'none';
+      if (state.mode === 'custom' && state.cases.length === 0) {
+        loadCases();
+      }
+      scheduleSaveRunOptions();
+    });
+  });
+
+  // 用例搜索
+  if (els.caseSearch) {
+    els.caseSearch.addEventListener('input', function() {
+      renderCaseList(this.value);
+    });
+  }
+  // 全选/清空
+  if (els.btnSelectAll) {
+    els.btnSelectAll.addEventListener('click', function() {
+      els.caseList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.checked = true;
+        state.selectedCases.add(cb.value);
+      });
+      updateSelectedCount();
+    });
+  }
+  if (els.btnClearAll) {
+    els.btnClearAll.addEventListener('click', function() {
+      els.caseList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.checked = false;
+      });
+      state.selectedCases.clear();
+      updateSelectedCount();
+    });
+  }
+
+  // Headless toggle
+  els.headlessToggle.addEventListener('click', function() {
+    this.classList.toggle('on');
+    state.headless = this.classList.contains('on');
+    els.headlessLabel.textContent = state.headless ? '已开启' : '已关闭';
+    scheduleSaveRunOptions();
+  });
+
+  // Screenshot toggle
+  els.screenshotToggle.addEventListener('click', function() {
+    this.classList.toggle('on');
+    state.screenshotOnFailure = this.classList.contains('on');
+    els.screenshotLabel.textContent = state.screenshotOnFailure ? '已开启' : '已关闭';
+    scheduleSaveRunOptions();
+  });
+
+  // Session-aware login toggle
+  els.sessionLoginToggle.addEventListener('click', function() {
+    this.classList.toggle('on');
+    state.sessionAwareLogin = this.classList.contains('on');
+    els.sessionLoginLabel.textContent = state.sessionAwareLogin ? '已开启' : '已关闭';
+    scheduleSaveRunOptions();
+  });
+
+  // 并发推荐刷新
+  els.btnParallelRefresh.addEventListener('click', refreshParallel);
+  els.parallelInput.addEventListener('change', function() {
+    let v = parseInt(this.value, 10) || 1;
+    v = Math.max(1, Math.min(8, v));
+    this.value = String(v);
+    refreshParallel();
+    scheduleSaveRunOptions();
+  });
+
+  // 包含已验证
+  els.includeExecCheckbox.addEventListener('click', function() {
+    this.classList.toggle('checked');
+    state.includeExec = this.classList.contains('checked');
+    scheduleSaveRunOptions();
+  });
+
+  // 浏览器选择
+  els.browserSelect.addEventListener('change', scheduleSaveRunOptions);
+
+  // 超时时间 / 视口 / 截图目录
+  els.timeoutInput.addEventListener('change', scheduleSaveRunOptions);
+  els.viewportWidthInput.addEventListener('change', scheduleSaveRunOptions);
+  els.viewportHeightInput.addEventListener('change', scheduleSaveRunOptions);
+  els.screenshotDirInput.addEventListener('change', scheduleSaveRunOptions);
+
+  // 转测文档 / 转测版本
+  if (els.deployDoc) els.deployDoc.addEventListener('change', scheduleSaveRunOptions);
+  if (els.deployVersion) els.deployVersion.addEventListener('change', scheduleSaveRunOptions);
+
+  // 取消按钮：返回 pipeline
+  els.btnCancel.addEventListener('click', function() {
+    window.location.href = '/pipeline';
+  });
+
+  // 开始执行
+  els.btnStart.addEventListener('click', startExecution);
+
+  // 重新加载
+  els.btnReload.addEventListener('click', function() {
+    if (typeof A._onAuthOk === 'function') A._onAuthOk();
+    loadAll();
+  });
+
+  // 重置参数
+  // T05/P2-2：内部改用 await A.confirm(...)（Promise），处理器必须声明为 async
+  els.btnReset.addEventListener('click', async function() {
+    if (!(await A.confirm('确定重置所有 Step4 参数为默认值?', { danger: true }))) return;
+    els.modeCards.querySelectorAll('.s4-radio-card').forEach(c => c.classList.remove('selected'));
+    els.modeCards.querySelector('[data-mode="normal"]').classList.add('selected');
+    state.mode = 'normal';
+    els.customCaseSection.style.display = 'none';
+    state.selectedCases.clear();
+    els.headlessToggle.classList.add('on');
+    state.headless = true;
+    els.headlessLabel.textContent = '已开启';
+    els.timeoutInput.value = '30000';
+    els.parallelInput.value = String(state.parallel?.max_parallel || 1);
+    els.viewportWidthInput.value = '1920';
+    els.viewportHeightInput.value = '1080';
+    els.screenshotToggle.classList.add('on');
+    state.screenshotOnFailure = true;
+    els.screenshotLabel.textContent = '已开启';
+    els.screenshotDirInput.value = '';
+    els.sessionLoginToggle.classList.add('on');
+    state.sessionAwareLogin = true;
+    els.sessionLoginLabel.textContent = '已开启';
+    els.includeExecCheckbox.classList.remove('checked');
+    state.includeExec = false;
+    state.selectedLevels = new Set(['P0', 'P1', 'P2']);
+    renderPriorities(state.priorities);
+    renderParallel(state.parallel?.recommendation);
+    scheduleSaveRunOptions();
+    appendLog('✅ Step4 参数已重置');
+  });
+}
+
+// ════════════ 数据加载 ════════════
+
+async function loadVersions() {
+  try {
+    const proj = A._currentProject || (window._currentProjectName || '');
+    const url = '/api/project/versions' + (proj ? '?project=' + encodeURIComponent(proj) : '');
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    state.versions = d.versions || [];
+    renderVersions(state.versions, d.active_id);
+    // 活跃版本已统一由顶栏版本指示器展示，页面信息栏不再重复显示（2026-08-31）
+    // 同步转测版本下拉
+    if (els.deployVersion) {
+      els.deployVersion.innerHTML = '<option value="">-- 请选择 --</option>' +
+        state.versions.map(v => '<option value="' + escAttr(String(v.id)) + '">' + escHtml(v.version_label || ('#' + v.id)) + '</option>').join('');
+    }
+  } catch (e) {
+    appendLog('❌ 加载版本列表失败: ' + String(e));
+    els.versionList.innerHTML = '<div class="s4-empty s4-empty-error">版本列表加载失败: ' + escHtml(String(e)) + '</div>';
+  }
+}
+
+// ★ [B6 契约修复] 填充「转测文档」下拉框。
+//   原先 <select id="deployDoc"> 只有一个空 option，**从无任何代码填充它**，
+//   导致 els.deployDoc.value 恒为 ''，转测文档功能整条链路是死的。
+//   option value 用 /api/deployment/docs 返回的 path（mysql:// 标识），
+//   后端 _run_step._resolve_doc() 负责把标识解析为正文。前端 key 名 deployDoc 未改。
+async function loadDeploymentDocs() {
+  if (!els.deployDoc) return;
+  try {
+    const r = await fetch('/api/deployment/docs');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const docs = (d && d.docs) || [];
+    els.deployDoc.innerHTML = '<option value="">-- 请选择 --</option>' +
+      docs.map(function (doc) {
+        var label = doc.name || doc.path || '(未命名)';
+        if (doc.size) label += ' (' + doc.size + ' 字符)';
+        return '<option value="' + escAttr(String(doc.path || '')) + '">' + escHtml(label) + '</option>';
+      }).join('');
+    if (!docs.length) {
+      appendLog('ℹ️ 当前项目暂无转测文档（可先在 Step1 上传转测文档）');
+    }
+  } catch (e) {
+    // 非阻塞：转测文档是可选项，加载失败不影响执行，但不能静默
+    appendLog('⚠️ 转测文档列表加载失败: ' + String(e));
+  }
+}
+
+async function loadStep4Config() {
+  try {
+    const r = await fetch('/api/step4-config');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    state.browsers = d.browsers || [];
+    state.priorities = d.priorities || [];
+    state.parallel = d.parallel || null;
+    renderBrowsers(state.browsers);
+    renderPriorities(state.priorities);
+    if (state.parallel) {
+      els.parallelInput.value = String(state.parallel.max_parallel || 1);
+      renderParallel(state.parallel.recommendation);
+    }
+  } catch (e) {
+    appendLog('❌ 加载 Step4 配置失败: ' + String(e));
+    els.browserSelect.innerHTML = '<option value="">无可用浏览器</option>';
+    els.browserCount.textContent = '0';
+    els.parallelInfo.innerHTML = '<span class="s4-error-text">Step4 配置加载失败: ' + escHtml(String(e)) + '</span>';
+  }
+}
+
+async function loadCases() {
+  els.caseList.innerHTML = '<div class="s4-empty"><span class="s4-loading-dot"></span> 正在加载用例列表...</div>';
+  try {
+    const d = await api('GET', '/api/cases');
+    if (!d || d.error) {
+      els.caseList.innerHTML = '<div class="s4-empty s4-empty-error">加载失败: ' + escHtml(d?.error || '未知错误') + '</div>';
+      return;
+    }
+    renderCases(d);
+  } catch (e) {
+    appendLog('❌ 加载用例列表失败: ' + String(e));
+    els.caseList.innerHTML = '<div class="s4-empty s4-empty-error">加载失败: ' + escHtml(String(e)) + '</div>';
+  }
+}
+
+async function refreshParallel() {
+  try {
+    const max = Math.max(1, Math.min(8, parseInt(els.parallelInput.value, 10) || 1));
+    els.parallelInput.value = String(max);
+    const rec = await api('GET', '/api/browser-parallel-recommendation?configured_max=' + encodeURIComponent(max));
+    if (rec && !rec.error) renderParallel(rec);
+    else renderParallel({ configured_max: max, recommended: 1, effective: 1, reason: (rec && rec.error) || '推荐值获取失败' });
+  } catch (e) {
+    appendLog('⚠️ 并发推荐值刷新失败: ' + String(e));
+  }
+}
+
+async function loadAll() {
+  // 当前项目
+  const proj = A._currentProjectName || A._currentProject || (window._currentProjectName || '');
+  if (els.curProject) els.curProject.textContent = proj || '未选择';
+  await Promise.all([loadVersions(), loadStep4Config(), loadDeploymentDocs()]);
+  // ★ 配置项全部就绪后回显"上次运行选项"（同个性化配置的持久化逻辑）
+  loadRunOptions();
+}
+
+// ════════════ 运行选项持久化（同个性化配置：user_credentials_v2 按键存取） ════════════
+
+function collectRunOptions() {
+  var o = {
+    mode: state.mode === 'retry' ? 'retry_failed' : state.mode,
+    browser: els.browserSelect ? els.browserSelect.value : '',
+    headless: !!state.headless,
+    timeout_ms: parseInt(els.timeoutInput ? els.timeoutInput.value : '30000', 10) || 30000,
+    max_parallel: parseInt(els.parallelInput ? els.parallelInput.value : '1', 10) || 1,
+    viewport_width: parseInt(els.viewportWidthInput ? els.viewportWidthInput.value : '1920', 10) || 1920,
+    viewport_height: parseInt(els.viewportHeightInput ? els.viewportHeightInput.value : '1080', 10) || 1080,
+    screenshot_on_failure: !!state.screenshotOnFailure,
+    screenshot_dir: els.screenshotDirInput ? els.screenshotDirInput.value : '',
+    session_aware_login: !!state.sessionAwareLogin,
+    include_executed: !!state.includeExec,
+    risk_level_filter: Array.from(state.selectedLevels || []),
+    deployDoc: els.deployDoc ? els.deployDoc.value : '',
+    deployVersion: els.deployVersion ? els.deployVersion.value : '',
+  };
+  return o;
+}
+
+var _roTimer = null;
+function scheduleSaveRunOptions() {
+  if (_roTimer) clearTimeout(_roTimer);
+  _roTimer = setTimeout(saveRunOptions, 400);
+}
+async function saveRunOptions() {
+  try {
+    var r = await A.api('POST', '/api/step4/run-options', { options: collectRunOptions() });
+    if (r && r.ok && A.toastShownOnce !== true) { /* 保存成功，静默不打扰 */ }
+  } catch (e) { /* 保存失败静默，不阻塞交互 */ }
+}
+
+async function loadRunOptions() {
+  try {
+    var r = await A.api('GET', '/api/step4/run-options');
+    var o = (r && r.ok && r.options) || {};
+    if (o.browser && els.browserSelect && [...(els.browserSelect.options || [])].some(function(opt){ return opt.value === o.browser; })) {
+      els.browserSelect.value = o.browser;
+    }
+    if (o.headless != null) {
+      state.headless = !!o.headless;
+      els.headlessToggle.classList.toggle('on', state.headless);
+      if (els.headlessLabel) els.headlessLabel.textContent = state.headless ? '已开启' : '已关闭';
+    }
+    if (o.timeout_ms)     els.timeoutInput.value = String(o.timeout_ms);
+    if (o.max_parallel)   els.parallelInput.value = String(o.max_parallel);
+    if (o.viewport_width) els.viewportWidthInput.value = String(o.viewport_width);
+    if (o.viewport_height) els.viewportHeightInput.value = String(o.viewport_height);
+    if (o.screenshot_on_failure != null) {
+      state.screenshotOnFailure = !!o.screenshot_on_failure;
+      els.screenshotToggle.classList.toggle('on', state.screenshotOnFailure);
+      if (els.screenshotLabel) els.screenshotLabel.textContent = state.screenshotOnFailure ? '已开启' : '已关闭';
+    }
+    if (o.screenshot_dir != null) els.screenshotDirInput.value = o.screenshot_dir;
+    if (o.session_aware_login != null) {
+      state.sessionAwareLogin = !!o.session_aware_login;
+      els.sessionLoginToggle.classList.toggle('on', state.sessionAwareLogin);
+      if (els.sessionLoginLabel) els.sessionLoginLabel.textContent = state.sessionAwareLogin ? '已开启' : '已关闭';
+    }
+    if (o.include_executed != null) {
+      state.includeExec = !!o.include_executed;
+      els.includeExecCheckbox.classList.toggle('checked', state.includeExec);
+    }
+    if (o.mode) {
+      var mCard = els.modeCards.querySelector('[data-mode="' + o.mode + '"]');
+      if (mCard) {
+        els.modeCards.querySelectorAll('.s4-radio-card').forEach(function(c){ c.classList.remove('selected'); });
+        mCard.classList.add('selected');
+        state.mode = o.mode;
+        els.customCaseSection.style.display = (o.mode === 'custom') ? 'flex' : 'none';
+      }
+    }
+    if (Array.isArray(o.risk_level_filter) && o.risk_level_filter.length) {
+      state.selectedLevels = new Set(o.risk_level_filter.filter(function(x){ return state.priorities.some(function(p){ return p.value === x || p === x; }); }.bind(this)));
+      renderPriorities(state.priorities);
+    }
+    if (o.deployDoc && els.deployDoc && [...(els.deployDoc.options || [])].some(function(opt){ return opt.value === o.deployDoc; })) {
+      els.deployDoc.value = o.deployDoc;
+    }
+    if (o.deployVersion && els.deployVersion && [...(els.deployVersion.options || [])].some(function(opt){ return opt.value === o.deployVersion; })) {
+      els.deployVersion.value = o.deployVersion;
+    }
+  } catch (e) { /* 回显失败不阻塞 */ }
+}
+
+// ════════════ 开始执行 ════════════
+
+async function startExecution() {
+  // ★ 启停前落盘当前运行选项（与页面实时保存一致）
+  scheduleSaveRunOptions();
+  const config = {
+    versions: Array.from(state.selectedVersions),
+    mode: state.mode === 'retry' ? 'retry_failed' : state.mode,
+    case_ids: Array.from(state.selectedCases),
+    browser: els.browserSelect.value,
+    headless: state.headless,
+    timeout_ms: parseInt(els.timeoutInput.value, 10) || 30000,
+    max_parallel: parseInt(els.parallelInput.value, 10) || 1,
+    viewport_width: parseInt(els.viewportWidthInput.value, 10) || 1920,
+    viewport_height: parseInt(els.viewportHeightInput.value, 10) || 1080,
+    screenshot_on_failure: state.screenshotOnFailure,
+    screenshot_dir: els.screenshotDirInput.value || '',
+    session_aware_login: state.sessionAwareLogin,
+    include_executed: state.includeExec,
+    risk_level_filter: Array.from(state.selectedLevels),
+    deployDoc: els.deployDoc.value,
+    deployVersion: els.deployVersion.value,
+  };
+  // ★ 仅执行 Step4（不重跑 Step1-3）：调用 /api/step/4，配置作为 body 传给后端
+  appendLog('🚀 正在启动 Step4 执行...');
+  var btn = document.getElementById('btnStart');
+  if (btn) { btn.disabled = true; btn.textContent = '启动中...'; }
+  try {
+    var r = await A.api('POST', '/api/step/4', config);
+    if (r && r.ok) {
+      appendLog('✅ Step4 已启动: run_id=' + r.run_id);
+      if (A.toast) A.toast('Step4 已启动，正在跳转...', 'success');
+      // 跳转到 pipeline，携带 run_id 让其自动订阅 SSE
+      setTimeout(function() {
+        window.location.href = '/pipeline?run_id=' + encodeURIComponent(r.run_id);
+      }, 600);
+    } else {
+      appendLog('❌ 启动失败: ' + (r && r.error || '未知错误'));
+      if (A.toast) A.toast('启动失败: ' + (r && r.error || '未知错误'), 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '开始执行'; }
+    }
+  } catch (e) {
+    appendLog('❌ 网络错误: ' + e);
+    if (A.toast) A.toast('网络错误: ' + e, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '开始执行'; }
+  }
+}
+
+// ════════════ 登录态守卫 ════════════
+
+A._onAuthOk = function() {
+  if (A._renderSidebarUser) A._renderSidebarUser();
+  if (A.applyPermissions) A.applyPermissions();
+  loadAll();
+  A._startStepBadgePolling();
+};
+
+bindEvents();
+
+// 已登录则立即加载
+if (A._currentUser) {
+  loadAll();
+}
+
+})();
+</script>
+{% endblock %}

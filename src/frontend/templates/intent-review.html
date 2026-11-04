@@ -1,0 +1,1488 @@
+{% extends "_layout_base.html" %}
+{% block title %}用例审核闸门 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+用例审核闸门 (Step3)
+{% endblock %}
+
+{% block topbar_actions %}
+<a href="/test-methods" class="btn-topbar" id="btnBackToMethods" data-tooltip="返回测试方法论清单页" data-tooltip-pos="bottom" style="display:none;">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6m6-10v8"/><path d="m9 14 10-2"/></svg>
+    返回方法论清单
+  </a>
+<a href="/pipeline" class="btn-topbar" data-tooltip="返回流水线执行页" data-tooltip-pos="bottom">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+    返回
+  </a>
+<button class="btn-topbar" id="btnRefresh" data-perm="execution.step3" data-tooltip="重新加载用例审核列表" data-tooltip-pos="bottom">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+    刷新列表
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════ T3：需求澄清入口（should_block_generation 时置顶提示） ════════════ -->
+<div class="ir-clarify-banner state-banner state-banner-warning" id="clarifyBanner" hidden>
+  <span>⚠ 检测到高危需求歧义（用例生成已暂停）。请先到「需求澄清」页逐条回答，解除闸门后再生成用例。</span>
+  <a href="/clarify" class="ir-clarify-link state-banner-link">前往需求澄清 →</a>
+</div>
+
+<!-- ════════════ 方法论筛选横幅（来自 ?method= 深度链接） ════════════ -->
+<div class="ir-method-banner" id="methodBanner" hidden>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6m6-10v8"/><path d="m9 14 10-2"/></svg>
+  <span>当前按方法论筛选：<b id="methodBannerName">-</b>（<span id="methodBannerCode" class="ir-method-code">-</span>）</span>
+  <a href="/test-methods" class="ir-method-link">返回方法论清单 →</a>
+</div>
+
+<!-- ════════════ 信息栏 ════════════ -->
+<div class="ir-info-bar">
+  <div class="ir-info-item">
+    <span class="ir-info-label">已审核</span>
+    <span class="ir-info-value" id="reviewedCount">0 / 0</span>
+  </div>
+  <div class="ir-info-item">
+    <span class="ir-info-label">平均置信度</span>
+    <span class="ir-info-value" id="avgConfidence">-</span>
+  </div>
+  <div class="ir-info-item">
+    <span class="ir-info-label">低分用例</span>
+    <span class="ir-info-value ir-info-warn" id="lowConfidenceCount">0</span>
+  </div>
+  <div class="ir-info-item">
+    <span class="ir-info-label">高风险</span>
+    <span class="ir-info-value ir-info-danger" id="highRiskCount">0</span>
+  </div>
+  <div class="ir-info-item">
+    <span class="ir-info-label">预检状态</span>
+    <div class="ir-preflight-item" id="preflightStatus">
+      <span class="ir-preflight-dot neutral"></span>
+      <span class="ir-preflight-text">加载中...</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ 状态横幅 ════════════ -->
+<div class="ir-status-banner" id="statusBanner">
+  <div class="ir-status-info">
+    <span class="ir-status-label">审核状态:</span>
+    <span class="ir-status-value" id="reviewStatus">-</span>
+  </div>
+  <div class="ir-status-info">
+    <span class="ir-status-label">通过率:</span>
+    <span class="ir-status-value" id="approvalRate">-</span>
+  </div>
+  <div class="ir-status-info">
+    <span class="ir-status-label">待审核:</span>
+    <span class="ir-status-value" id="pendingCount">-</span>
+  </div>
+</div>
+
+<!-- ★ P1-7: 校准统计展示区 -->
+<div class="ir-calibration-bar" id="calibrationBar" hidden>
+  <div class="ir-cal-info">
+    <span class="ir-cal-label">校准状态:</span>
+    <span class="ir-cal-value" id="calStatus">-</span>
+  </div>
+  <div class="ir-cal-info">
+    <span class="ir-cal-label">样本数:</span>
+    <span class="ir-cal-value" id="calTotal">-</span>
+  </div>
+  <div class="ir-cal-info">
+    <span class="ir-cal-label">一致率:</span>
+    <span class="ir-cal-value" id="calAgreement">-</span>
+  </div>
+  <div class="ir-cal-info">
+    <span class="ir-cal-label">假PASS率:</span>
+    <span class="ir-cal-value ir-info-warn" id="calFalsePass">-</span>
+  </div>
+  <div class="ir-cal-info">
+    <span class="ir-cal-label">假FAIL率:</span>
+    <span class="ir-cal-value ir-info-warn" id="calFalseFail">-</span>
+  </div>
+</div>
+
+<!-- ════════════ 主面板（通用 master-detail 组件） ════════════ -->
+<div class="md-panel">
+
+  <div class="md-cols">
+
+    <!-- 左栏：测试用例列表 -->
+    <div class="md-list-col">
+      <div class="md-list-header">
+        <div class="md-section-title">
+          <input type="checkbox" id="selectAllCb" class="ir-cb" title="全选当前筛选结果">
+          <span>测试用例资产 <span class="md-section-count" id="listCount">0</span></span>
+        </div>
+        <input type="text" id="searchInput" class="md-search" placeholder="搜索 case_id / 标题...">
+        <select id="riskFilter" class="md-filter">
+          <option value="">全部风险</option>
+          <option value="high">高风险</option>
+          <option value="medium">中风险</option>
+          <option value="low">低风险</option>
+        </select>
+        <select id="confidenceFilter" class="md-filter">
+          <option value="">全部置信度</option>
+          <option value="high">高 (&gt;80%)</option>
+          <option value="mid">中 (50%-80%)</option>
+          <option value="low">低 (&lt;50%)</option>
+        </select>
+        <select id="statusFilter" class="md-filter">
+          <option value="">全部状态</option>
+          <option value="approved">已通过</option>
+          <option value="pending">待审核</option>
+          <option value="warning">警告</option>
+        </select>
+      </div>
+      <div class="md-list-wrap" id="caseList">
+        <div class="md-empty-state">加载中...</div>
+      </div>
+      <div class="md-list-footer">
+        <span class="md-footer-info">显示 <span id="visibleCount">0</span> / <span id="totalCount">0</span> 条</span>
+      </div>
+    </div>
+
+    <!-- 右栏：用例详情 -->
+    <div class="md-detail-col">
+      <div class="md-detail-empty" id="detailEmpty">请选择左侧测试用例查看详情</div>
+      <div class="md-detail" id="detailPanel" style="display:none;">
+
+        <div class="md-detail-header">
+          <div class="md-detail-id" id="detailCaseId">-</div>
+          <div class="md-detail-title" id="detailTitle">-</div>
+          <div class="md-badges">
+            <span class="md-badge md-badge-risk" id="detailRisk" hidden></span>
+            <span class="md-lane-tag" id="detailLane" hidden></span>
+            <span class="md-badge md-badge-status" id="detailStatus">-</span>
+          </div>
+        </div>
+
+        <div class="md-detail-section">
+          <div class="md-section-title">用例目标</div>
+          <div class="md-quote-block" id="detailGoal">-</div>
+        </div>
+
+        <div class="md-detail-section">
+          <div class="md-section-title">前置条件</div>
+          <div class="md-detail-text" id="detailPrecondition">无</div>
+        </div>
+
+        <div class="md-detail-section">
+          <div class="md-section-title">操作步骤（含逐步预期）</div>
+          <div class="md-steps" id="detailSteps">
+            <div class="md-empty-mini">无操作步骤</div>
+          </div>
+        </div>
+
+        <div class="md-detail-section">
+          <div class="md-section-title">整体预期结果（全部断言）</div>
+          <div class="md-detail-text" id="detailExpected">-</div>
+        </div>
+
+        <div class="md-detail-section">
+          <div class="md-section-title">置信度分析</div>
+          <div class="md-dim-row" id="dimList">
+            <div class="md-empty-mini">无置信度数据</div>
+          </div>
+        </div>
+
+        <div class="md-confidence-card">
+          <div class="md-confidence-label">用例置信度</div>
+          <div class="md-confidence-score" id="confidenceScore">-</div>
+          <div class="md-confidence-bar"><div class="md-confidence-bar-fill" id="confidenceBar"></div></div>
+          <div class="md-confidence-hint" id="confidenceHint">基于生成质量与证据加权</div>
+        </div>
+
+        <div class="md-detail-section">
+          <div class="md-section-title">关键指标</div>
+          <div class="md-metric-grid" id="metricList"></div>
+        </div>
+
+        <div class="md-detail-section">
+          <div class="md-section-title">
+            关系链路
+            <button class="md-chain-toggle-btn" id="chainToggleBtn" type="button" data-tooltip="展开/折叠完整关系链路" data-tooltip-pos="right">
+              <span class="md-chain-toggle-icon">▶</span>
+            </button>
+          </div>
+          <div class="md-chain-container" id="chainContainer" style="display:none;">
+            <div class="md-chain-loading">加载中...</div>
+          </div>
+        </div>
+
+        <div class="md-detail-actions">
+          <button class="md-btn-ghost" id="btnEdit" type="button" data-tooltip="新窗口编辑该用例并落库" data-tooltip-pos="top">编辑器</button>
+          <button class="md-btn-danger" id="btnReject" type="button" data-tooltip="驳回当前用例（触发 AI 重新建模）" data-tooltip-pos="top">驳回</button>
+          <button class="md-btn-primary" id="btnApprove" type="button" data-tooltip="通过当前用例" data-tooltip-pos="top">通过</button>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 底部操作 -->
+  <div class="md-action-row">
+    <span class="md-selected-info">已选 <span id="selectedCount">0</span> 条</span>
+    <button class="md-btn-ghost" id="btnBatchApprove" type="button" data-tooltip="自动放行 green 车道用例，yellow/red 需逐条人审" data-tooltip-pos="top">
+      自动放行 Green 车道
+    </button>
+    <button class="md-btn-danger" id="btnRejectSel" type="button" disabled data-tooltip="驳回选中的用例" data-tooltip-pos="top">驳回选中</button>
+    <button class="md-btn-primary" id="btnConfirm" type="button" data-tooltip="完成 Step3 审核，继续执行 Step4" data-tooltip-pos="top">完成审核</button>
+  </div>
+
+</div>
+
+<!-- ════════════ T4：功能点语义聚合合并说明（可折叠/展开/滚动） ════════════ -->
+<div class="ir-merge-panel" id="semanticMergePanel">
+  <div class="ir-merge-header" id="semanticMergeToggle">
+    <span class="ir-merge-arrow">▾</span>
+    <span class="ir-merge-title">功能点合并</span>
+    <span class="ir-merge-hint">功能点语义聚合合并说明</span>
+    <span class="ir-merge-summary" id="semanticMergeSummary"></span>
+    <span class="ir-merge-state">收起</span>
+  </div>
+  <div class="ir-merge-body" id="semanticMergeBody">
+    <div id="semanticMergeLogs" class="ir-merge-logs"></div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ★ 页面级 flex 布局，让面板填满剩余空间 */
+.content-body {
+  display: flex;
+  flex-direction: column;
+}
+/* ════════════ 信息栏 ════════════ */
+.ir-info-bar {
+  display: flex; gap: 32px;
+  padding: 16px 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.ir-info-item { display: flex; flex-direction: column; gap: 4px; }
+.ir-info-label { font-size: var(--fs-small); color: var(--text-secondary); }
+.ir-info-value {
+  font-size: var(--fs-h3); font-weight: var(--fw-semibold);
+  color: var(--text-primary); font-family: var(--font-mono);
+}
+.ir-info-primary { color: var(--color-primary); }
+.ir-info-warn { color: var(--state-warning-text); }
+.ir-info-danger { color: var(--state-error-text); }
+
+/* ════════════ 状态横幅 ════════════ */
+.ir-status-banner {
+  display: flex; gap: 24px;
+  padding: 12px 20px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+.ir-status-info { display: flex; align-items: center; gap: 6px; font-size: var(--fs-small); }
+.ir-status-label { color: var(--text-secondary); }
+.ir-status-value { color: var(--text-primary); font-weight: var(--fw-semibold); font-family: var(--font-mono); }
+
+/* ★ P1-7: 校准统计展示区（复用 banner 布局模式） */
+.ir-calibration-bar {
+  display: flex; gap: 24px;
+  padding: 10px 20px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+.ir-cal-info { display: flex; align-items: center; gap: 6px; font-size: var(--fs-small); }
+.ir-cal-label { color: var(--text-secondary); }
+.ir-cal-value { color: var(--text-primary); font-weight: var(--fw-semibold); font-family: var(--font-mono); }
+
+/* ════════════ 左栏列表项内的复选框 / 车道标签 ════════════ */
+.ir-cb { width: 16px; height: 16px; cursor: pointer; accent-color: var(--color-primary); }
+.md-list-item-cb { display: inline-flex; align-items: center; flex-shrink: 0; }
+.md-lane-dot {
+  display: inline-block; width: 10px; height: 10px; border-radius: var(--radius-full);
+  margin-left: 6px; flex-shrink: 0;
+}
+.md-lane-dot.green { background: var(--state-success); }
+.md-lane-dot.yellow { background: var(--state-warning); }
+.md-lane-dot.red { background: var(--state-error); }
+
+/* ════════════ 通用列表项预留的"优先级"标签 ════════════ */
+.md-priority {
+  display: inline-block; padding: 1px 8px; border-radius: var(--radius-sm);
+  font-size: var(--fs-xs); font-weight: var(--fw-semibold); font-family: var(--font-mono);
+}
+.md-priority.P0 { background: var(--state-error-tint); color: var(--state-error-text); }
+.md-priority.P1 { background: var(--state-warning-tint); color: var(--state-warning-text); }
+.md-priority.P2 { background: var(--color-primary-tint); color: var(--color-primary); }
+.md-priority.P3 { background: var(--border-default); color: var(--text-secondary); }
+
+/* ════════════ 底部操作条（master-detail 面板内，复用 md-btn-*） ════════════ */
+.md-action-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-default);
+  background: var(--border-faint);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.md-md-btn {
+  height: var(--control-height-lg);
+  padding: 0 20px;
+  border-radius: var(--radius-md);
+  font-size: var(--fs-body);
+  font-family: var(--font-sans);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.md-md-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.md-selected-info {
+  margin-left: auto;
+  font-size: var(--fs-small); color: var(--text-secondary);
+}
+.md-selected-info span { color: var(--color-primary); font-weight: var(--fw-semibold); font-family: var(--font-mono); }
+.md-action-row .md-btn-ghost {
+  height: var(--control-height-lg);
+  padding: 0 20px;
+}
+.md-action-row .md-btn-danger,
+.md-action-row .md-btn-primary {
+  height: var(--control-height-lg);
+  padding: 0 20px;
+}
+
+/* 预检状态 */
+.ir-preflight-item { display: flex; align-items: center; gap: 8px; }
+.ir-preflight-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.ir-preflight-dot.neutral { background: var(--text-tertiary); }
+.ir-preflight-dot.ok { background: var(--state-success); }
+.ir-preflight-dot.warn { background: var(--state-warning); }
+.ir-preflight-dot.err { background: var(--state-error); }
+.ir-preflight-text { font-size: var(--fs-small); color: var(--text-primary); }
+
+/* ════════════ 功能点合并说明（底部可折叠/展开/滚动） ════════════ */
+.ir-merge-panel {
+  margin-top: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.ir-merge-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer; user-select: none;
+  border-bottom: 1px solid var(--border-default);
+}
+.ir-merge-arrow { transition: transform 0.2s ease; font-size: var(--fs-small); color: var(--text-tertiary); }
+.ir-merge-title { font-weight: var(--fw-semibold); }
+.ir-merge-hint { font-size: var(--fs-micro); color: var(--text-tertiary); }
+.ir-merge-summary { margin-left: auto; font-size: var(--fs-small); color: var(--step2-color); }
+.ir-merge-state { font-size: var(--fs-micro); color: var(--text-tertiary); }
+.ir-merge-panel.collapsed .ir-merge-arrow { transform: rotate(-90deg); }
+.ir-merge-panel.collapsed .ir-merge-body { display: none; }
+.ir-merge-body { max-height: 200px; overflow-y: auto; }
+.ir-merge-logs {
+  padding: 10px 14px;
+  font-size: var(--fs-small); color: var(--text-secondary);
+  display: flex; flex-direction: column; gap: 4px;
+}
+
+/* 需求澄清横幅（全局 state-banner 基础上微调） */
+.ir-clarify-banner { flex-shrink: 0; margin-bottom: 16px; }
+.ir-clarify-link { margin-left: 8px; }
+
+/* ════════════ 方法论筛选横幅（?method= 深度链接） ════════════ */
+.ir-method-banner {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  background: var(--step2-soft);
+  border: 1px solid var(--step2-border);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  font-size: var(--fs-small); color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.ir-method-banner svg { color: var(--step2-color); flex-shrink: 0; }
+.ir-method-banner b { color: var(--step2-color); font-weight: var(--fw-semibold); }
+.ir-method-code { font-family: var(--font-mono); font-weight: var(--fw-semibold); color: var(--color-primary); }
+.ir-method-link { margin-left: auto; color: var(--step2-color); font-weight: var(--fw-medium); }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+'use strict';
+
+const A = window._A;
+if (!A) { console.error('[intent-review] _A 未初始化'); return; }
+const $ = A.$, escHtml = A.escHtml, escAttr = A.escAttr, api = A.api, appendLog = A.appendLog;
+
+const state = {
+  intents: [],         // 全部用例
+  filtered: [],        // 过滤后
+  selectedIds: new Set(),
+  currentCaseId: null,
+  currentCase: null,
+  stats: {},
+  reviewState: null,
+  laneMap: {},         // ★ P1-7: {case_id: {lane, reason, routed_to_human}}
+  calibration: null,   // ★ P1-7: 校准统计数据
+  methodFilter: null,  // ★ 方法论筛选：来自 URL ?method=<code>
+};
+
+// ★ 方法论编码 → 中文名（与 src/testing_methods/catalog.py 权威目录同源，18 编码）
+const METHOD_CN = {
+  EP: '等价类划分', BV: '边界值分析', CE: '因果图', DT: '判定表',
+  ST: '状态迁移', OT: '正交实验', EG: '错误推测', FD: '场景法',
+  PC: '路径覆盖', SD: '规范导出', SX: 'XSS注入', SI: 'SQL注入',
+  CS: 'CSRF跨站请求伪造', AU: '越权与权限', SS: '会话管理',
+  CT: '兼容与响应式', PF: '性能', ET: '探索式',
+};
+
+// ★ 初始化方法论筛选：从 URL ?method= 读取；非法值忽略
+(function initMethodFilter() {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const m = (p.get('method') || '').trim().toUpperCase();
+    if (!m || !METHOD_CN[m]) return;
+    state.methodFilter = m;
+    const btn = $('btnBackToMethods');
+    if (btn) btn.style.display = '';
+    const banner = $('methodBanner');
+    if (banner) {
+      banner.hidden = false;
+      const nameEl = $('methodBannerName');
+      const codeEl = $('methodBannerCode');
+      if (nameEl) nameEl.textContent = METHOD_CN[m] || m;
+      if (codeEl) codeEl.textContent = m;
+    }
+  } catch (e) { /* 忽略解析失败 */ }
+})();
+
+// ── 元素引用 ──
+const els = {
+  curProject: $('curProject'),
+  reviewedCount: $('reviewedCount'),
+  avgConfidence: $('avgConfidence'),
+  lowConfidenceCount: $('lowConfidenceCount'),
+  highRiskCount: $('highRiskCount'),
+  reviewStatus: $('reviewStatus'),
+  approvalRate: $('approvalRate'),
+  pendingCount: $('pendingCount'),
+  searchInput: $('searchInput'),
+  riskFilter: $('riskFilter'),
+  confidenceFilter: $('confidenceFilter'),
+  statusFilter: $('statusFilter'),
+  listCount: $('listCount'),
+  visibleCount: $('visibleCount'),
+  totalCount: $('totalCount'),
+  caseList: $('caseList'),
+  selectAllCb: $('selectAllCb'),
+  detailEmpty: $('detailEmpty'),
+  detailPanel: $('detailPanel'),
+  detailCaseId: $('detailCaseId'),
+  detailTitle: $('detailTitle'),
+  detailRisk: $('detailRisk'),
+  detailLane: $('detailLane'),
+  detailStatus: $('detailStatus'),
+  detailGoal: $('detailGoal'),
+  detailPrecondition: $('detailPrecondition'),
+  detailSteps: $('detailSteps'),
+  detailExpected: $('detailExpected'),
+  dimList: $('dimList'),
+  confidenceScore: $('confidenceScore'),
+  confidenceBar: $('confidenceBar'),
+  confidenceHint: $('confidenceHint'),
+  metricList: $('metricList'),
+  chainContainer: $('chainContainer'),
+  chainToggleBtn: $('chainToggleBtn'),
+  btnApprove: $('btnApprove'),
+  btnReject: $('btnReject'),
+  btnEdit: $('btnEdit'),
+  btnConfirm: $('btnConfirm'),
+  btnBatchApprove: $('btnBatchApprove'),
+  btnRejectSel: $('btnRejectSel'),
+  selectedCount: $('selectedCount'),
+  btnRefresh: $('btnRefresh'),
+  preflightStatus: $('preflightStatus'),
+  calibrationBar: $('calibrationBar'),
+  calStatus: $('calStatus'),
+  calTotal: $('calTotal'),
+  calAgreement: $('calAgreement'),
+  calFalsePass: $('calFalsePass'),
+  calFalseFail: $('calFalseFail'),
+};
+
+// ════════════ 工具函数（置信度规范化：统一转 0-100 百分比） ════════════
+
+// 把任意来源的数值/字符串/对象统一转成 0-100 的整数百分比；无法解析返回 null。
+// 修复点：原逻辑只认 number/object，遇到 JSON 字符串、空串或已存百分比的字段会误判。
+function toPercent(v) {
+  if (v == null || v === '') return null;
+  let raw = v;
+  if (typeof v === 'object') {
+    raw = (v._avg_confidence != null) ? v._avg_confidence
+        : (v.score != null ? v.score : null);
+    if (raw == null) return null;
+  }
+  let n = Number(raw);
+  if (n == null || isNaN(n)) return null;
+  // 0~1 视为小数 (0.75→75)；>1 视为已是百分比 (75→75)
+  return (n >= 0 && n <= 1) ? Math.round(n * 100) : Math.round(n);
+}
+
+function getConfidenceScore(item) {
+  if (!item) return null;
+  // ★ 口径修正：Step3 审核页评审的是「生成用例质量」，应优先用生成置信度 cm.confidence(_confidence)；
+  //   执行置信度 _avg_confidence 是 Step4 执行后的聚合，审核阶段尚无意义（未执行可能极低且误导）。
+  //   兼容 number / JSON字符串 / 对象包装 / 已百分比化。
+  if (item._confidence != null) return toPercent(item._confidence);
+  return toPercent(item._avg_confidence);
+}
+
+function getConfidenceClass(score) {
+  if (score == null) return 'mid';
+  if (score >= 80) return 'high';
+  if (score >= 50) return 'mid';
+  return 'low';
+}
+
+// ★ 风险中文化：high/medium/low | 高/中/低 | 数值 统一成 高/中/低
+const RISK_CN = { high: '高', medium: '中', low: '低', 高: '高', 中: '中', 低: '低' };
+function getRiskCn(v) {
+  if (v == null || v === '') return '';
+  const s = String(v).toLowerCase().trim();
+  return RISK_CN[s] || String(v);
+}
+
+function getStatus(c) {
+  const rs = c._review_status || c.review_status || '';
+  if (rs === 'approved' || rs === 'modified') return 'approved';
+  if (rs === 'rejected') return 'rejected';
+  if (rs === 'warning') return 'warning';
+  return 'pending';
+}
+
+function getStatusLabel(s) {
+  if (s === 'approved') return '已通过';
+  if (s === 'rejected') return '已驳回';
+  if (s === 'warning') return '警告';
+  return '待审核';
+}
+
+// 解析操作步骤：支持数组 / JSON 字符串 / 单条字符串
+// 兼容三类步骤对象：AI 生成 {step/action/target}、规则生成 {type/target_hint/...}、纯文本
+function stepText(s) {
+  if (typeof s === 'object' && s !== null) {
+    const t = String(s.action || s.step || s.text || '');
+    if (t && t.trim()) return t;
+    const type = String(s.type || '');
+    let hint = String(s.target_hint || '');
+    // ★ 目标页未解析（§4.17-B）：占位的站点根/登录页不是页面身份，
+    //   不得渲染成"导航到 /" —— 让人误以为那是目标页。
+    if (s.nav_unresolved && (hint === '/' || hint === '/login')) hint = '';
+    const tm = {
+      navigate: '导航到',
+      click: '点击',
+      fill: '填写',
+      select_option: '选择',
+      upload_file: '上传文件',
+      press_key: '按键',
+      screenshot: '截图'
+    };
+    if (tm[type]) {
+      let parts = [tm[type], hint].filter(function(x) { return x && x.trim(); });
+      if (type === 'fill' && s.value !== undefined) parts.push('为「' + s.value + '」');
+      if (type === 'select_option' && s.option_text !== undefined) parts.push('「' + s.option_text + '」');
+      if (type === 'upload_file' && s.file !== undefined) parts.push('「' + s.file + '」');
+      if (type === 'press_key' && s.key !== undefined) parts.push('「' + s.key + '」');
+      const text = parts.join(' ');
+      if (text.trim()) return text;
+    }
+    return '';
+  }
+  return String(s);
+}
+function parseSteps(item) {
+  // 步骤可能存放于多套键：test_steps(新)/steps / actions / case_actions_json(存量兜底)
+  const payload = item.payload || {};
+  let raw = item.test_steps || item.steps || item.actions || item.case_actions_json
+    || payload.test_steps || payload.actions || [];
+  if (typeof raw === 'string') {
+    try { raw = JSON.parse(raw); } catch (e) { raw = [raw]; }
+  }
+  if (!Array.isArray(raw)) raw = [raw];
+  const steps = raw.map(stepText).filter(function(s) { return s && s.trim(); });
+  return steps;
+}
+
+// 取原始步骤对象数组（保留步骤自身的 expected 字段，供逐步预期渲染）
+// ★ SSOT(§4.17-B): "操作步骤"渲染的必须是**将要执行的指令链** → actions 为权威源；
+//   test_steps 只是生成期的派生快照（可能与导航解析结果脱节，且混入取证步骤）。
+function parseStepsRaw(item) {
+  const payload = item.payload || {};
+  const nonEmpty = function(v) { return (Array.isArray(v) && v.length) ? v : null; };
+  let raw = nonEmpty(item.actions) || nonEmpty(payload.actions)
+    || item.test_steps || item.steps || item.case_actions_json
+    || payload.test_steps || [];
+  if (typeof raw === 'string') {
+    try { raw = JSON.parse(raw); } catch (e) { raw = [raw]; }
+  }
+  if (!Array.isArray(raw)) raw = [raw];
+  // 取证步骤（截图）不是操作步骤 —— 与 step_assertions 的步骤契约一致
+  return raw.filter(function(s) {
+    return !(s && typeof s === 'object' && String(s.type || '') === 'screenshot');
+  });
+}
+
+// 提取用例的全部断言预期文本（checks[].expect / description / check.expected）。
+// 逐步预期的权威来源：步骤自带 expected 优先，其次按序对齐断言，最后回落整体预期。
+function caseExpectations(c) {
+  const payload = c.payload || {};
+  const checks = c.checks || payload.checks || [];
+  const out = [];
+  (Array.isArray(checks) ? checks : []).forEach(function(ch) {
+    if (!ch || typeof ch !== 'object') return;
+    const inner = (ch.check && typeof ch.check === 'object') ? ch.check : {};
+    const txt = String(ch.expect || ch.description || inner.expected || inner.description || '').trim();
+    if (txt) out.push(txt);
+  });
+  return out;
+}
+
+// 解析字段里的 JSON 字符串为该字段的展示值
+function fieldValue(v) {
+  if (v == null || v === '') return '';
+  if (typeof v === 'string') {
+    try { const p = JSON.parse(v); if (typeof p === 'string') return p; } catch (e) { /* 非 JSON 直接返回 */ }
+    return v;
+  }
+  if (typeof v === 'object') return JSON.stringify(v, null, 2);
+  return String(v);
+}
+
+// ════════════ 数据加载 ════════════
+
+async function loadReview() {
+  els.caseList.innerHTML = '<div class="md-empty-state">加载中...</div>';
+  try {
+    const d = await api('GET', '/api/cases/review');
+    if (!d || !d.ok) {
+      els.caseList.innerHTML = '<div class="md-empty-state">加载失败: ' + escHtml((d && d.error) || '未知') + '</div>';
+      return;
+    }
+    state.intents = d.intents || [];
+    state.stats = d.stats || {};
+    renderStats();
+    // ★ P1-7: 并行加载三车道数据（不阻断主流程，失败时降级为空 laneMap）
+    loadLaneData();
+    // ★ P1-7: 并行加载校准统计（不阻断主流程，失败时隐藏展示区）
+    loadCalibration();
+    applyFilters();
+    // ★ 从 ?case= 参数恢复选中（从用例编辑页"返回列表"带回来的）
+    selectCaseFromUrl();
+    // ★ 默认条目：URL 未指定且当前无选中项时，自动选中并展示第一条用例详情，
+    //   避免右侧一直停在「请选择左侧测试用例查看详情」。仅首次生效，不覆盖用户手动选择。
+    if (state.currentCaseId === null && state.filtered.length > 0) {
+      selectCase(state.filtered[0].case_id || state.filtered[0].id);
+    }
+  } catch (e) {
+    els.caseList.innerHTML = '<div class="md-empty-state">加载异常: ' + escHtml(String(e)) + '</div>';
+    appendLog('⚠️ 加载用例审核数据失败: ' + String(e));
+  }
+  loadReviewState();
+}
+
+// ★ P1-7: 加载三车道路由数据
+async function loadLaneData() {
+  try {
+    const d = await api('GET', '/api/review/lane');
+    if (d && d.ok && d.lanes) {
+      const map = {};
+      d.lanes.forEach(function(l) {
+        if (l.case_id) {
+          map[l.case_id] = {
+            lane: l.lane || 'yellow',
+            reason: l.reason || '',
+            routed_to_human: l.routed_to_human !== false,
+          };
+        }
+      });
+      state.laneMap = map;
+      applyFilters();
+      // 若当前详情已选中，刷新其 lane 徽章
+      if (state.currentCase && state.currentCaseId) renderDetail(state.currentCase);
+    }
+  } catch (e) {
+    appendLog('⚠️ 加载三车道数据失败（降级为无 lane）: ' + String(e));
+  }
+}
+
+// ★ P1-7: 加载校准统计数据
+async function loadCalibration() {
+  try {
+    const d = await api('GET', '/api/calibration/summary');
+    if (d && d.ok && d.stats) {
+      state.calibration = d;
+      renderCalibration(d);
+    }
+  } catch (e) {
+    appendLog('⚠️ 加载校准统计失败（降级隐藏）: ' + String(e));
+  }
+}
+
+function renderCalibration(d) {
+  if (!d || !d.stats) return;
+  const s = d.stats;
+  const total = s.total || 0;
+  if (total === 0) {
+    if (els.calibrationBar) els.calibrationBar.style.display = 'none';
+    return;
+  }
+  if (els.calibrationBar) els.calibrationBar.style.display = 'flex';
+  if (els.calStatus) els.calStatus.textContent = s.is_cold_start ? '冷启动' : (d.is_calibrated ? '已校准' : '未校准');
+  if (els.calTotal) els.calTotal.textContent = total + ' / ' + (s.min_samples || 3);
+  if (els.calAgreement) els.calAgreement.textContent = (Math.round((s.agreement_rate || 0) * 1000) / 10) + '%';
+  if (els.calFalsePass) els.calFalsePass.textContent = (s.false_pass || 0) + ' (' + (Math.round((s.false_pass_rate || 0) * 1000) / 10) + '%)';
+  if (els.calFalseFail) els.calFalseFail.textContent = (s.false_fail || 0) + ' (' + (Math.round((s.false_fail_rate || 0) * 1000) / 10) + '%)';
+}
+
+async function loadReviewState() {
+  try {
+    const d = await api('GET', '/api/cases/review/state');
+    if (d && d.ok) {
+      state.reviewState = d;
+      els.reviewStatus.textContent = d.status === 'approved' ? '已完成' : (d.status === 'paused' ? '已暂停' : d.status || '-');
+      els.approvalRate.textContent = d.approval_rate != null ? (Math.round(d.approval_rate * 10) / 10) + '%' : '-';
+      els.pendingCount.textContent = d.pending != null ? d.pending : '-';
+    }
+  } catch (e) {
+    appendLog('⚠️ 加载审核状态失败: ' + String(e));
+  }
+}
+
+function renderStats() {
+  if (A._currentProject) {
+    if (els.curProject) els.curProject.textContent = A._currentProjectName || A._currentProject || '-';
+  }
+  const s = state.stats;
+  const total = s.total || 0;
+  const approved = s.approved || 0;
+  els.reviewedCount.textContent = approved + ' / ' + total;
+  // ★ 口径一致：信息栏「平均置信度」改为与列表/详情同一置信度口径（生成置信度 _confidence），
+  //   不再借后端 avg_execution_confidence(执行置信度)，避免与列表数值里外不一致。
+  const scs = state.intents.map(getConfidenceScore).filter(function(v) { return v != null; });
+  els.avgConfidence.textContent = scs.length > 0
+    ? Math.round(scs.reduce(function(a, b) { return a + b; }, 0) / scs.length) + '%'
+    : '-';
+  els.lowConfidenceCount.textContent = s.low_confidence || 0;
+  els.highRiskCount.textContent = s.high_risk || 0;
+}
+
+// ════════════ 过滤（与置信度解析联动，统一按百分比口径） ════════════
+
+function applyFilters() {
+  const kw = els.searchInput.value.trim().toLowerCase();
+  const risk = els.riskFilter.value;
+  const confFilter = els.confidenceFilter.value;
+  const statusFilter = els.statusFilter.value;
+
+  state.filtered = state.intents.filter(c => {
+    if (kw) {
+      const id = (c.case_id || c.id || '').toLowerCase();
+      const title = (c.title || c.intent_summary || '').toLowerCase();
+      if (!id.includes(kw) && !title.includes(kw)) return false;
+    }
+    if (state.methodFilter) {
+      const m = String(c.test_method || '').trim().toUpperCase();
+      if (m !== state.methodFilter) return false;
+    }
+    if (risk) {
+      const rc = getRiskCn(c._risk_level || c.risk_level).toLowerCase();
+      if (rc !== risk && c._risk_level !== risk && c.risk_level !== risk) {
+        // 兼容英文原始值
+        const raw = String(c._risk_level || c.risk_level || '').toLowerCase();
+        if (raw !== risk) return false;
+      }
+    }
+    const score = getConfidenceScore(c); // 百分比整数，null 表示无数据
+    if (confFilter === 'high' && (score == null || score < 80)) return false;
+    if (confFilter === 'mid' && (score == null || score < 50 || score >= 80)) return false;
+    if (confFilter === 'low' && (score == null || score >= 50)) return false;
+    if (statusFilter && getStatus(c) !== statusFilter) return false;
+    return true;
+  });
+
+  renderList();
+  syncSelectAll();
+}
+
+// ════════════ 列表渲染 ════════════
+
+function renderList() {
+  els.listCount.textContent = state.intents.length;
+  els.totalCount.textContent = state.intents.length;
+  els.visibleCount.textContent = state.filtered.length;
+
+  if (state.filtered.length === 0) {
+    els.caseList.innerHTML = '<div class="md-empty-state">暂无数据</div>';
+    if (els.detailEmpty) {
+      els.detailEmpty.textContent =
+        state.intents.length === 0 ? '暂无用例数据'
+          : (state.methodFilter ? '该方法论（' + (METHOD_CN[state.methodFilter] || state.methodFilter) + '）下暂无匹配用例' : '当前筛选条件下无匹配条目');
+    }
+    return;
+  }
+
+  els.caseList.innerHTML = state.filtered.map(c => {
+    const caseId = c.case_id || c.id || '-';
+    const status = getStatus(c);
+    const statusLabel = getStatusLabel(status);
+    const riskCn = getRiskCn(c._risk_level || c.risk_level);
+    const score = getConfidenceScore(c);
+    const confClass = getConfidenceClass(score);
+    const laneInfo = state.laneMap[caseId];
+    const laneCls = laneInfo ? (' status-lane status-lane-' + laneInfo.lane) : (' status-' + status);
+    const checked = state.selectedIds.has(caseId) ? ' checked' : '';
+    const selectedCls = state.currentCaseId === caseId ? ' selected' : '';
+    return '<div class="md-list-item ' + laneCls + selectedCls + '" data-case-id="' + escAttr(caseId) + '">' +
+      '<div class="md-list-item-row1">' +
+        '<label class="ir-cb-wrap" title="选择该用例">' +
+          '<input type="checkbox" class="ir-cb ir-row-cb" data-case-id="' + escAttr(caseId) + '"' + checked + '>' +
+        '</label>' +
+        '<span class="md-list-item-id">' + escHtml(caseId) + '</span>' +
+        (laneInfo ? '<span class="md-lane-dot ' + escAttr(laneInfo.lane) + '" title="' + escAttr(laneInfo.reason || '') + '"></span>' : '') +
+        '<span class="md-req-tag">' + escHtml(c.req_id || '') + '</span>' +
+      '</div>' +
+      '<div class="md-list-item-desc">' + escHtml(c.title || c.intent_summary || '-') + '</div>' +
+      '<div class="md-list-item-conf md-conf-line">' +
+        '<span class="ir-risk-tag">' + (riskCn ? escHtml(riskCn) : '') + '</span>' +
+        '<span>置信度</span>' +
+        '<div class="md-conf-bar"><div class="md-conf-fill ' + escAttr(confClass) + '" style="width:' + (score != null ? score : 0) + '%"></div></div>' +
+        '<span class="md-conf-text">' + (score != null ? score + '%' : '-') + '</span>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  // 绑定列表项点击（选中 → 渲染详情）
+  els.caseList.querySelectorAll('.md-list-item').forEach(item => {
+    item.addEventListener('click', function() {
+      selectCase(this.dataset.caseId);
+    });
+  });
+  // 复选框事件（事件委托）
+  // ★ 根因（2026-10-28 实测）：点击勾选框时 click 会冒泡到行 → selectCase → renderList
+  //   在浏览器执行勾选框「激活行为」（翻转 checked + 派发 change）之前把 input 从 DOM 移除，
+  //   未连接的 input 不做激活 → change 不触发、checked 回滚 → 表现为「勾选无反应」。
+  //   故在勾选框（及其 label 外壳）阻断 click 冒泡，让激活与 change 正常完成。
+  els.caseList.querySelectorAll('.ir-cb-wrap').forEach(function(wrap) {
+    wrap.addEventListener('click', function(e) { e.stopPropagation(); });
+  });
+  els.caseList.querySelectorAll('.ir-row-cb').forEach(cb => {
+    cb.addEventListener('click', function(e) { e.stopPropagation(); });
+    cb.addEventListener('change', function() {
+      const caseId = this.dataset.caseId;
+      if (this.checked) state.selectedIds.add(caseId);
+      else state.selectedIds.delete(caseId);
+      updateSelectedCount();
+      // 勾选单条即联动右栏：置信度分析按该用例渲染（不勾选时保持当前详情不动）
+      if (this.checked) selectCase(caseId);
+    });
+  });
+}
+
+function selectCase(caseId) {
+  state.currentCaseId = caseId;
+  state.currentCase = state.intents.find(c => (c.case_id || c.id) === caseId);
+  renderList();
+  renderDetail(state.currentCase);
+}
+
+// ★ 从 URL ?case= 参数恢复选中（配合编辑页"返回列表"保留进度）
+function selectCaseFromUrl() {
+  try {
+    if (!state.intents || state.intents.length === 0) return;
+    const p = new URLSearchParams(window.location.search);
+    const cid = (p.get('case') || '').trim();
+    if (!cid) return;
+    const found = state.intents.some(c => (c.case_id || c.id) === cid);
+    if (found) selectCase(cid);
+  } catch (e) { /* 参数解析失败则忽略 */ }
+}
+
+// ════════════ 详情渲染 ════════════
+
+function renderDetail(c) {
+  _chainLoaded = false;
+  _chainExpanded = false;
+  if (els.chainContainer) els.chainContainer.style.display = 'none';
+  if (els.chainToggleBtn) els.chainToggleBtn.classList.remove('expanded');
+  const icon = els.chainToggleBtn ? els.chainToggleBtn.querySelector('.md-chain-toggle-icon') : null;
+  if (icon) icon.textContent = '▶';
+
+  if (!c) {
+    els.detailEmpty.style.display = '';
+    els.detailPanel.style.display = 'none';
+    return;
+  }
+  els.detailEmpty.style.display = 'none';
+  els.detailPanel.style.display = 'flex';
+
+  const caseId = c.case_id || c.id || '-';
+  window._currentCaseId = caseId;
+  els.detailCaseId.textContent = caseId;
+  els.detailTitle.textContent = c.title || c.intent_summary || '-';
+
+  // 风险徽章
+  const riskCn = getRiskCn(c._risk_level || c.risk_level);
+  if (riskCn) {
+    const riskCls = String(c._risk_level || c.risk_level || '').toLowerCase();
+    els.detailRisk.hidden = false;
+    els.detailRisk.className = 'md-badge md-badge-risk ' + escAttr(riskCls || riskCn);
+    els.detailRisk.textContent = '风险 ' + riskCn;
+  } else {
+    els.detailRisk.hidden = true;
+  }
+
+  // 车道徽章
+  const laneInfo = state.laneMap[caseId];
+  if (laneInfo) {
+    els.detailLane.hidden = false;
+    els.detailLane.className = 'md-lane-tag ' + escAttr(laneInfo.lane);
+    els.detailLane.textContent = laneInfo.lane === 'green' ? '绿车道' : (laneInfo.lane === 'yellow' ? '黄车道' : '红车道');
+    els.detailLane.title = laneInfo.reason || '';
+  } else {
+    els.detailLane.hidden = true;
+  }
+
+  // 状态徽章
+  const status = getStatus(c);
+  els.detailStatus.textContent = getStatusLabel(status);
+  els.detailStatus.className = 'md-badge md-badge-status ' + status;
+
+  // 内容
+  els.detailGoal.textContent = c.title || c.intent_summary || '-';
+  els.detailPrecondition.textContent = fieldValue(c.precondition) || '无';
+  els.detailSteps.innerHTML = (function() {
+    const rawSteps = parseStepsRaw(c).filter(function(s) {
+      const t = stepText(s);
+      return t && t.trim();
+    });
+    if (rawSteps.length === 0) return '<div class="md-empty-mini">无操作步骤</div>';
+    const expects = caseExpectations(c);
+    const globalExp = String(fieldValue(c.expected_result || c.expected_outcome) || '').trim();
+    const aligned = (expects.length === rawSteps.length);
+    return rawSteps.map(function(s, i) {
+      const text = stepText(s);
+      const own = (typeof s === 'object' && s !== null)
+        ? String(s.expected || s.expect || s.expected_result || '').trim() : '';
+      let exp = own;
+      if (!exp && aligned) exp = expects[i] || '';
+      // 断言数无法与步骤对齐时，整体预期挂到最后一个交互步骤，避免"只在末尾单列一条"
+      if (!exp && i === rawSteps.length - 1 && globalExp) exp = globalExp;
+      return '<div class="md-step-item"><span class="md-step-num">' + (i + 1) + '</span>' +
+        '<span class="md-step-body">' +
+          '<span class="md-step-text">' + escHtml(text) +
+            ((typeof s === 'object' && s !== null && s.nav_unresolved)
+              ? '<span class="md-step-unresolved" title="真实导航数据(nav_graph)中没有该页面：执行时将如实判定失败，不再停在站点根伪装到达">目标页未解析</span>'
+              : '') +
+          '</span>' +
+          '<span class="md-step-expect' + (exp ? '' : ' md-step-expect-none') + '">' +
+            '<span class="md-step-expect-tag">预期</span>' +
+            '<span>' + escHtml(exp || '—') + '</span>' +
+          '</span>' +
+        '</span></div>';
+    }).join('');
+  })();
+  // 整体预期：聚合全部断言文本（不再只取第一条），无断言时回落用例级预期字段
+  const _allExp = caseExpectations(c);
+  els.detailExpected.textContent = _allExp.length > 0
+    ? _allExp.join('\n')
+    : (String(fieldValue(c.expected_result || c.expected_outcome) || '').trim() || '-');
+
+  // 置信度分析（维度条 + 综合置信度卡片）
+  renderConfidence(c);
+  // 关键指标
+  renderMetrics(c);
+}
+
+function renderConfidence(c) {
+  // 维度条：生成/执行/证据置信度、覆盖率、完整度（均可为 0-100 或 0-1，toPercent 统一）
+  const dims = [
+    { key: '_confidence', label: '生成置信度' },
+    { key: '_avg_confidence', label: '执行置信度' },
+    { key: '_evidence_confidence', label: '证据置信度' },
+    { key: '_case_coverage', label: '用例覆盖率' },
+    { key: '_case_completeness', label: '用例完整度' },
+  ];
+  const rows = [];
+  dims.forEach(function(d) {
+    const v = toPercent(c[d.key]);
+    rows.push(
+      '<div class="md-dim-item">' +
+        '<span class="md-dim-name">' + escHtml(d.label) + '</span>' +
+        '<span class="md-dim-bar"><span class="md-dim-bar-fill" style="width:' + (v != null ? v : 0) + '%"></span></span>' +
+        '<span class="md-dim-value">' + (v != null ? v + '%' : '-') + '</span>' +
+      '</div>'
+    );
+  });
+  if (rows.length === 0) {
+    els.dimList.innerHTML = '<div class="md-empty-mini">无置信度数据</div>';
+  } else {
+    els.dimList.innerHTML = rows.join('');
+  }
+
+  // 综合执行置信度卡片（分数 + 进度条）
+  const score = getConfidenceScore(c);
+  if (score != null) {
+    els.confidenceScore.textContent = score + '%';
+    els.confidenceScore.style.color = score >= 80 ? 'var(--state-success-text)'
+      : (score >= 50 ? 'var(--state-warning-text)' : 'var(--state-error-text)');
+  } else {
+    els.confidenceScore.textContent = '-';
+    els.confidenceScore.style.color = '';
+  }
+  if (els.confidenceBar) {
+    const _cls = getConfidenceClass(score);
+    els.confidenceBar.className = 'md-confidence-bar-fill ' + _cls;
+    els.confidenceBar.style.width = (score != null ? score : 0) + '%';
+  }
+  const verdict = c._evidence_verdict;
+  if (verdict) {
+    els.confidenceHint.textContent = '证据判决: ' + verdict + (c._evidence_strength != null ? ' · 强度 ' + toPercent(c._evidence_strength) + '%' : '');
+  } else {
+    els.confidenceHint.textContent = '基于证据与执行因素加权';
+  }
+  // 保留原 #confidenceScore 曾是独立元素可能性：无需额外处理
+}
+
+function renderMetrics(c) {
+  const items = [
+    { label: '意图驱动率', val: toPercent(c._case_driven_rate), unit: '%' },
+    { label: '严格度', val: toPercent(c._strictness_score), unit: '%' },
+    { label: '证据数', val: (c._evidence_total != null && c._evidence_total !== '' ? Number(c._evidence_total) : null), unit: '' },
+    { label: '证据等级', val: c._evidence_level || null, unit: '' },
+    { label: '证据判决', val: c._evidence_verdict || null, unit: '' },
+  ];
+  const html = items.map(function(it) {
+    let text = '-';
+    if (it.val != null) {
+      if (typeof it.val === 'number' && it.unit) text = it.val + it.unit;
+      else if (typeof it.val === 'number') text = String(it.val); // 证据数是计数，不加 %
+      else text = escHtml(it.val);
+    }
+    return '<div class="md-metric-item"><span class="md-metric-label">' + escHtml(it.label) + '</span>' +
+      '<span class="md-metric-value">' + text + '</span></div>';
+  }).join('');
+  els.metricList.innerHTML = html || '<div class="md-empty-mini">无指标数据</div>';
+}
+
+// ════════════ 关联链路（详情内，类名用通用 md-chain-*） ════════════
+let _chainLoaded = false;
+let _chainExpanded = false;
+
+async function toggleChain() {
+  const container = els.chainContainer;
+  const btn = els.chainToggleBtn;
+  const icon = btn ? btn.querySelector('.md-chain-toggle-icon') : null;
+  _chainExpanded = !_chainExpanded;
+  if (_chainExpanded) {
+    container.style.display = 'flex';
+    if (btn) btn.classList.add('expanded');
+    if (icon) icon.textContent = '▼';
+    if (!_chainLoaded) {
+      container.innerHTML = '<div class="md-chain-loading">加载中...</div>';
+      try {
+        const caseId = (window._currentCaseId || '').trim();
+        if (!caseId) { container.innerHTML = '<div class="md-chain-empty">无用例ID</div>'; return; }
+        const r = await api('GET', '/api/trace/case/' + encodeURIComponent(caseId));
+        if (r && !r.error) {
+          renderCaseChain(r, container);
+          _chainLoaded = true;
+        } else {
+          container.innerHTML = '<div class="md-chain-empty">加载失败: ' + escHtml((r && r.error) || '') + '</div>';
+        }
+      } catch (e) {
+        container.innerHTML = '<div class="md-chain-empty">异常: ' + escHtml(String(e)) + '</div>';
+      }
+    }
+  } else {
+    container.style.display = 'none';
+    if (btn) btn.classList.remove('expanded');
+    if (icon) icon.textContent = '▶';
+  }
+}
+
+function renderCaseChain(data, panel) {
+  let html = '';
+
+  // 1. 关联需求
+  if (data.requirement && data.requirement.req_id) {
+    const r = data.requirement;
+    html += '<div class="md-chain-section"><div class="md-chain-section-title">关联需求</div>';
+    html += '<div class="md-chain-item"><span class="md-chain-tag"><span class="md-chain-tag-req">REQ</span></span><span class="md-chain-item-title">' + escHtml(r.req_id) + '</span></div>';
+    if (r.operation) html += '<div class="md-chain-item">操作: ' + escHtml(r.operation) + '</div>';
+    if (r.expected_feedback) html += '<div class="md-chain-item">预期: ' + escHtml(r.expected_feedback) + '</div>';
+    if (r.feature_label) html += '<div class="md-chain-item">功能: ' + escHtml(r.feature_label) + '</div>';
+    html += '</div>';
+  }
+
+  // 2. 需求切片
+  if (data.slice && data.slice.slice_id) {
+    const s = data.slice;
+    html += '<div class="md-chain-section"><div class="md-chain-section-title">需求切片</div>';
+    html += '<div class="md-chain-item"><span class="md-chain-tag ir-chain-tag-slice">SLICE</span>' + escHtml(s.slice_id) + '</div>';
+    if (s.section) html += '<div class="md-chain-item">章节: ' + escHtml(s.section) + '</div>';
+    if (s.feature_label) html += '<div class="md-chain-item">功能: ' + escHtml(s.feature_label) + '</div>';
+    html += '</div>';
+  }
+
+  // ★ H1: 原文档来源
+  if (data.source_document && data.source_document.doc_type) {
+    const d = data.source_document;
+    html += '<div class="md-chain-section"><div class="md-chain-section-title">原文档来源</div>';
+    html += '<div class="md-chain-item">' + (d.filename ? escHtml(d.filename) : escHtml(d.doc_type)) + '</div>';
+    if (d.category) html += '<div class="md-chain-item-meta">分类: ' + escHtml(d.category) + '</div>';
+    if (d.source_url) html += '<div class="md-chain-item"><a href="' + escAttr(d.source_url) + '" target="_blank" rel="noopener">查看原文档 ↗</a></div>';
+    html += '</div>';
+  }
+
+  // 3. API 端点
+  if (data.api_endpoints && data.api_endpoints.length > 0) {
+    html += '<div class="md-chain-section"><div class="md-chain-section-title">API 端点 (' + data.api_endpoints.length + ')</div>';
+    data.api_endpoints.forEach(a => {
+      const txt = typeof a === 'string' ? a : (a.method + ' ' + a.path || JSON.stringify(a));
+      html += '<div class="md-chain-item"><span class="md-chain-tag ir-chain-tag-api">API</span>' + escHtml(txt) + '</div>';
+    });
+    html += '</div>';
+  }
+
+  // 4. 数据库表
+  if (data.db_tables && data.db_tables.length > 0) {
+    html += '<div class="md-chain-section"><div class="md-chain-section-title">数据库表 (' + data.db_tables.length + ')</div>';
+    data.db_tables.forEach(t => {
+      const txt = typeof t === 'string' ? t : (t.table_name || JSON.stringify(t));
+      html += '<div class="md-chain-item"><span class="md-chain-tag ir-chain-tag-db">DB</span>' + escHtml(txt) + '</div>';
+    });
+    html += '</div>';
+  }
+
+  // 5. Figma 页面
+  if (data.figma_pages && data.figma_pages.length > 0) {
+    html += '<div class="md-chain-section"><div class="md-chain-section-title">Figma 页面 (' + data.figma_pages.length + ')</div>';
+    data.figma_pages.forEach(f => {
+      const txt = typeof f === 'string' ? f : (f.page_name || f.page_id || JSON.stringify(f));
+      html += '<div class="md-chain-item"><span class="md-chain-tag ir-chain-tag-figma">FIGMA</span>' + escHtml(txt) + '</div>';
+    });
+    html += '</div>';
+  }
+
+  if (!html) html = '<div class="md-chain-empty">暂无链路数据</div>';
+  panel.innerHTML = html;
+}
+
+// ════════════ 选中/批量统计 ════════════
+
+function syncSelectAll() {
+  if (!els.selectAllCb) return;
+  const visibleIds = state.filtered.map(c => c.case_id || c.id);
+  const checkedAll = visibleIds.length > 0 && visibleIds.every(id => state.selectedIds.has(id));
+  els.selectAllCb.checked = checkedAll;
+  els.selectAllCb.indeterminate = !checkedAll && visibleIds.some(id => state.selectedIds.has(id));
+}
+
+function updateSelectedCount() {
+  els.selectedCount.textContent = state.selectedIds.size;
+  els.btnRejectSel.disabled = state.selectedIds.size === 0;
+  syncSelectAll();
+}
+
+// ════════════ 操作 ════════════
+
+async function approveCase(caseId) {
+  try {
+    const d = await api('POST', '/api/cases/review/approve', { case_id: caseId });
+    if (d && d.ok) {
+      appendLog('✅ 已通过: ' + caseId);
+      const c = state.intents.find(x => (x.case_id || x.id) === caseId);
+      if (c) c._review_status = 'approved';
+      applyFilters();
+      if (state.currentCase && (state.currentCase.case_id || state.currentCase.id) === caseId) renderDetail(state.currentCase);
+    } else {
+      A.toast('通过失败: ' + (d && d.error ? d.error : '未知'), 'error');
+    }
+  } catch (e) {
+    A.toast('通过异常: ' + String(e), 'error');
+  }
+}
+
+async function rejectCase(caseId) {
+  if (!(await A.confirm('确认驳回用例 ' + caseId + '？'))) return;
+  try {
+    const body = { case_id: caseId };
+    const d = await api('POST', '/api/cases/review/reject', body);
+    if (d && d.ok) {
+      appendLog('✅ 已驳回: ' + caseId + (d.regenerated ? ' (已重新生成)' : ''));
+      if (d.regenerated) {
+        await loadReview();
+      } else {
+        const c = state.intents.find(x => (x.case_id || x.id) === caseId);
+        if (c) c._review_status = 'rejected';
+        applyFilters();
+      }
+    } else {
+      A.toast('驳回失败: ' + (d && d.error ? d.error : '未知'), 'error');
+    }
+  } catch (e) {
+    A.toast('驳回异常: ' + String(e), 'error');
+  }
+}
+
+async function laneConfirmCase(caseId) {
+  if (!(await A.confirm('确认人工审核用例 ' + caseId + '（车道路由确认通过）？'))) return;
+  try {
+    const d = await api('POST', '/api/review/lane/confirm', { case_id: caseId, action: 'approve' });
+    if (d && d.ok) {
+      appendLog('✅ 人工确认车道: ' + caseId + ' → ' + (d.new_status || d.action || 'approved'));
+      A.toast('已人工确认: ' + caseId, 'success');
+      loadLaneData();
+      loadReviewState();
+      if (state.currentCase && (state.currentCase.case_id || state.currentCase.id) === caseId) renderDetail(state.currentCase);
+    } else {
+      A.toast('人工确认失败: ' + (d && d.error ? d.error : '未知'), 'error');
+    }
+  } catch (e) {
+    A.toast('人工确认异常: ' + String(e), 'error');
+  }
+}
+
+async function batchReject() {
+  if (state.selectedIds.size === 0) return;
+  if (!(await A.confirm('确认驳回选中的 ' + state.selectedIds.size + ' 条用例？'))) return;
+  for (const caseId of state.selectedIds) {
+    await rejectCase(caseId);
+  }
+  state.selectedIds.clear();
+  updateSelectedCount();
+}
+
+async function batchApproveSelected() {
+  if (!(await A.confirm('确认自动放行 green 车道用例？yellow/red 车道需逐条人审。'))) return;
+  const btn = els.btnBatchApprove;
+  const origText = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '放行中...'; }
+  try {
+    const d = await api('POST', '/api/cases/review/batch-approve', {});
+    if (d && d.ok) {
+      const approved = d.approved || 0;
+      const skippedYellow = d.skipped_yellow || 0;
+      const skippedRed = d.skipped_red || 0;
+      const alreadyApproved = d.already_approved || 0;
+      appendLog('✅ Green 自动放行: ' + approved + ' 条' +
+        (skippedYellow ? '，跳过黄车道 ' + skippedYellow + ' 条' : '') +
+        (skippedRed ? '，跳过红车道 ' + skippedRed + ' 条' : '') +
+        (alreadyApproved ? '，已通过 ' + alreadyApproved + ' 条' : ''));
+      const needReview = skippedYellow + skippedRed;
+      if (approved > 0 || needReview > 0) {
+        const lines = [
+          '本次自动放行 green 车道：' + approved + ' 条' + (alreadyApproved ? '（另有 ' + alreadyApproved + ' 条早已通过，跳过）' : ''),
+          '',
+          needReview > 0
+            ? '⚠ ' + needReview + ' 条 yellow/red 车道用例需逐条人审：\n黄车道（中风险）：' + skippedYellow + ' 条\n红车道（高风险）：' + skippedRed + ' 条'
+            : '🎉 green 车道用例已全部通过，无待审用例。',
+          '',
+          '请在列表中逐条确认 yellow/red 后再点"完成审核"。',
+        ];
+        await A.confirm(lines.join('\n'), { title: '自动放行结果', okText: '知道了', cancelText: '关闭' });
+      } else if (alreadyApproved > 0) {
+        // 全部 green 均已通过，无任何可放行项 —— 用清晰文案而非误导性"需逐条人审"
+        await A.confirm('所有 green 车道用例均已通过（' + alreadyApproved + ' 条，含此前已通过），无需自动放行。\n\n无 yellow/red 闲置用例待逐条人审。',
+          { title: '自动放行结果', okText: '知道了', cancelText: '关闭' });
+      } else {
+        A.toast('当前项目不存在可自动放行的用例（未生成三车道分流或已全部审核）。', 'info');
+      }
+      state.selectedIds.clear();
+      updateSelectedCount();
+      await loadReview();
+    } else {
+      A.toast('自动放行失败: ' + (d && d.error ? d.error : '未知'), 'error');
+    }
+  } catch (e) {
+    A.toast('自动放行异常: ' + String(e), 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = origText; }
+  }
+}
+
+// ════════════ 预检逻辑 ════════════
+let preflightState = null;
+
+async function loadPreflight() {
+  try {
+    const r = await api('GET', '/api/preflight');
+    if (!r || !r.ok) { preflightState = { can_proceed: false }; updatePreflightUI(false); return; }
+    preflightState = r;
+    updatePreflightUI(r.can_proceed, r.warnings);
+  } catch (e) {
+    preflightState = { can_proceed: false };
+    updatePreflightUI(false);
+  }
+}
+
+function updatePreflightUI(canProceed, warnings) {
+  const el = els.preflightStatus;
+  if (!el) return;
+  const dot = el.querySelector('.ir-preflight-dot');
+  const text = el.querySelector('.ir-preflight-text');
+  if (canProceed) { dot.className = 'ir-preflight-dot ok'; text.textContent = '数据源正常'; }
+  else { dot.className = 'ir-preflight-dot err'; text.textContent = '无可用数据源'; }
+  if (warnings && warnings.length) { text.textContent += ' (有警告)'; dot.className = 'ir-preflight-dot warn'; }
+}
+
+async function confirmReview() {
+  if (preflightState && !preflightState.can_proceed) {
+    A.toast('预检未通过: 未检测到已配置的数据源，请先在项目配置中配置至少一个数据源', 'error');
+    return;
+  }
+  if (preflightState && preflightState.warnings && preflightState.warnings.length) {
+    if (!(await A.confirm('预检警告:\n' + preflightState.warnings.join('\n') + '\n\n是否继续？'))) return;
+  }
+  if (!(await A.confirm('确认完成审核？将解除暂停继续执行 Step4'))) return;
+  try {
+    const d = await api('POST', '/api/cases/review/confirm');
+    if (d && d.ok) {
+      appendLog('✅ 审核完成: total=' + (d.total || 0) + ', pending=' + (d.pending || 0) + ', rate=' + (d.approval_rate || 0));
+      A.toast('审核完成\n总数: ' + (d.total || 0) + '\n待审核: ' + (d.pending || 0) + '\n通过率: ' + (d.approval_rate || 0), 'success');
+      await loadReview();
+    } else {
+      A.toast('完成审核失败: ' + (d && d.error ? d.error : '未知'), 'error');
+    }
+  } catch (e) {
+    A.toast('完成审核异常: ' + String(e), 'error');
+  }
+}
+
+// ════════════ 事件 ════════════
+
+function bindEvents() {
+  els.searchInput.addEventListener('input', applyFilters);
+  els.riskFilter.addEventListener('change', applyFilters);
+  els.confidenceFilter.addEventListener('change', applyFilters);
+  els.statusFilter.addEventListener('change', applyFilters);
+
+  els.selectAllCb.addEventListener('change', function() {
+    if (this.checked) {
+      state.filtered.forEach(c => state.selectedIds.add(c.case_id || c.id));
+    } else {
+      state.filtered.forEach(c => state.selectedIds.delete(c.case_id || c.id));
+    }
+    renderList();
+    updateSelectedCount();
+  });
+
+  els.btnApprove.addEventListener('click', function() { A.withBtnLoading(els.btnApprove, '处理中...', function() { return approveCase(state.currentCaseId); }); });
+  els.btnReject.addEventListener('click', function() { A.withBtnLoading(els.btnReject, '处理中...', rejectCurrentCase); });
+  els.btnEdit.addEventListener('click', function() {
+    if (!state.currentCaseId) return;
+    window.open('/intent-edit?case_id=' + encodeURIComponent(state.currentCaseId), '_blank');
+  });
+  els.btnBatchApprove.addEventListener('click', batchApproveSelected);
+  els.btnRejectSel.addEventListener('click', batchReject);
+  els.btnConfirm.addEventListener('click', function() { A.withBtnLoading(els.btnConfirm, '提交中...', confirmReview); });
+  els.btnRefresh.addEventListener('click', loadReview);
+  if (els.btnRejectSel) els.btnRejectSel.disabled = true;
+
+  if (els.chainToggleBtn) els.chainToggleBtn.addEventListener('click', toggleChain);
+}
+
+async function rejectCurrentCase() {
+  if (!state.currentCaseId) return;
+  await rejectCase(state.currentCaseId);
+}
+
+// ════════════ 入口 ════════════
+
+function loadClarifyGate() {
+  const project = (A._currentProject) ? A._currentProject : '';
+  api('GET', '/api/step2/clarify/gate?project=' + encodeURIComponent(project)).then(function(r) {
+    const banner = $('clarifyBanner');
+    if (!banner) return;
+    banner.style.display = (r && r.ok && r.gate_open) ? 'flex' : 'none';
+  }).catch(function() {
+    const banner = $('clarifyBanner');
+    if (banner) banner.style.display = 'none';
+  });
+}
+
+function loadSemanticMerge() {
+  const panel = $('semanticMergePanel');
+  if (!panel) return;
+  const summary = $('semanticMergeSummary');
+  const logHost = $('semanticMergeLogs');
+  api('GET', '/api/quality/semantic-merge/latest').then(function(r) {
+    const stats = (r && r.stats) || {};
+    if (!logHost || !summary) return;
+    logHost.innerHTML = '';
+    if (stats.has_data && stats.merged_count > 0) {
+      summary.textContent = '合并前 ' + stats.before + ' 条 → 合并后 ' + stats.after + ' 条（合并 ' + stats.merged_count + ' 条）';
+      const logs = stats.logs || [];
+      if (logs.length === 0) { logHost.textContent = '暂无合并明细'; }
+      else {
+        logs.slice(0, 20).forEach(function(l) {
+          const div = document.createElement('div');
+          div.textContent = '· ' + (l.primary || '') + ' ← ' + (l.merged || '') + '（' + (l.reason || '') + '）';
+          logHost.appendChild(div);
+        });
+      }
+    } else {
+      summary.textContent = '暂无合并记录';
+      logHost.textContent = '当前项目暂无功能点合并记录';
+    }
+    panel.style.display = '';
+  }).catch(function() {
+    if (summary) summary.textContent = '加载失败';
+    if (logHost) logHost.textContent = '';
+    panel.style.display = '';
+  });
+  const toggle = $('semanticMergeToggle');
+  if (toggle) {
+    toggle.addEventListener('click', function() {
+      const collapsed = panel.classList.toggle('collapsed');
+      const st = panel.querySelector('.ir-merge-state');
+      if (st) st.textContent = collapsed ? '展开' : '收起';
+    });
+  }
+}
+
+A._onAuthOk = function() {
+  if (A._renderSidebarUser) A._renderSidebarUser();
+  if (A.applyPermissions) A.applyPermissions();
+  loadPreflight();
+  loadReview();
+  loadClarifyGate();
+  loadSemanticMerge();
+  A._startStepBadgePolling();
+};
+
+bindEvents();
+
+if (A._currentUser) {
+  loadReview();
+}
+
+})();
+</script>
+{% endblock %}

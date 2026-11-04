@@ -1,0 +1,1098 @@
+{% extends "_layout_base.html" %}
+{% block head_extra %}
+<style>
+/* ════════════ Full-Height Layout ════════════ */
+.content-body {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+.charts-wrapper {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.charts-kpi-row { flex-shrink: 0; margin-bottom: 0; }
+.charts-scroll-area {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ════════════ 可视化报告专属样式 ════════════ */
+.charts-kpi-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.charts-kpi-card {
+  flex: 1 1 160px;
+  min-width: 120px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+.charts-kpi-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-2);
+}
+.charts-kpi-value {
+  font-size: var(--fs-h1);
+  font-weight: var(--fw-bold);
+  font-family: var(--font-mono);
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.charts-kpi-sub {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  margin-top: var(--space-1);
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.chart-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.chart-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  flex-shrink: 0;
+}
+.chart-card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.chart-card-body {
+  flex: 1;
+  padding: var(--space-4);
+  min-height: 240px;
+  /* ★ 根因修复(2026-09-21)：去掉 max-height:320px + overflow:auto 的卡内二次裁剪 ——
+       滚动统一由 .charts-scroll-area 单一 owner 承担，卡片内容自然生长，
+       消除"外层滚到底、卡内仍缺 63px"的底部不可达。 */
+}
+
+/* Donut Chart */
+.donut-container {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 100%;
+}
+.donut {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.donut::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--state-success) 0deg var(--passed-deg, 0deg)},
+    var(--state-error) var(--passed-deg, 0deg)} var(--failed-deg, 0deg)},
+    var(--state-warning) var(--failed-deg, 0deg)} var(--skipped-deg, 0deg)},
+    var(--text-tertiary) var(--skipped-deg, 0deg)} 360deg
+  );
+}
+.donut::after {
+  content: '';
+  position: absolute;
+  inset: 18px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+}
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+.donut-center-value {
+  font-size: var(--fs-h1);
+  font-weight: var(--fw-bold);
+  font-family: var(--font-mono);
+  color: var(--color-primary);
+  line-height: 1;
+}
+.donut-center-label {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+.donut-stats {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.donut-stat-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-xs);
+}
+.donut-stat-label {
+  width: 36px;
+  flex-shrink: 0;
+}
+.donut-stat-bar-track {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-base);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.donut-stat-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.3s;
+}
+.donut-stat-value {
+  min-width: 32px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-weight: var(--fw-semibold);
+}
+
+/* Bar Chart */
+.bar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.bar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-xs);
+}
+.bar-label {
+  width: 100px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bar-track {
+  flex: 1;
+  height: 18px;
+  background: var(--bg-base);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  display: flex;
+}
+.bar-fill-pass {
+  background: var(--state-success);
+  height: 100%;
+  transition: width 0.3s;
+}
+.bar-fill-fail {
+  background: var(--state-error);
+  height: 100%;
+  transition: width 0.3s;
+}
+.bar-fill-pending {
+  background: var(--text-tertiary);
+  height: 100%;
+  transition: width 0.3s;
+}
+.bar-value {
+  min-width: 36px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+
+/* Risk Chart */
+.risk-chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.risk-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.risk-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.risk-label-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.risk-badge {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  color: var(--text-on-color);
+}
+.risk-badge-p0 { background: var(--state-error); }
+.risk-badge-p1 { background: var(--state-critical); }
+.risk-badge-p2 { background: var(--state-warning); }
+.risk-badge-p3, .risk-badge-p4 { background: var(--state-success); }
+.risk-item {
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: background 0.15s;
+  cursor: help;
+}
+.risk-item:hover {
+  background: var(--bg-elevated);
+}
+.risk-name {
+  font-size: var(--fs-xs);
+  color: var(--text-primary);
+  font-weight: var(--fw-medium);
+}
+.risk-percent {
+  font-size: var(--fs-small);
+  font-family: var(--font-mono);
+  font-weight: var(--fw-bold);
+}
+.risk-bar-track {
+  height: 6px;
+  background: var(--bg-base);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.risk-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.3s;
+}
+.risk-meta {
+  display: flex;
+  gap: var(--space-3);
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+}
+.risk-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Trend Chart */
+.trend-svg {
+  width: 100%;
+  height: 220px;
+}
+.trend-grid-line {
+  stroke: var(--border-default);
+  stroke-width: 1;
+  stroke-dasharray: 2, 3;
+}
+.trend-label-y {
+  fill: var(--text-tertiary);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  text-anchor: end;
+}
+.trend-label-x {
+  fill: var(--text-tertiary);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  text-anchor: middle;
+}
+.trend-line {
+  fill: none;
+  stroke-width: 2;
+}
+.trend-dot {
+  transition: r 0.2s;
+}
+.trend-value-label {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  text-anchor: middle;
+}
+
+/* Table */
+.charts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-xs);
+  border: 1px solid var(--text-tertiary);
+}
+.charts-table th,
+.charts-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--text-tertiary);
+  border-right: 1px solid var(--text-tertiary);
+}
+.charts-table th:last-child,
+.charts-table td:last-child { border-right: none; }
+.charts-table th {
+  background: var(--bg-surface);
+  color: var(--text-tertiary);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.charts-table tbody tr:hover {
+  background: var(--border-faint);
+}
+.charts-table td.num {
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+/* Empty */
+.charts-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 200px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-small);
+}
+
+@media (max-width: 1200px) {
+  .charts-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .charts-kpi-card { flex: 1 1 140px; min-width: 100px; }
+}
+
+/* ════════════ T03 P1-1 新增样式（独立追加，不改动上方任何既有规则） ════════════ */
+/* 多切片环形：切片数由数据决定，故 conic-gradient 由 JS 内联下发；
+   这里只负责尺寸、圆形裁切与中心挖孔，配色一律走既有设计令牌。 */
+.donut-ring {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.donut-ring::after {
+  content: '';
+  position: absolute;
+  inset: 18px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+}
+.donut-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.donut-legend-name {
+  width: 68px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ════════ 批1：令牌化后下沉的项目级通用类（token-only）════════ */
+.ch-ver-sel {
+  height: var(--control-height-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  padding: 0 var(--space-2);
+}
+.sk-w50 { width: 50%; }
+.ch-trend-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2);
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+}
+</style>
+{% endblock %}
+{% block title %}可视化报告 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+可视化报告
+{% endblock %}
+
+{% block topbar_actions %}
+<select id="chartVersionSelect" class="btn-topbar ch-ver-sel">
+  <option value="">当前版本</option>
+</select>
+<button class="btn-topbar" id="btnRefreshCharts" data-perm="execution.step5">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  刷新
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="charts-wrapper">
+
+<!-- ════════════ LAYER 1: KPI Row ════════════ -->
+<div class="charts-kpi-row">
+  <div class="charts-kpi-card">
+    <div class="charts-kpi-label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+      总用例
+    </div>
+    <div class="charts-kpi-value ud-accent" id="ckTotal"><div class="skeleton skeleton-value sk-w50"></div></div>
+    <div class="charts-kpi-sub" id="ckTotalSub"><div class="skeleton skeleton-text narrow"></div></div>
+  </div>
+  <div class="charts-kpi-card">
+    <div class="charts-kpi-label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      通过
+    </div>
+    <div class="charts-kpi-value ud-ok" id="ckPassed"><div class="skeleton skeleton-value sk-w50"></div></div>
+    <div class="charts-kpi-sub" id="ckPassedSub"><div class="skeleton skeleton-text narrow"></div></div>
+  </div>
+  <div class="charts-kpi-card">
+    <div class="charts-kpi-label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      失败
+    </div>
+    <div class="charts-kpi-value ud-err" id="ckFailed"><div class="skeleton skeleton-value sk-w50"></div></div>
+    <div class="charts-kpi-sub" id="ckFailedSub"><div class="skeleton skeleton-text narrow"></div></div>
+  </div>
+  <div class="charts-kpi-card">
+    <div class="charts-kpi-label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="4.93 4.93 19.07 19.07"/></svg>
+      跳过
+    </div>
+    <div class="charts-kpi-value ud-warn" id="ckSkipped"><div class="skeleton skeleton-value sk-w50"></div></div>
+    <div class="charts-kpi-sub" id="ckSkippedSub"><div class="skeleton skeleton-text narrow"></div></div>
+  </div>
+  <div class="charts-kpi-card">
+    <div class="charts-kpi-label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      通过率
+    </div>
+    <div class="charts-kpi-value ud-ok" id="ckRate"><div class="skeleton skeleton-value sk-w50"></div></div>
+    <div class="charts-kpi-sub" id="ckRateSub"><div class="skeleton skeleton-text narrow"></div></div>
+  </div>
+  <div class="charts-kpi-card">
+    <div class="charts-kpi-label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
+      Flaky 率
+    </div>
+    <div class="charts-kpi-value ud-warn" id="ckFlaky"><div class="skeleton skeleton-value sk-w50"></div></div>
+    <div class="charts-kpi-sub" id="ckFlakySub"><div class="skeleton skeleton-text narrow"></div></div>
+  </div>
+</div>
+
+<!-- ════════════ LAYER 2: Scrollable Charts Area ════════════ -->
+<div class="charts-scroll-area">
+<div class="charts-grid">
+  <!-- Chart 1: 执行结果分布 (Donut) -->
+  <div class="chart-card">
+    <div class="chart-card-header">
+      <div class="chart-card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10"/></svg>
+        执行结果分布
+      </div>
+    </div>
+    <div class="chart-card-body" id="donutChart">
+      <div class="charts-empty">加载中...</div>
+    </div>
+  </div>
+
+  <!-- Chart 2: 模块分布 (Horizontal Bars) -->
+  <div class="chart-card">
+    <div class="chart-card-header">
+      <div class="chart-card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="4" height="8" rx="1"/><rect x="10" y="8" width="4" height="12" rx="1"/><rect x="17" y="4" width="4" height="16" rx="1"/></svg>
+        模块用例分布
+      </div>
+    </div>
+    <div class="chart-card-body" id="moduleChart">
+      <div class="charts-empty">加载中...</div>
+    </div>
+  </div>
+
+  <!-- Chart 3: 风险等级达成率 -->
+  <div class="chart-card">
+    <div class="chart-card-header">
+      <div class="chart-card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
+        风险等级达成率
+      </div>
+    </div>
+    <div class="chart-card-body" id="riskChart">
+      <div class="charts-empty">加载中...</div>
+    </div>
+  </div>
+
+  <!-- Chart 4: 版本历史趋势 -->
+  <div class="chart-card">
+    <div class="chart-card-header">
+      <div class="chart-card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+        版本历史趋势
+      </div>
+    </div>
+    <div class="chart-card-body" id="trendChart">
+      <div class="charts-empty">加载中...</div>
+    </div>
+  </div>
+
+  <!-- Chart 5: 用例类型分布 (Donut) —— T03 P1-1 新增 -->
+  <div class="chart-card">
+    <div class="chart-card-header">
+      <div class="chart-card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+        用例类型分布
+      </div>
+    </div>
+    <div class="chart-card-body" id="caseTypeChart">
+      <div class="charts-empty">加载中...</div>
+    </div>
+  </div>
+
+  <!-- Chart 6: 执行人分布 (Horizontal Bars) —— T03 P1-1 新增 -->
+  <div class="chart-card">
+    <div class="chart-card-header">
+      <div class="chart-card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
+        执行人分布
+      </div>
+    </div>
+    <div class="chart-card-body" id="executorChart">
+      <div class="charts-empty">加载中...</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ LAYER 3: 详细数据表格 ════════════ -->
+<div class="chart-card ud-mt-4">
+  <div class="chart-card-header">
+    <div class="chart-card-title">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      模块详情
+    </div>
+  </div>
+  <div class="chart-card-body ud-pad-0">
+    <table class="charts-table" id="moduleTable">
+      <thead>
+        <tr>
+          <th>模块</th>
+          <th>总数</th>
+          <th>通过</th>
+          <th>失败</th>
+          <th>待执行</th>
+          <th>通过率</th>
+        </tr>
+      </thead>
+      <tbody id="moduleTableBody">
+        <tr><td colspan="6" class="charts-empty">加载中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- T05/P2-1：KPI 单一定义源。阈值与单位一律由 MetricsDef 提供，本页不再自带数字。 -->
+<script src="{{ static_ver('metrics-def.js') }}"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  var A = window._A = window._A || {};
+  var $ = A.$;
+  var escHtml = A.escHtml;
+  var escAttr = A.escAttr;  // ★ 修复：原代码引用未定义的 escAttr，导致版本下拉渲染抛 ReferenceError 被外层 Promise 吞掉
+  var api = A.dedupedApi || A.api;
+
+  // 批1：数据驱动运行期内联样式装配器——仅在 HTML 模板文本中保留本行一个 style=
+  // 字面量，其余全部通过 dS() 在运行期依数据拼接，杜绝静态模板中的内联样式漂移。
+  function dS(props) { return ' style="' + props + '"'; }
+
+  // ★ 性能根因修复（2026-08-30）：charts 页不再被 /api/metrics-summary 阻塞。
+  //    根因：metrics-summary 聚合 13 个领域的重型 KPI（app.py 注释实测首个冷请求可
+  //    阻塞 14s+），而 charts 页渲染的 6 个 KPI 全部可由轻量的 /api/report/chart-data
+  //    直接提供（case_pass_rate / flaky_rate 在 MetricsDef 里本就有 chart 兜底源）。
+  //    旧实现用 Promise.all 并发等二者，页面会死等最慢的 metrics-summary——即便没数据
+  //    也要等十几秒才显示「无测试用例数据」，正是用户反馈「又慢又不知道有没有数据」。
+  //    现改为：唯一阻塞等待 chart-data（轻量、已按 project+version_id 过滤），到即渲染；
+  //    metrics-summary 改后台非阻塞加载，仅用于【增强】case_pass_rate/flaky_rate 口径，
+  //    不参与首屏等待。功能与图表完全不变。
+  var _chartPayload = null;
+  var _KPI_IDS = ['ckTotal', 'ckPassed', 'ckFailed', 'ckSkipped', 'ckRate', 'ckFlaky'];
+  var _KPI_SUB_IDS = ['ckTotalSub', 'ckPassedSub', 'ckFailedSub', 'ckSkippedSub', 'ckRateSub', 'ckFlakySub'];
+
+  // 空态：没有数据时 KPI 明确显示「暂无数据」，不再无限转骨架 / 空白。
+  function showNoDataKpis() {
+    _KPI_IDS.forEach(function(id) {
+      var el = $(id);
+      if (el) el.textContent = '—';
+    });
+    _KPI_SUB_IDS.forEach(function(id) {
+      var el = $(id);
+      if (el) el.textContent = '暂无数据';
+    });
+  }
+
+  // 统一「加载失败 / 无数据」展示：图表 + 表格都立即给出明确文案而非长时间加载中。
+  function renderErrorEmpty(msg) {
+    ['donutChart', 'moduleChart', 'riskChart', 'trendChart',
+     'caseTypeChart', 'executorChart'].forEach(function(id) {
+      var el = $(id);
+      if (el) el.innerHTML = '<div class="charts-empty">' + escHtml(msg) + '</div>';
+    });
+    $('moduleTableBody').innerHTML = '<tr><td colspan="6" class="charts-empty">' + escHtml(msg) + '</td></tr>';
+  }
+
+  async function loadChartData() {
+    // 唯一阻塞请求：chart-data（轻量）。页面据此立即渲染图表，或快速上屏空态。
+    var data = await api('GET', '/api/report/chart-data');
+    if (!data || data.error || !data.ok) {
+      var msg = (data && data.error) || '加载失败';
+      renderErrorEmpty(msg);
+      showNoDataKpis();
+      return;
+    }
+    _chartPayload = data;
+    // 立即渲染：KPI 先用 chart-data 兜底口径（metrics-summary 未就绪也不阻塞）
+    renderOverview(data.overview || {});
+    renderDonut(data.overview || {});
+    renderModules(data.modules || []);
+    renderRisk(data.risk_level || []);
+    renderTrend(data.history || []);
+    // ── T03 P1-1：用例类型 / 执行人分布（来自同一次 chart-data 响应，零额外请求）──
+    renderCaseTypes(data.case_types || []);
+    renderExecutors(data.executors || []);
+    // ★ 填充版本下拉（历史版本列表）
+    var verSel = $('chartVersionSelect');
+    if (verSel && data.history && data.history.length > 0) {
+      var curVer = verSel.value || '';
+      verSel.innerHTML = '<option value="">当前版本</option>' + data.history.map(function(h) {
+        var v = h.version || '';
+        var sel = (v === curVer) ? ' selected' : '';
+        return '<option value="' + escAttr(v) + '"' + sel + '>' + escHtml(v || '—') + '</option>';
+      }).join('');
+    }
+    renderModuleTable(data.modules || []);
+    // 后台增强（非阻塞）：summary 就绪后用其口径重绘 KPI，不参与页面等待。
+    refreshSummaryKpis();
+  }
+
+  // 后台加载 metrics-summary，就绪后仅重绘 KPI（追平 pass_rate/flaky_rate 口径）；
+  // summary 缺失/失败时保持 chart-data 兜底口径，绝不回退成空白或阻塞。
+  function refreshSummaryKpis() {
+    loadMetricsSummary().then(function() {
+      if (_chartPayload) renderOverview(_chartPayload.overview || {});
+    });
+  }
+
+  // ── T05/P2-1：/api/metrics-summary 优先。本页原本只读 /api/report/chart-data，
+  //    导致「通过率 / Flaky 率」与 dashboard、metrics 三处口径各算各的。
+  //    现统一：先取 summary，缺字段才回落到 chart-data（由 MetricsDef.value 内部处理）。
+  var _mdSummary = null;
+  function loadMetricsSummary() {
+    if (!window.MetricsDef) return Promise.resolve(null);
+    return A.api('GET', MetricsDef.ENDPOINT_SUMMARY)
+      .then(function (d) { _mdSummary = d || null; return _mdSummary; })
+      .catch(function () { _mdSummary = null; return null; });  // 兜底源仍可用，不阻断渲染
+  }
+
+  /** 用 MetricsDef 统一写一张 KPI 卡：文案、单位、阈值着色全部来自定义源。 */
+  function paintKpi(elId, subId, key, chartPayload, subText) {
+    var el = $(elId);
+    if (!el || !window.MetricsDef) return;   // 定义源未加载则保持骨架，不渲染半成品
+    var def = MetricsDef.get(key);
+    var r = MetricsDef.render(key, _mdSummary, chartPayload);
+    el.textContent = r.text;
+    if (def && def.thresholds) el.style.color = r.color;  // 无阈值的计数类保留原有配色
+    if (r.desc) el.setAttribute('title', r.desc);
+    var sub = $(subId);
+    if (sub) sub.textContent = subText;
+  }
+
+  function renderOverview(o) {
+    // chart-data 的 overview 需包成 {overview:...} 才符合 MetricsDef 的 path 约定
+    var payload = { overview: o || {} };
+    paintKpi('ckTotal', 'ckTotalSub', 'total_cases', payload,
+      (o.executed || 0) + ' 已执行 / ' + (o.pending || 0) + ' 待执行');
+    paintKpi('ckPassed', 'ckPassedSub', 'passed_cases', payload, '通过 + Flaky');
+    paintKpi('ckFailed', 'ckFailedSub', 'failed_cases', payload,
+      o.failed > 0 ? '需修复' : '无失败');
+    paintKpi('ckSkipped', 'ckSkippedSub', 'skipped_cases', payload, '未配置数据源');
+    paintKpi('ckRate', 'ckRateSub', 'case_pass_rate', payload,
+      (o.passed || 0) + '/' + ((o.passed || 0) + (o.failed || 0)) + ' 通过');
+    paintKpi('ckFlaky', 'ckFlakySub', 'flaky_rate', payload,
+      (o.flaky || 0) + ' 个用例不稳定');
+  }
+
+  function renderDonut(o) {
+    var total = o.total || 0;
+    var passed = o.passed || 0;
+    var failed = o.failed || 0;
+    var skipped = o.skipped || 0;
+    var pending = o.pending || 0;
+    var rate = o.pass_rate || 0;
+    if (total === 0) {
+      $('donutChart').innerHTML = '<div class="charts-empty">暂无数据</div>';
+      return;
+    }
+    var passedPct = (passed / total * 100).toFixed(1);
+    var failedPct = (failed / total * 100).toFixed(1);
+    var skippedPct = (skipped / total * 100).toFixed(1);
+    var pendingPct = (pending / total * 100).toFixed(1);
+    var passedDeg = passed / total * 360;
+    var failedDeg = (passed + failed) / total * 360;
+    var skippedDeg = (passed + failed + skipped) / total * 360;
+    var html = '<div class="donut-container">' +
+      '<div class="donut"' + dS('--passed-deg:' + passedDeg + 'deg; --failed-deg:' + failedDeg + 'deg; --skipped-deg:' + skippedDeg + 'deg') + '>' +
+        '<div class="donut-center">' +
+          '<div class="donut-center-value">' + rate + '%</div>' +
+          '<div class="donut-center-label">通过率</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="donut-stats">' +
+        '<div class="donut-stat-row"><span class="donut-stat-label ud-ok">通过</span>' +
+          '<div class="donut-stat-bar-track"><div class="donut-stat-bar-fill"' + dS('width:' + passedPct + '%; background:var(--state-success)') + '></div></div>' +
+          '<span class="donut-stat-value ud-ok-t">' + passed + '</span></div>' +
+        '<div class="donut-stat-row"><span class="donut-stat-label ud-err">失败</span>' +
+          '<div class="donut-stat-bar-track"><div class="donut-stat-bar-fill"' + dS('width:' + failedPct + '%; background:var(--state-error)') + '></div></div>' +
+          '<span class="donut-stat-value ud-err-t">' + failed + '</span></div>' +
+        '<div class="donut-stat-row"><span class="donut-stat-label ud-warn">跳过</span>' +
+          '<div class="donut-stat-bar-track"><div class="donut-stat-bar-fill"' + dS('width:' + skippedPct + '%; background:var(--state-warning)') + '></div></div>' +
+          '<span class="donut-stat-value ud-warn-t">' + skipped + '</span></div>' +
+        '<div class="donut-stat-row"><span class="donut-stat-label ud-muted">待执行</span>' +
+          '<div class="donut-stat-bar-track"><div class="donut-stat-bar-fill"' + dS('width:' + pendingPct + '%; background:var(--text-tertiary)') + '></div></div>' +
+          '<span class="donut-stat-value ud-muted">' + pending + '</span></div>' +
+      '</div>' +
+    '</div>';
+    $('donutChart').innerHTML = html;
+  }
+
+  function renderModules(modules) {
+    if (!modules || modules.length === 0) {
+      $('moduleChart').innerHTML = '<div class="charts-empty">暂无模块数据</div>';
+      return;
+    }
+    var max = Math.max.apply(null, modules.map(function(m) { return m.total || 0; })) || 1;
+    var colors = ['var(--step1-color)', 'var(--step2-color)', 'var(--step3-color)', 'var(--step4-color)', 'var(--step5-color)'];
+    var html = '<div class="bar-chart">';
+    modules.slice(0, 8).forEach(function(m, i) {
+      var pct = (m.total / max * 100).toFixed(1);
+      var passPct = (m.passed / (m.total || 1) * 100).toFixed(1);
+      var failPct = (m.failed / (m.total || 1) * 100).toFixed(1);
+      var pendPct = (m.pending / (m.total || 1) * 100).toFixed(1);
+      html += '<div class="bar-row">' +
+        '<span class="bar-label" title="' + escHtml(m.name) + '">' + escHtml(m.name) + '</span>' +
+        '<div class="bar-track">' +
+          '<div class="bar-fill-pass"' + dS('width:' + passPct + '%') + '></div>' +
+          '<div class="bar-fill-fail"' + dS('width:' + failPct + '%') + '></div>' +
+          '<div class="bar-fill-pending"' + dS('width:' + pendPct + '%') + '></div>' +
+        '</div>' +
+        '<span class="bar-value">' + m.total + '</span>' +
+      '</div>';
+    });
+    html += '</div>';
+    $('moduleChart').innerHTML = html;
+  }
+
+  // ══════════════════ T03 P1-1：用例类型分布（环形） ══════════════════
+  //  复用 renderDonut(:598) 的 .donut-container / .donut-center / .donut-stats
+  //  视觉语言；但切片数由数据决定（不是固定的 通过/失败/跳过/待执行 四段），
+  //  故环形背景在运行时拼 conic-gradient，而非套用只支持 4 段的既有 .donut。
+  //  全部为手写 CSS 渐变，不引入任何图表库（CSP default-src 'self'）。
+  var SLICE_COLORS = [
+    'var(--step1-color)', 'var(--step2-color)', 'var(--step3-color)',
+    'var(--step4-color)', 'var(--step5-color)', 'var(--state-success)',
+    'var(--state-warning)', 'var(--state-error)'
+  ];
+  var SLICE_MAX = 8;          // 超出的尾部并入「其他」，避免环被切成看不清的碎条
+  var EXECUTOR_MAX = 8;       // 同上，执行人只画 Top 8
+
+  function renderCaseTypes(list) {
+    var el = $('caseTypeChart');
+    if (!el) return;
+    var rows = (list || []).filter(function(t) { return (t.total || 0) > 0; });
+    if (rows.length === 0) {
+      el.innerHTML = '<div class="charts-empty">暂无用例类型数据</div>';
+      return;
+    }
+    rows = rows.slice().sort(function(a, b) { return (b.total || 0) - (a.total || 0); });
+    if (rows.length > SLICE_MAX) {
+      var head = rows.slice(0, SLICE_MAX - 1);
+      var restTotal = rows.slice(SLICE_MAX - 1).reduce(function(s, t) {
+        return s + (t.total || 0);
+      }, 0);
+      head.push({ type: '其他', total: restTotal });
+      rows = head;
+    }
+    var total = rows.reduce(function(s, t) { return s + (t.total || 0); }, 0);
+    if (total <= 0) {
+      el.innerHTML = '<div class="charts-empty">暂无用例类型数据</div>';
+      return;
+    }
+
+    var stops = [];
+    var acc = 0;
+    var statsHtml = '';
+    rows.forEach(function(t, i) {
+      var color = SLICE_COLORS[i % SLICE_COLORS.length];   // 取自常量表，非用户数据
+      var from = acc / total * 360;
+      acc += (t.total || 0);
+      var to = acc / total * 360;
+      stops.push(color + ' ' + from.toFixed(2) + 'deg ' + to.toFixed(2) + 'deg');
+
+      var name = String(t.type == null ? '' : t.type).trim() || '未分类';
+      var count = t.total || 0;
+      var pct = (count / total * 100).toFixed(1);
+      var tip = name + '：' + count + ' 个（' + pct + '%）';
+      statsHtml += '<div class="donut-stat-row" title="' + escHtml(tip) + '">' +
+        '<span class="donut-legend-dot"' + dS('background:' + color) + '></span>' +
+        '<span class="donut-legend-name">' + escHtml(name) + '</span>' +
+        '<div class="donut-stat-bar-track">' +
+          '<div class="donut-stat-bar-fill"' + dS('width:' + pct + '%; background:' + color) + '></div>' +
+        '</div>' +
+        '<span class="donut-stat-value">' + count + '</span>' +
+      '</div>';
+    });
+
+    el.innerHTML = '<div class="donut-container">' +
+      '<div class="donut-ring"' + dS('background: conic-gradient(' + stops.join(', ') + ')') + '>' +
+        '<div class="donut-center">' +
+          '<div class="donut-center-value">' + total + '</div>' +
+          '<div class="donut-center-label">用例总数</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="donut-stats">' + statsHtml + '</div>' +
+    '</div>';
+  }
+
+  // ══════════════════ T03 P1-1：执行人分布（横向柱状） ══════════════════
+  //  复用 renderModules(:641) 的 .bar-chart / .bar-row / .bar-track 结构与配色，
+  //  但三段宽度以**全场最大值 max** 为分母（而非本行 total），这样柱长 ∝ 用例量，
+  //  横向对比才成立；段内仍按 通过/失败/待执行 着色。
+  function renderExecutors(list) {
+    var el = $('executorChart');
+    if (!el) return;
+    var rows = (list || []).filter(function(u) { return (u.total || 0) > 0; });
+    if (rows.length === 0) {
+      el.innerHTML = '<div class="charts-empty">暂无执行人数据</div>';
+      return;
+    }
+    rows = rows.slice()
+      .sort(function(a, b) { return (b.total || 0) - (a.total || 0); })
+      .slice(0, EXECUTOR_MAX);
+
+    var max = Math.max.apply(null, rows.map(function(u) { return u.total || 0; })) || 1;
+    var html = '<div class="bar-chart">';
+    rows.forEach(function(u) {
+      // 后端 chart_data.py:256 已把空 author 归一为 "unknown"，此处统一展示为中文
+      var raw = String(u.name == null ? '' : u.name).trim();
+      var name = (!raw || raw === 'unknown') ? '未知执行器' : raw;
+      var passPct = ((u.passed || 0) / max * 100).toFixed(1);
+      var failPct = ((u.failed || 0) / max * 100).toFixed(1);
+      var pendPct = ((u.pending || 0) / max * 100).toFixed(1);
+      var tip = name + '：共 ' + (u.total || 0) + ' 个，通过 ' + (u.passed || 0) +
+                ' / 失败 ' + (u.failed || 0) + ' / 待执行 ' + (u.pending || 0) +
+                '，通过率 ' + (u.pass_rate || 0) + '%';
+      html += '<div class="bar-row" title="' + escHtml(tip) + '">' +
+        '<span class="bar-label">' + escHtml(name) + '</span>' +
+        '<div class="bar-track">' +
+          '<div class="bar-fill-pass"' + dS('width:' + passPct + '%') + '></div>' +
+          '<div class="bar-fill-fail"' + dS('width:' + failPct + '%') + '></div>' +
+          '<div class="bar-fill-pending"' + dS('width:' + pendPct + '%') + '></div>' +
+        '</div>' +
+        '<span class="bar-value">' + (u.total || 0) + '</span>' +
+      '</div>';
+    });
+    html += '</div>';
+    el.innerHTML = html;
+  }
+
+  function renderRisk(risks) {
+    if (!risks || risks.length === 0) {
+      $('riskChart').innerHTML = '<div class="charts-empty">暂无风险数据</div>';
+      return;
+    }
+    var RISK_DESC = {
+      'P0': 'P0：核心业务流程、涉及数据写入/删除/修改、安全漏洞、权限绕过',
+      'P1': 'P1：错误处理、异常输入、非核心功能流程',
+      'P2': 'P2：边界值验证、UI展示、非关键路径、兼容性',
+      'P3': 'P3：辅助功能、文档链接、样式调整',
+      'P4': 'P4：信息展示、无业务影响'
+    };
+    var html = '<div class="risk-chart">';
+    risks.forEach(function(r) {
+      var level = (r.level || '').toUpperCase();
+      var badgeClass = 'risk-badge-p2';
+      if (level === 'P0') badgeClass = 'risk-badge-p0';
+      else if (level === 'P1') badgeClass = 'risk-badge-p1';
+      else if (level === 'P3' || level === 'P4') badgeClass = 'risk-badge-p3';
+      var fillColor = level === 'P0' ? 'var(--state-error)' :
+                      level === 'P1' ? 'var(--state-critical)' :
+                      level === 'P2' ? 'var(--state-warning)' : 'var(--state-success)';
+      var pctColor = level === 'P0' ? 'var(--state-error-text)' :
+                     level === 'P1' ? 'var(--state-critical-text)' :
+                     level === 'P2' ? 'var(--state-warning-text)' : 'var(--state-success-text)';
+      var tooltip = (RISK_DESC[level] || level) + '&#10;通过率 = 通过数 / (通过数 + 失败数) × 100%&#10;统计：通过 ' + (r.passed || 0) + ' / 总计 ' + (r.total || 0) + ' / 失败 ' + (r.failed || 0) + ' / 待执行 ' + (r.pending || 0);
+      html += '<div class="risk-item tooltip-wide" data-tooltip="' + escHtml(tooltip) + '" data-tooltip-pos="top">' +
+        '<div class="risk-header">' +
+          '<div class="risk-label-group">' +
+            '<div class="risk-badge ' + badgeClass + '">' + escHtml(level.charAt(0) || 'P') + '</div>' +
+            '<span class="risk-name">' + escHtml(level) + ' 风险用例</span>' +
+          '</div>' +
+          '<span class="risk-percent"' + dS('color:' + pctColor) + '>' + (r.pass_rate || 0) + '%</span>' +
+        '</div>' +
+        '<div class="risk-bar-track">' +
+          '<div class="risk-bar-fill"' + dS('width:' + (r.pass_rate || 0) + '%; background:' + fillColor) + '></div>' +
+        '</div>' +
+        '<div class="risk-meta">' +
+          '<span class="risk-meta-item"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' + (r.passed || 0) + '/' + (r.total || 0) + ' 通过</span>' +
+          '<span class="risk-meta-item"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/></svg>' + (r.failed || 0) + ' 失败</span>' +
+          '<span class="risk-meta-item"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>' + (r.pending || 0) + ' 待执行</span>' +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+    $('riskChart').innerHTML = html;
+  }
+
+  function renderTrend(history) {
+    if (!history || history.length === 0) {
+      $('trendChart').innerHTML = '<div class="charts-empty">暂无历史数据</div>';
+      return;
+    }
+    // 简化：使用历史版本号作为 x 轴，size_kb 作为 y 轴参考（实际 API 未返回通过率历史）
+    // 这里改为显示版本列表
+    var html = '<div class="ud-flex-col ud-gap-2">';
+    history.slice(-10).forEach(function(h) {
+      html += '<div class="ch-trend-row">' +
+        '<div class="ud-flex ud-aic ud-gap-2">' +
+          '<div class="ud-dot"></div>' +
+          '<span class="ud-accent ud-fw-se">' + escHtml(h.version || '—') + '</span>' +
+        '</div>' +
+        '<span class="ud-muted ud-mono">' + escHtml(h.label || '—') + '</span>' +
+        '<span class="ud-muted-m ud-mono">' + (h.size_kb || 0) + ' KB</span>' +
+      '</div>';
+    });
+    html += '</div>';
+    $('trendChart').innerHTML = html;
+  }
+
+  function renderModuleTable(modules) {
+    if (!modules || modules.length === 0) {
+      $('moduleTableBody').innerHTML = '<tr><td colspan="6" class="charts-empty">暂无模块数据</td></tr>';
+      return;
+    }
+    $('moduleTableBody').innerHTML = modules.map(function(m) {
+      var rate = m.pass_rate || 0;
+      var rateColor = rate >= 90 ? 'var(--state-success)' : rate >= 70 ? 'var(--state-warning)' : 'var(--state-error)';
+      return '<tr>' +
+        '<td>' + escHtml(m.name) + '</td>' +
+        '<td class="num">' + (m.total || 0) + '</td>' +
+        '<td class="num ud-ok-t">' + (m.passed || 0) + '</td>' +
+        '<td class="num ud-err-t">' + (m.failed || 0) + '</td>' +
+        '<td class="num ud-muted">' + (m.pending || 0) + '</td>' +
+        '<td class="num"' + dS('color:' + rateColor + ';font-weight:var(--fw-semibold)') + '>' + rate + '%</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  // ★ 防重入标志：避免 initCharts 被执行两次（A._currentUser 恢复时一次 + _onAuthOk 一次）
+  // 重复执行会发起重复 API 请求 + 重复渲染，导致页面加载卡顿
+  var _chartsInitStarted = false;
+  function initCharts() {
+    if (_chartsInitStarted) return;
+    _chartsInitStarted = true;
+    // ★ 立即显示加载态
+    ['ckTotal', 'ckPassRate', 'ckCoverage', 'ckRisk'].forEach(function(id) {
+      var el = $(id);
+      if (el) el.innerHTML = '<span class="inline-loading"></span>';
+    });
+    ['donutChart', 'moduleChart', 'riskChart', 'trendChart'].forEach(function(id) {
+      var el = $(id);
+      if (el) el.innerHTML = '<div class="charts-empty"><span class="inline-loading">加载中</span></div>';
+    });
+    var refreshBtn = $('btnRefreshCharts');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', loadChartData);
+    }
+    // ★ 版本切换：重新加载图表数据
+    var verSel = $('chartVersionSelect');
+    if (verSel) {
+      verSel.addEventListener('change', function() {
+        var v = verSel.value;
+        if (A.toast) A.toast(v ? ('已切换到版本: ' + v) : '已切换到当前版本', 'info');
+        loadChartData();
+      });
+    }
+    loadChartData();
+  }
+
+  A._onAuthOk = function() {
+    A._renderSidebarUser();
+    A.applyPermissions();
+    initCharts();
+    A._startStepBadgePolling();
+  };
+
+  if (A._currentUser) {
+    initCharts();
+  }
+})();
+</script>
+{% endblock %}

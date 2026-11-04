@@ -1,0 +1,264 @@
+{% extends "_layout_base.html" %}
+{% block title %}CI 集成 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+CI 集成
+{% endblock %}
+
+{% block head_extra %}
+<style>
+.ci-layout { display: grid; gap: var(--space-5); }
+.ci-card { background: var(--bg-card); border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: var(--space-5); }
+.ci-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-4); }
+.ci-card-title { font-size: var(--fs-h3); font-weight: 600; }
+.ci-card-sub { font-size: var(--fs-small); color: var(--text-secondary); margin-top: var(--space-1); }
+.ci-table { width: 100%; border-collapse: collapse; }
+.ci-table th, .ci-table td { padding: var(--space-2) var(--space-3); text-align: left; border-bottom: 1px solid var(--border-light); }
+.ci-table th { font-size: var(--fs-small); color: var(--text-secondary); font-weight: 500; }
+.ci-table td { font-size: var(--fs-body); }
+.ci-token-masked { font-family: var(--font-mono); color: var(--text-secondary); }
+.ci-badge { display: inline-block; padding: 2px 8px; border-radius: var(--radius-sm); font-size: var(--fs-tiny); }
+.ci-badge-active { background: var(--state-success-bg); color: var(--state-success-text); }
+.ci-badge-revoked { background: var(--state-error-bg); color: var(--state-error-text); }
+.ci-form-row { display: flex; gap: var(--space-3); align-items: flex-end; }
+.ci-form-group { flex: 1; }
+.ci-form-group label { display: block; font-size: var(--fs-small); color: var(--text-secondary); margin-bottom: var(--space-1); }
+.ci-form-group input, .ci-form-group select { width: 100%; padding: var(--space-2) var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-primary); font-size: var(--fs-body); }
+.ci-webhook-url { font-family: var(--font-mono); background: var(--bg-hover); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); word-break: break-all; font-size: var(--fs-small); }
+.ci-template { background: var(--bg-code); border: 1px solid var(--border-default); border-radius: var(--radius-md); padding: var(--space-4); overflow-x: auto; }
+.ci-template pre { margin: 0; font-family: var(--font-mono); font-size: var(--fs-tiny); white-space: pre-wrap; }
+.ci-new-token-box { background: var(--state-success-bg); border: 1px solid var(--state-success-border); border-radius: var(--radius-md); padding: var(--space-4); margin-top: var(--space-3); }
+.ci-new-token-box .token-value { font-family: var(--font-mono); font-size: var(--fs-h3); word-break: break-all; color: var(--state-success-text); }
+.ci-new-token-box .token-warning { font-size: var(--fs-small); color: var(--text-secondary); margin-top: var(--space-2); }
+/* ════════════ class 治理（下沉内联样式） ════════════ */
+.ci-create-token-form { margin-bottom: var(--space-4); }
+.ci-form-actions { display: flex; gap: var(--space-2); align-items: flex-end; }
+.ci-token-scopes { height: 80px; }
+.ci-new-token-title { font-weight: var(--fw-semibold); }
+.ci-table-empty { color: var(--text-tertiary); text-align: center; }
+.ci-table-empty-error { color: var(--state-error-text); text-align: center; }
+.ci-cell-small { font-size: var(--fs-small); }
+.ci-btn-revoke { font-size: var(--fs-tiny); padding: 2px 8px; }
+.ci-webhook-label { font-size: var(--fs-small); color: var(--text-secondary); margin-bottom: var(--space-1); }
+.ci-hint-text { font-size: var(--fs-small); color: var(--text-secondary); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ci-layout">
+  <!-- Token 管理 -->
+  <div class="ci-card">
+    <div class="ci-card-header">
+      <div>
+        <div class="ci-card-title">API Token 管理</div>
+        <div class="ci-card-sub">创建和管理 CI/CD 集成的 API Token</div>
+      </div>
+      <button class="btn-primary" id="btnCreateToken" onclick="showCreateToken()">创建 Token</button>
+    </div>
+    <!-- 创建 Token 表单 -->
+    <div id="createTokenForm" class="ci-create-token-form" style="display:none;">
+      <div class="ci-form-row">
+        <div class="ci-form-group">
+          <label>Token 名称</label>
+          <input type="text" id="tokenName" placeholder="例如：jenkins-prod">
+        </div>
+        <div class="ci-form-group">
+          <label>权限范围</label>
+          <select id="tokenScopes" class="ci-token-scopes" multiple>
+            <option value="execution.run">执行流水线</option>
+            <option value="execution.status">查看状态</option>
+            <option value="report.read">读取报告</option>
+          </select>
+        </div>
+        <div class="ci-form-actions">
+          <button class="btn-primary" onclick="createToken()">创建</button>
+          <button class="btn-secondary" onclick="hideCreateToken()">取消</button>
+        </div>
+      </div>
+    </div>
+    <!-- 新 Token 展示 -->
+    <div id="newTokenBox" class="ci-new-token-box" style="display:none;">
+      <div class="ci-new-token-title">新 Token（仅显示一次，请立即复制保存）</div>
+      <div class="token-value" id="newTokenValue"></div>
+      <div class="token-warning">此 token 之后不会再显示，请妥善保管</div>
+      <button class="btn-secondary mt-2" onclick="copyNewToken()">复制到剪贴板</button>
+    </div>
+    <!-- Token 列表 -->
+    <table class="ci-table" id="tokenTable">
+      <thead>
+        <tr>
+          <th>名称</th>
+          <th>Token</th>
+          <th>权限</th>
+          <th>状态</th>
+          <th>创建时间</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="6" class="ci-table-empty">加载中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Webhook 配置 -->
+  <div class="ci-card">
+    <div class="ci-card-header">
+      <div>
+        <div class="ci-card-title">Webhook 配置</div>
+        <div class="ci-card-sub">CI 系统触发流水线的 Webhook 端点</div>
+      </div>
+    </div>
+    <div class="mb-3">
+      <div class="ci-webhook-label">Webhook URL</div>
+      <div class="ci-webhook-url" id="webhookUrl">加载中...</div>
+    </div>
+    <div class="ci-hint-text">
+      使用此 URL 在 Jenkins / GitHub Actions / GitLab CI 中配置 Webhook，触发自动化测试流水线。
+    </div>
+  </div>
+
+  <!-- CI 模板 -->
+  <div class="ci-card">
+    <div class="ci-card-header">
+      <div>
+        <div class="ci-card-title">CI 模板</div>
+        <div class="ci-card-sub">复制以下配置到你的 CI 系统中</div>
+      </div>
+      <div class="ci-form-actions">
+        <button class="btn-secondary" id="btnJenkins" onclick="loadTemplate('jenkins')">Jenkins</button>
+        <button class="btn-secondary" id="btnGithub" onclick="loadTemplate('github')">GitHub Actions</button>
+      </div>
+    </div>
+    <div class="ci-template" id="ciTemplate">
+      <pre id="ciTemplateContent">点击上方按钮加载 CI 配置模板</pre>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  if (!window._A) return;
+  var A = window._A, $ = A.$, api = A.api, escHtml = A.escHtml;
+
+  A._onAuthOk = function() {
+    A._renderSidebarUser();
+    A.applyPermissions();
+    loadTokens();
+    loadWebhookConfig();
+    A._startStepBadgePolling();
+  };
+
+  function loadTokens() {
+    api('GET', '/api/ci/tokens').then(function(r) {
+      var tbody = document.querySelector('#tokenTable tbody');
+      if (!r || r.error) {
+        tbody.innerHTML = '<tr><td colspan="6" class="ci-table-empty-error">' + escHtml((r && r.error) || '加载失败') + '</td></tr>';
+        return;
+      }
+      var items = r.tokens || [];
+      if (items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="ci-table-empty">暂无 Token</td></tr>';
+        return;
+      }
+      tbody.innerHTML = items.map(function(t) {
+        var statusClass = t.is_active ? 'ci-badge-active' : 'ci-badge-revoked';
+        var statusText = t.is_active ? '有效' : '已撤销';
+        var revokeBtn = t.is_active ? '<button class="btn-secondary ci-btn-revoke" onclick="revokeToken(' + t.id + ')">撤销</button>' : '';
+        return '<tr>' +
+          '<td>' + escHtml(t.name) + '</td>' +
+          '<td><span class="ci-token-masked">' + escHtml(t.token_hash || '***') + '</span></td>' +
+          '<td><span class="ci-cell-small">' + escHtml((t.scopes || []).join(', ') || '全部') + '</span></td>' +
+          '<td><span class="ci-badge ' + statusClass + '">' + statusText + '</span></td>' +
+          '<td class="ci-cell-small">' + escHtml(t.created_at || '') + '</td>' +
+          '<td>' + revokeBtn + '</td>' +
+          '</tr>';
+      }).join('');
+    }).catch(function(e) {
+      document.querySelector('#tokenTable tbody').innerHTML = '<tr><td colspan="6" class="ci-table-empty-error">网络错误: ' + escHtml(String(e)) + '</td></tr>';
+    });
+  }
+
+  function loadWebhookConfig() {
+    api('GET', '/api/ci/webhook-config').then(function(r) {
+      if (r && r.webhook_url) {
+        $('webhookUrl').textContent = r.webhook_url;
+      } else {
+        $('webhookUrl').textContent = '无法获取 Webhook URL';
+      }
+    }).catch(function() {
+      $('webhookUrl').textContent = '加载失败';
+    });
+  }
+
+  window.showCreateToken = function() {
+    $('createTokenForm').style.display = '';
+    $('newTokenBox').style.display = 'none';
+  };
+
+  window.hideCreateToken = function() {
+    $('createTokenForm').style.display = 'none';
+  };
+
+  window.createToken = function() {
+    var name = ($('tokenName').value || '').trim();
+    if (!name) { A.toast('请输入 Token 名称', 'error'); return; }
+    var scopes = [];
+    var sel = $('tokenScopes');
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].selected) scopes.push(sel.options[i].value);
+    }
+    api('POST', '/api/ci/token', { name: name, scopes: scopes }).then(function(r) {
+      if (r.error) { A.toast(r.error, 'error'); return; }
+      $('createTokenForm').style.display = 'none';
+      $('newTokenBox').style.display = '';
+      $('newTokenValue').textContent = r.token || '';
+      loadTokens();
+    }).catch(function(e) {
+      A.toast('创建失败: ' + String(e), 'error');
+    });
+  };
+
+  window.copyNewToken = function() {
+    var val = $('newTokenValue').textContent;
+    if (!val) return;
+    navigator.clipboard.writeText(val).then(function() {
+      A.toast('已复制到剪贴板', 'success');
+    }).catch(function() {
+      A.toast('复制失败，请手动复制', 'error');
+    });
+  };
+
+  window.revokeToken = function(id) {
+    if (!confirm('确定要撤销此 Token 吗？撤销后无法恢复。')) return;
+    api('DELETE', '/api/ci/token/' + id).then(function(r) {
+      if (r.error) { A.toast(r.error, 'error'); return; }
+      A.toast('Token 已撤销', 'success');
+      loadTokens();
+    }).catch(function(e) {
+      A.toast('撤销失败: ' + String(e), 'error');
+    });
+  };
+
+  window.loadTemplate = function(type) {
+    var contentEl = $('ciTemplateContent');
+    contentEl.textContent = '加载中...';
+    api('GET', '/api/ci/template/' + type).then(function(r) {
+      if (r && r.template) {
+        contentEl.textContent = r.template;
+      } else {
+        contentEl.textContent = (r && r.error) || '加载失败';
+      }
+    }).catch(function(e) {
+      contentEl.textContent = '网络错误: ' + String(e);
+    });
+  };
+
+  if (A._currentUser) {
+    A._onAuthOk();
+  }
+})();
+</script>
+{% endblock %}

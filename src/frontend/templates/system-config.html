@@ -1,0 +1,484 @@
+{% extends "_layout_base.html" %}
+{% block title %}系统配置 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+系统配置
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnSaveConfig" data-perm="system.settings" data-tooltip="保存系统配置&#10;写入 project_configs 表" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+  保存配置
+</button>
+<button class="btn-topbar" id="btnReloadConfig" data-perm="system.settings" data-tooltip="重新加载配置" data-tooltip-pos="bottom">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  重新加载
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════ 系统级提示 ════════════ -->
+<div class="cfg-info-bar">
+  <div class="cfg-info-item">
+    <span class="cfg-info-label">配置层级</span>
+    <span class="cfg-info-value" style="color:var(--state-warning-text);font-size:var(--fs-small);">系统级 · 跨项目共享</span>
+  </div>
+  <div class="cfg-info-item">
+    <span class="cfg-info-label">配置字段</span>
+    <span class="cfg-info-value" id="fieldCount">0</span>
+  </div>
+  <button class="cfg-btn-ghost tooltip-wide" id="btnToggleAdvanced" type="button" data-tooltip="高级配置默认折叠（仅显示字段名），可逐项点击展开；此按钮用于一键展开/收起全部高级配置&#10;常用配置始终直接展开显示输入控件" data-tooltip-pos="bottom">展开全部高级</button>
+</div>
+
+<div class="cfg-container" id="cfgContainer">
+  <div class="cfg-empty">加载配置中...</div>
+</div>
+
+<div class="cfg-action-bar" id="actionBar" style="display:none;">
+  <span class="cfg-action-hint" id="dirtyHint">有未保存的修改</span>
+  <button class="cfg-btn-ghost" id="btnDiscard">放弃修改</button>
+  <button class="cfg-btn-primary" id="btnSaveAll">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    保存全部修改
+  </button>
+</div>
+
+{% endblock %}
+
+{% block head_extra %}
+<style>
+.cfg-info-bar {
+  display: flex; gap: 32px;
+  padding: 16px 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--state-warning);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+.cfg-info-item { display: flex; flex-direction: column; gap: 4px; }
+.cfg-info-label { font-size: var(--fs-small); color: var(--text-secondary); }
+.cfg-info-value { font-size: var(--fs-h3); font-weight: var(--fw-semibold); color: var(--text-primary); font-family: var(--font-mono); }
+.cfg-container { display: flex; flex-direction: column; gap: 16px; padding-bottom: 80px; }
+.cfg-empty { padding: 48px; text-align: center; color: var(--text-tertiary); }
+.cfg-group {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: visible;
+}
+.cfg-group-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 20px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-default);
+  cursor: pointer; user-select: none;
+}
+.cfg-group-header:hover { background: var(--bg-base); }
+.cfg-group-icon {
+  width: 28px; height: 28px; border-radius: var(--radius-sm);
+  background: var(--color-primary-soft); color: var(--color-primary);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.cfg-group-title { flex: 1; font-size: var(--fs-h3); font-weight: var(--fw-semibold); color: var(--text-primary); }
+.cfg-group-count { font-size: var(--fs-micro); color: var(--text-tertiary); font-family: var(--font-mono); padding: 2px 8px; background: var(--bg-base); border-radius: var(--radius-xs); }
+.cfg-group-toggle { color: var(--text-tertiary); transition: transform 0.2s; }
+.cfg-group.collapsed .cfg-group-toggle { transform: rotate(-90deg); }
+.cfg-group-body { padding: 16px 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.cfg-group.collapsed .cfg-group-body { display: none; }
+.cfg-field { display: flex; flex-direction: column; gap: 4px; }
+/* ★ 常用/高级 分层：高级配置折叠为「字段名 + 当前值」一行，逐项点击展开（避免一次涌出上百项） */
+.cfg-field.advanced {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  padding: 0;
+  overflow: hidden;
+}
+.cfg-field.advanced.open { border-color: var(--color-primary-border, var(--color-primary)); }
+.cfg-adv-toggle {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 12px;
+  background: none; border: none; cursor: pointer;
+  color: var(--text-secondary);
+  text-align: left; font-family: var(--font-sans); font-size: var(--fs-small);
+}
+.cfg-adv-toggle:hover { background: var(--bg-elevated); color: var(--text-primary); }
+.cfg-adv-badge {
+  flex-shrink: 0; font-size: var(--fs-micro);
+  color: var(--state-info-text); background: var(--state-info-soft);
+  border: 1px solid var(--state-info-border); border-radius: var(--radius-xs);
+  padding: 1px 6px; white-space: nowrap;
+}
+.cfg-adv-toggle .cfg-field-key { color: var(--text-primary); font-family: var(--font-mono); font-weight: var(--fw-medium); }
+.cfg-adv-summary {
+  margin-left: auto; font-size: var(--fs-micro); color: var(--text-tertiary);
+  font-family: var(--font-mono); max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cfg-adv-chevron { flex-shrink: 0; color: var(--text-tertiary); transition: transform 0.2s; }
+.cfg-field.advanced.open .cfg-adv-chevron { transform: rotate(180deg); }
+.cfg-adv-body { display: none; padding: 0 12px 12px; gap: 8px; flex-direction: column; border-top: 1px dashed var(--border-default); }
+.cfg-field.advanced.open .cfg-adv-body { display: flex; }
+/* 一键展开全部 */
+.cfg-container.all-open .cfg-adv-body { display: flex; }
+.cfg-container.all-open .cfg-field.advanced { border-color: var(--color-primary-border, var(--color-primary)); }
+#btnToggleAdvanced { margin-left: auto; }
+.cfg-field-label { display: flex; align-items: center; gap: 6px; font-size: var(--fs-small); color: var(--text-secondary); font-family: var(--font-mono); font-weight: var(--fw-medium); }
+.cfg-field-key { color: var(--text-primary); }
+.cfg-field-desc { font-size: var(--fs-micro); color: var(--text-tertiary); font-family: var(--font-sans); font-weight: var(--fw-regular); }
+.cfg-field-input {
+  padding: 8px 12px; background: var(--bg-base);
+  border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+  color: var(--text-primary); font-size: var(--fs-small); font-family: var(--font-mono);
+  transition: border-color 0.15s;
+}
+.cfg-field-input:focus { outline: none; border-color: var(--color-primary); }
+.cfg-field-input.dirty { border-color: var(--state-warning); background: var(--state-warning-soft); }
+.cfg-field-input[type="checkbox"] { width: 18px; height: 18px; margin: 4px 0; cursor: pointer; accent-color: var(--color-primary); }
+.cfg-action-bar {
+  position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px; background: var(--bg-elevated);
+  border: 1px solid var(--border-default); border-radius: var(--radius-lg);
+  box-shadow: var(--surface-shadow-float); z-index: 100;
+}
+.cfg-action-hint { font-size: var(--fs-small); color: var(--state-warning-text); }
+.cfg-btn-ghost { padding: 8px 16px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-sm); font-size: var(--fs-small); cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+.cfg-btn-ghost:hover { background: var(--bg-base); color: var(--text-primary); }
+.cfg-btn-primary { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: var(--color-primary); color: var(--text-inverse); border: none; border-radius: var(--radius-sm); font-size: var(--fs-small); font-weight: var(--fw-medium); cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+.cfg-btn-primary:hover { background: var(--color-primary-hover); }
+.cfg-ovr-badge {
+  display: inline-block; padding: 1px 6px; font-size: var(--fs-micro);
+  color: var(--color-primary); border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm); font-family: var(--font-sans); font-weight: var(--fw-medium);
+  cursor: help;
+}
+/* 已合并到流水线配置的字段：只读归档行 */
+.cfg-field.redirected {
+  display: flex; align-items: center; gap: 8px;
+  border: 1px dashed var(--border-default); border-radius: var(--radius-sm);
+  background: var(--bg-base); padding: 8px 12px; opacity: 0.85;
+}
+.cfg-field.redirected .cfg-adv-badge { background: var(--state-success-soft); }
+.cfg-redirect-link {
+  margin-left: auto; flex-shrink: 0;
+  font-size: var(--fs-micro); color: var(--color-primary);
+  text-decoration: none; white-space: nowrap;
+}
+.cfg-redirect-link:hover { text-decoration: underline; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  'use strict';
+  var A = window._A;
+  if (!A) return;
+  var $ = A.$, esc = A.escHtml;
+
+  // ★ 归一化分类：分组 + 字段元数据（label/type/help/options/secret）现由后端
+  //   /api/system-config 的 schema 字段提供（单一事实源，config.yaml 加键即前端可见）。
+  //   前端只负责渲染，不再维护硬编码白名单（消除「后端有、前端不显示」漂移）。
+  var schemaData = { groups: [] };
+  var itemMeta = {};  // key → item，便于 dirty 比对与渲染
+
+
+  var ICON_SVGS = {
+    search: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>',
+    archive: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>',
+    settings: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+    file: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+    // ★ 分组图标别名（键名 = 归一化分组 key 的小写），renderGroups 按 g.key 取用
+    storage: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>',
+    ai: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg>',
+    ollama: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h.01M15 9h.01M9 15h6"/></svg>',
+    oracle: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18"/><circle cx="12" cy="12" r="3"/></svg>',
+    playwright: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
+    session: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+    providers: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg>',
+    figma: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5a3 3 0 0 1 3-3h6v6H8a3 3 0 0 1-3-3zM5 8h6v6H8a3 3 0 1 1 0-6zM5 14h6v3a3 3 0 1 1-6 0zM14 8h3a3 3 0 1 1 0 6h-3zM14 14h3a3 3 0 1 1 0 6h-3z"/></svg>',
+    bootstrap: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>',
+    web: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+    export: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>',
+    rag: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+    step4_plugins: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>',
+    global: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'
+  };
+
+  var allFields = {};
+  var dirtyFields = {};
+
+  async function loadConfig() {
+    var container = $('cfgContainer');
+    if (container) container.innerHTML = '<div class="cfg-loading"><div class="loading-spinner"></div><div class="cfg-loading-text">加载配置中...</div></div>';
+    var r = await A.api('GET', '/api/system-config');
+    if (!r || r.error) {
+      if (container) container.innerHTML = '<div class="cfg-empty">' + esc((r && r.error) || '加载失败') + '</div>';
+      return;
+    }
+    allFields = r.config || r.fields || {};
+    // ★ 归一化：原生值→字符串，保证 dirty 比对一致；保留 null（占位符）与
+    //   list/dict 对象（前端按 JSON 渲染），避免 bool/int 字段一碰就标脏。
+    for (var _k in allFields) {
+      var _v = allFields[_k];
+      if (_v === null || _v === undefined) continue;
+      if (typeof _v === 'object') continue;
+      allFields[_k] = String(_v);
+    }
+    schemaData = r.schema || { groups: [] };
+    // 建立 key → item 索引（含后端下发的元数据与当前值）
+    itemMeta = {};
+    schemaData.groups.forEach(function(g) {
+      g.items.forEach(function(it) { itemMeta[it.key] = it; });
+    });
+    dirtyFields = {};
+    updateActionBar();
+    renderGroups();
+    // 字段计数 = schema 全部叶子项（与后端归一化分类一致）
+    var total = 0;
+    schemaData.groups.forEach(function(g) { total += g.items.length; });
+    if ($('fieldCount')) $('fieldCount').textContent = total;
+  }
+
+  function renderGroups() {
+    var container = $('cfgContainer');
+    if (!container) return;
+    if (!schemaData.groups.length) {
+      container.innerHTML = '<div class="cfg-empty">无配置字段</div>';
+      return;
+    }
+    var html = '';
+    schemaData.groups.forEach(function(g) {
+      if (!g.items.length) return;
+      var icon = ICON_SVGS[g.key.toLowerCase()] || ICON_SVGS.settings;
+      html += '<div class="cfg-group" data-group="' + esc(g.key) + '">'
+        + '<div class="cfg-group-header" data-toggle="' + esc(g.key) + '">'
+          + '<div class="cfg-group-icon">' + icon + '</div>'
+          + '<div class="cfg-group-title">' + esc(g.title) + '</div>'
+          + '<span class="cfg-group-count">' + g.items.length + ' 字段</span>'
+          + '<svg class="cfg-group-toggle" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>'
+        + '</div>'
+        + '<div class="cfg-group-body">'
+          + (g.desc ? '<div style="grid-column:1/-1;font-size:var(--fs-micro);color:var(--text-tertiary);margin-bottom:4px;">' + esc(g.desc) + '</div>' : '')
+          + g.items.map(function(it) { return renderField(it); }).join('')
+        + '</div>'
+      + '</div>';
+    });
+    container.innerHTML = html;
+    bindGroupToggles();
+    bindFieldInputs();
+    bindAdvancedFieldToggles();
+    bindAdvancedToggle();
+  }
+
+  function buildFieldInput(item, key, rawVal, ph) {
+    var val = (rawVal === null || rawVal === undefined) ? '' : String(rawVal);
+    var input;
+    // 枚举 → select
+    if (item.type === 'enum' && item.options) {
+      var opts = item.options.map(function(o) {
+        var sel = (o.value === val) ? ' selected' : '';
+        return '<option value="' + esc(o.value) + '"' + sel + '>' + esc(o.label) + '</option>';
+      }).join('');
+      input = '<select class="cfg-field-input" data-key="' + esc(key) + '">' + opts + '</select>';
+    }
+    // 布尔 → checkbox
+    else if (item.type === 'bool') {
+      var checked = (val === 'true' || val === 'True' || val === true) ? 'checked' : '';
+      input = '<input type="checkbox" class="cfg-field-input" data-key="' + esc(key) + '" ' + checked + ' />';
+    }
+    // 数值 → number
+    else if (item.type === 'int' || item.type === 'float') {
+      var step = item.type === 'float' ? ' step="0.01"' : '';
+      input = '<input type="number" class="cfg-field-input" data-key="' + esc(key) + '" value="' + esc(val) + '"' + step + ph + ' />';
+    }
+    // 列表/字典 → textarea（JSON）
+    else if (item.type === 'list' || item.type === 'dict') {
+      var txt = (typeof rawVal === 'object' && rawVal !== null) ? JSON.stringify(rawVal) : val;
+      input = '<textarea class="cfg-field-input" data-key="' + esc(key) + '"' + ph + '>' + esc(txt) + '</textarea>';
+    }
+    // 其余 → text / password（敏感字段）
+    else {
+      var type = item.secret ? 'password' : 'text';
+      input = '<input type="' + type + '" class="cfg-field-input" data-key="' + esc(key) + '" value="' + esc(val) + '"' + ph + ' />';
+    }
+    return input;
+  }
+
+  // 高级配置折叠行的「当前值」摘要（简洁，避免整片涌出）
+  function summarizeValue(item, val) {
+    if (item.secret) return '••••••';
+    if (item.type === 'bool') return (val === 'true' || val === 'True') ? '开' : '关';
+    var s = String(val == null ? '' : val);
+    if (s.length > 24) return s.substring(0, 24) + '…';
+    return s || '未设置（自动推断）';
+  }
+
+  function renderField(item) {
+    var key = item.key;
+    // ★ 已合并到流水线配置的字段：只读归档，不渲染输入控件（避免双源编辑）
+    if (item.redirected) {
+      var rawR = (key in allFields) ? allFields[key] : item.value;
+      return '<div class="cfg-field redirected">'
+        + '<span class="cfg-adv-badge">已合并</span>'
+        + '<span class="cfg-field-key">' + esc(item.label || key) + '</span>'
+        + '<span class="cfg-adv-summary">' + esc(summarizeValue(item, String(rawR == null ? '' : rawR))) + '</span>'
+        + '<a class="cfg-redirect-link tooltip-wide" href="#/quality/pipeline-config" data-tooltip="到 质量治理 → 流水线配置 的 rag/step4 分组编辑" data-tooltip-pos="left">→ 流水线配置</a>'
+      + '</div>';
+    }
+    // 当前生效值优先取 flat config，缺则取 schema 下发值
+    var rawVal = (key in allFields) ? allFields[key] : item.value;
+    var val = (rawVal === null || rawVal === undefined) ? '' : String(rawVal);
+    // ★ null 值字段（如 RAG_HYBRID_BM25_WEIGHT）显示占位符，让默认值可见
+    var ph = (rawVal === null) ? ' placeholder="null（自动推断）"' : '';
+    var input = buildFieldInput(item, key, rawVal, ph);
+    var help = item.help || '';
+    var label = item.label || key;
+    var ovr = item.is_overridden ? ' <span class="cfg-ovr-badge" title="已被 system_config 表覆盖">覆盖</span>' : '';
+    var helpLines = help.split('\n').join('<br>');
+    // ★ 高级配置：折叠为「高级徽标 + 字段名 + 当前值」一行，点击展开输入与说明
+    if (item.tier === 'advanced') {
+      return '<div class="cfg-field advanced">'
+        + '<button type="button" class="cfg-adv-toggle tooltip-wide" data-toggle-adv="' + esc(key) + '" data-tooltip="高级配置，点击展开/收起详细设置" data-tooltip-pos="right">'
+          + '<span class="cfg-adv-badge">高级</span>'
+          + '<span class="cfg-field-key">' + esc(label) + '</span>' + ovr
+          + '<span class="cfg-adv-summary">' + esc(summarizeValue(item, val)) + '</span>'
+          + '<svg class="cfg-adv-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>'
+        + '</button>'
+        + '<div class="cfg-adv-body">'
+          + (help ? '<div class="cfg-field-desc">' + helpLines + '</div>' : '')
+          + input
+        + '</div>'
+      + '</div>';
+    }
+    // ★ 常用配置：直接展开显示输入控件
+    return '<div class="cfg-field">'
+      + '<label class="cfg-field-label tooltip-wide" data-tooltip="' + esc(help) + '" data-tooltip-pos="right">'
+        + '<span class="cfg-field-key">' + esc(label) + '</span>' + ovr
+      + '</label>'
+      + input
+    + '</div>';
+  }
+
+  function bindGroupToggles() {
+    document.querySelectorAll('.cfg-group-header').forEach(function(h) {
+      h.addEventListener('click', function() {
+        var group = h.closest('.cfg-group');
+        if (group) group.classList.toggle('collapsed');
+      });
+    });
+  }
+
+  function bindFieldInputs() {
+    document.querySelectorAll('.cfg-field-input').forEach(function(inp) {
+      inp.addEventListener('input', function() { markDirty(inp); });
+      inp.addEventListener('change', function() { markDirty(inp); });
+    });
+  }
+
+  // 高级配置：逐项点击展开/收起
+  function bindAdvancedFieldToggles() {
+    document.querySelectorAll('.cfg-adv-toggle').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var field = btn.closest('.cfg-field.advanced');
+        if (field) field.classList.toggle('open');
+      });
+    });
+  }
+
+  // 「展开全部 / 收起全部」高级（辅助）：高级配置默认逐项折叠可见
+  function bindAdvancedToggle() {
+    var btn = document.getElementById('btnToggleAdvanced');
+    var container = document.getElementById('cfgContainer');
+    if (!btn || !container) return;
+    var advCount = document.querySelectorAll('.cfg-field.advanced').length;
+    btn.textContent = '展开全部高级 (' + advCount + ')';
+    var open = false;
+    btn.addEventListener('click', function() {
+      open = !open;
+      container.classList.toggle('all-open', open);
+      btn.textContent = open ? ('收起全部高级 (' + advCount + ')') : ('展开全部高级 (' + advCount + ')');
+    });
+  }
+
+  function markDirty(inp) {
+    var key = inp.getAttribute('data-key');
+    if (!key) return;
+    var newVal = inp.type === 'checkbox' ? (inp.checked ? 'true' : 'false') : inp.value;
+    var origVal = allFields[key] || '';
+    if (newVal !== origVal) {
+      dirtyFields[key] = newVal;
+      inp.classList.add('dirty');
+    } else {
+      delete dirtyFields[key];
+      inp.classList.remove('dirty');
+    }
+    updateActionBar();
+  }
+
+  function updateActionBar() {
+    var bar = $('actionBar');
+    var hint = $('dirtyHint');
+    if (!bar) return;
+    var count = Object.keys(dirtyFields).length;
+    if (count > 0) {
+      bar.style.display = 'flex';
+      if (hint) hint.textContent = '有 ' + count + ' 个未保存的修改';
+    } else {
+      bar.style.display = 'none';
+    }
+  }
+
+  async function doSaveConfig() {
+    var keys = Object.keys(dirtyFields);
+    if (keys.length === 0) { A.toast && A.toast('无修改需要保存', 'info'); return; }
+    var payload = { config: {} };
+    keys.forEach(function(k) { payload.config[k] = dirtyFields[k]; });
+    var r = await A.api('POST', '/api/system-config', payload);
+    if (r && (r.ok || r.success)) {
+      A.toast && A.toast('系统配置保存成功（' + keys.length + ' 字段）', 'success');
+      await loadConfig();
+    } else {
+      A.toast && A.toast((r && r.error) || '保存失败', 'error');
+    }
+  }
+
+  function saveConfig(btn) {
+    A.withBtnLoading(btn || $('btnSaveAll') || $('btnSaveConfig'), '保存中...', doSaveConfig);
+  }
+
+  function bindEvents() {
+    var btnReload = $('btnReloadConfig');
+    if (btnReload) btnReload.addEventListener('click', function() {
+      A.withBtnLoading(btnReload, '加载中...', loadConfig);
+    });
+    var btnSave = $('btnSaveConfig');
+    if (btnSave) btnSave.addEventListener('click', function() { saveConfig(this); });
+    var btnSaveAll = $('btnSaveAll');
+    if (btnSaveAll) btnSaveAll.addEventListener('click', function() { saveConfig(this); });
+    var btnDiscard = $('btnDiscard');
+    if (btnDiscard) btnDiscard.addEventListener('click', function() {
+      dirtyFields = {}; renderGroups(); updateActionBar();
+      A.toast && A.toast('已放弃修改', 'info');
+    });
+    window.addEventListener('beforeunload', function(e) {
+      if (Object.keys(dirtyFields).length > 0) {
+        e.preventDefault(); e.returnValue = '有未保存的配置修改，确定要离开吗？';
+      }
+    });
+  }
+
+  A._onAuthOk = function() {
+    A._renderSidebarUser();
+    A.applyPermissions();
+    loadConfig();
+    A._startStepBadgePolling();
+  };
+  if (A._currentUser) { loadConfig(); }
+  bindEvents();
+})();
+</script>
+{% endblock %}

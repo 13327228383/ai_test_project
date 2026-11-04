@@ -1,0 +1,672 @@
+{% extends "_layout_base.html" %}
+{% block title %}清除数据 — E2E 智能测试引擎{% endblock %}
+
+{% block breadcrumb %}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+清除数据
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn-topbar" id="btnRefresh" data-perm="file.clear">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+  刷新列表
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ════════════ 信息栏 ════════════ -->
+<div class="cf-info-bar">
+  <div class="cf-info-item">
+    <span class="cf-info-label">可清除项</span>
+    <span class="cf-info-value" id="totalCount">0</span>
+  </div>
+  <div class="cf-info-item">
+    <span class="cf-info-label">占用空间</span>
+    <span class="cf-info-value" id="totalSize">0 B</span>
+  </div>
+  <div class="cf-info-item">
+    <span class="cf-info-label">存储引擎</span>
+    <span class="cf-info-value" id="storageEngine">-</span>
+  </div>
+</div>
+
+<!-- ════════════ 警告横幅 ════════════ -->
+<div class="cf-warning-banner">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+  <span>此操作不可撤销，请谨慎操作</span>
+</div>
+
+<!-- ════════════ 主面板 ════════════ -->
+<div class="cf-panel">
+
+  <div class="cf-panel-header">
+    <div class="cf-section-title">可清除数据（按阶段分组）</div>
+    <div class="cf-deps-hint" id="depsHint">依赖关系：AI 生成 依赖 数据拉取；执行产物 依赖 AI 生成</div>
+  </div>
+
+  <div class="cf-empty-state" id="emptyState">加载中...</div>
+  <div class="cf-groups" id="groupsList"></div>
+
+  <!-- 底部操作栏 -->
+  <div class="cf-action-row">
+    <button class="cf-btn-ghost" id="btnSelectAll" type="button">全选</button>
+    <button class="cf-btn-ghost" id="btnDeselectAll" type="button">取消全选</button>
+    <div class="cf-selected-info">
+      已选 <span id="selectedCount">0</span> 项 / 共 <span id="totalItemsCount">0</span> 项
+    </div>
+    <button class="cf-btn-danger" id="btnConfirmClear" type="button" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      确认清除选中
+    </button>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ════════════ 信息栏 ════════════ */
+.cf-info-bar {
+  display: flex;
+  gap: 32px;
+  padding: 16px 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.cf-info-item { display: flex; flex-direction: column; gap: 4px; }
+.cf-info-label { font-size: var(--fs-small); color: var(--text-secondary); }
+.cf-info-value {
+  font-size: var(--fs-h3); font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+.cf-info-primary { color: var(--color-primary); }
+
+/* ════════════ 警告横幅 ════════════ */
+.cf-warning-banner {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px;
+  background: var(--state-error-soft);
+  border: 1px solid var(--state-error);
+  border-radius: var(--radius-md);
+  color: var(--state-error-text);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  margin-bottom: 16px;
+}
+.cf-warning-banner svg { color: var(--state-error); flex-shrink: 0; }
+
+/* ════════════ 主面板 ════════════ */
+.cf-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--surface-shadow-float);
+  padding: 24px;
+}
+.cf-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-default);
+}
+.cf-section-title {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.cf-deps-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+}
+
+/* ════════════ Groups ════════════ */
+.cf-empty-state {
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: var(--fs-body);
+}
+.cf-groups { display: flex; flex-direction: column; gap: 12px; }
+
+.cf-group {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+.cf-group-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 20px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+}
+.cf-group-header:hover { background: var(--border-faint); }
+.cf-group-checkbox {
+  width: 18px; height: 18px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+  flex-shrink: 0;
+}
+.cf-group-chevron {
+  color: var(--text-tertiary);
+  transition: transform 0.2s;
+}
+.cf-group.expanded .cf-group-chevron { transform: rotate(180deg); }
+.cf-group-name {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.cf-group-meta {
+  display: flex; gap: 12px;
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+}
+.cf-badge {
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--border-default);
+  color: var(--text-secondary);
+}
+.cf-badge-size {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+.cf-group-deps {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  padding: 0 20px 8px 50px;
+  font-style: italic;
+}
+
+.cf-group-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+.cf-group.expanded .cf-group-body {
+  max-height: 2000px;
+  overflow-y: auto;
+}
+
+.cf-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 20px 10px 50px;
+  border-top: 1px solid var(--border-default);
+  transition: background 0.1s;
+}
+.cf-item:hover { background: var(--border-faint); }
+.cf-item-checkbox {
+  width: 16px; height: 16px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+  flex-shrink: 0;
+}
+.cf-item-info { flex: 1; min-width: 0; }
+.cf-item-name {
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  color: var(--text-primary);
+  word-break: break-all;
+}
+.cf-item-desc {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+.cf-item-meta {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  display: flex; gap: 12px;
+  flex-shrink: 0;
+}
+.cf-item-source {
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background: var(--border-default);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+}
+
+.cf-children-toggle {
+  font-size: var(--fs-xs);
+  color: var(--color-primary);
+  cursor: pointer;
+  text-decoration: underline;
+  flex-shrink: 0;
+}
+.cf-children-list {
+  padding: 8px 20px 12px 70px;
+  border-top: 1px solid var(--border-default);
+  background: var(--bg-overlay);
+  display: none;
+}
+.cf-children-list.show { display: block; }
+.cf-child-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 0;
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+.cf-child-checkbox {
+  width: 14px; height: 14px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+
+/* ════════════ Action Row ════════════ */
+.cf-action-row {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-default);
+}
+.cf-btn-ghost {
+  height: var(--control-height-lg);
+  padding: 0 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+  font-family: var(--font-sans);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cf-btn-ghost:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+.cf-selected-info {
+  margin-left: auto;
+  margin-right: 8px;
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+}
+.cf-selected-info span {
+  color: var(--color-primary);
+  font-weight: var(--fw-semibold);
+  font-family: var(--font-mono);
+}
+.cf-btn-danger {
+  height: var(--control-height-lg);
+  padding: 0 24px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--state-error);
+  color: var(--text-on-color);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.cf-btn-danger:hover:not(:disabled) {
+  background: var(--state-error-hover);
+  box-shadow: 0 0 16px var(--state-error-soft);
+}
+.cf-btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+'use strict';
+
+const A = window._A;
+if (!A) { console.error('[clear-files] _A 未初始化'); return; }
+const $ = A.$, escHtml = A.escHtml, escAttr = A.escAttr, api = A.api, appendLog = A.appendLog;
+
+// ── 状态 ──
+const state = {
+  groups: [],          // [{name, group_key, items, depends_on_group}]
+  expanded: {},        // {group_key: bool}
+  childrenLoaded: {},  // {item_path: bool}
+  childrenData: {},    // {item_path: [child_items]}
+  clearing: false,
+};
+
+// ── 元素引用 ──
+const els = {
+  curProject: $('curProject'),
+  totalCount: $('totalCount'),
+  totalSize: $('totalSize'),
+  storageEngine: $('storageEngine'),
+  groupsList: $('groupsList'),
+  emptyState: $('emptyState'),
+  btnSelectAll: $('btnSelectAll'),
+  btnDeselectAll: $('btnDeselectAll'),
+  selectedCount: $('selectedCount'),
+  totalItemsCount: $('totalItemsCount'),
+  btnConfirmClear: $('btnConfirmClear'),
+  btnRefresh: $('btnRefresh'),
+};
+
+// ════════════ 工具函数 ════════════
+
+function formatSize(bytes) {
+  if (bytes == null) return '-';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+}
+
+function formatTime(ts) {
+  if (!ts) return '-';
+  return String(ts).replace('T', ' ').substring(0, 19);
+}
+
+function getAllItems() {
+  const all = [];
+  state.groups.forEach(g => {
+    (g.items || []).forEach(item => all.push({ ...item, group_key: g.group_key }));
+  });
+  return all;
+}
+
+function getSelectedPaths() {
+  const paths = [];
+  // 组级选中
+  state.groups.forEach(g => {
+    const groupCb = document.querySelector('.cf-group-checkbox[data-group="' + g.group_key + '"]');
+    if (groupCb && groupCb.checked) {
+      (g.items || []).forEach(item => paths.push(item.path));
+    }
+  });
+  // 项级选中（未选组时）
+  document.querySelectorAll('.cf-item-checkbox[data-path]').forEach(cb => {
+    if (cb.checked) {
+      const path = cb.dataset.path;
+      if (!paths.includes(path)) paths.push(path);
+    }
+  });
+  // 子项选中
+  document.querySelectorAll('.cf-child-checkbox[data-path]').forEach(cb => {
+    if (cb.checked) {
+      const path = cb.dataset.path;
+      if (!paths.includes(path)) paths.push(path);
+    }
+  });
+  return paths;
+}
+
+function updateSelectedCount() {
+  const paths = getSelectedPaths();
+  els.selectedCount.textContent = paths.length;
+  els.btnConfirmClear.disabled = paths.length === 0 || state.clearing;
+}
+
+function updateTotalItemsCount() {
+  const all = getAllItems();
+  els.totalItemsCount.textContent = all.length;
+}
+
+// ════════════ 数据加载 ════════════
+
+async function loadClearableFiles() {
+  els.emptyState.style.display = 'block';
+  els.emptyState.textContent = '加载中...';
+  try {
+    const d = await api('GET', '/api/clearable-files');
+    if (!d || !d.ok) {
+      els.emptyState.textContent = '加载失败: ' + (d && d.error ? d.error : '未知');
+      return;
+    }
+    state.groups = d.groups || [];
+    els.totalCount.textContent = d.total_count || 0;
+    els.totalSize.textContent = formatSize(d.total_size || 0);
+    els.storageEngine.textContent = d.storage_engine || '-';
+    if (A._currentProject) {
+      if (els.curProject) els.curProject.textContent = A._currentProjectName || A._currentProject || '-';
+    }
+    renderGroups();
+    updateTotalItemsCount();
+  } catch (e) {
+    els.emptyState.textContent = '加载异常: ' + String(e);
+    appendLog('⚠️ 加载可清除文件失败: ' + String(e));
+  }
+}
+
+function renderGroups() {
+  if (state.groups.length === 0) {
+    els.emptyState.style.display = 'block';
+    els.emptyState.textContent = '暂无可清除数据';
+    return;
+  }
+  els.emptyState.style.display = 'none';
+  els.groupsList.innerHTML = state.groups.map(g => {
+    const itemCount = (g.items || []).length;
+    const totalBytes = (g.items || []).reduce((sum, it) => sum + (it.size || 0), 0);
+    const depsHtml = g.depends_on_group
+      ? '<div class="cf-group-deps">依赖: ' + escHtml(g.depends_on_group) + '</div>'
+      : '';
+    return '<div class="cf-group" data-group="' + escAttr(g.group_key) + '">' +
+      '<div class="cf-group-header" data-group="' + escAttr(g.group_key) + '">' +
+        '<input type="checkbox" class="cf-group-checkbox" data-group="' + escAttr(g.group_key) + '">' +
+        '<svg class="cf-group-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>' +
+        '<span class="cf-group-name">' + escHtml(g.name) + '</span>' +
+        '<div class="cf-group-meta">' +
+          '<span class="cf-badge">' + itemCount + ' 项</span>' +
+          '<span class="cf-badge cf-badge-size">' + formatSize(totalBytes) + '</span>' +
+        '</div>' +
+      '</div>' +
+      depsHtml +
+      '<div class="cf-group-body" id="body-' + escAttr(g.group_key) + '">' +
+        renderItems(g.items || [], g.group_key) +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  // 绑定事件
+  els.groupsList.querySelectorAll('.cf-group-header').forEach(header => {
+    header.addEventListener('click', function(e) {
+      // 防止 checkbox 点击触发折叠
+      if (e.target.classList.contains('cf-group-checkbox')) return;
+      const gk = this.dataset.group;
+      state.expanded[gk] = !state.expanded[gk];
+      const groupEl = this.closest('.cf-group');
+      groupEl.classList.toggle('expanded', state.expanded[gk]);
+    });
+  });
+
+  els.groupsList.querySelectorAll('.cf-group-checkbox').forEach(cb => {
+    cb.addEventListener('click', function(e) { e.stopPropagation(); });
+    cb.addEventListener('change', function() {
+      const gk = this.dataset.group;
+      const groupEl = this.closest('.cf-group');
+      groupEl.querySelectorAll('.cf-item-checkbox').forEach(itemCb => {
+        itemCb.checked = this.checked;
+      });
+      // 同时同步子项 checkbox
+      groupEl.querySelectorAll('.cf-child-checkbox').forEach(childCb => {
+        childCb.checked = this.checked;
+      });
+      updateSelectedCount();
+    });
+  });
+
+  els.groupsList.querySelectorAll('.cf-item-checkbox').forEach(cb => {
+    cb.addEventListener('change', updateSelectedCount);
+  });
+
+  els.groupsList.querySelectorAll('.cf-children-toggle').forEach(toggle => {
+    toggle.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const path = this.dataset.path;
+      const table = this.dataset.table;
+      toggleChildren(path, table);
+    });
+  });
+}
+
+function renderItems(items, groupKey) {
+  if (items.length === 0) {
+    return '<div style="padding: 16px 20px 16px 50px; color: var(--text-tertiary); font-size: var(--fs-small);">暂无数据</div>';
+  }
+  return items.map(item => {
+    const hasChildren = item.has_children;
+    const childrenToggle = hasChildren
+      ? '<span class="cf-children-toggle" data-path="' + escAttr(item.path) + '" data-table="' + escAttr(item.children_key || item.mysql_table || '') + '">查看子项</span>'
+      : '';
+    return '<div class="cf-item">' +
+      '<input type="checkbox" class="cf-item-checkbox" data-path="' + escAttr(item.path) + '">' +
+      '<div class="cf-item-info">' +
+        '<div class="cf-item-name">' + escHtml(item.name) + '</div>' +
+        (item.desc ? '<div class="cf-item-desc">' + escHtml(item.desc) + '</div>' : '') +
+      '</div>' +
+      '<div class="cf-item-meta">' +
+        (item.source ? '<span class="cf-item-source">' + escHtml(item.source) + '</span>' : '') +
+        '<span>' + formatSize(item.size) + '</span>' +
+        '<span>' + formatTime(item.mtime) + '</span>' +
+      '</div>' +
+      childrenToggle +
+    '</div>' +
+    (hasChildren ? '<div class="cf-children-list" id="children-' + escAttr(item.path).replace(/[^a-zA-Z0-9]/g, '_') + '"></div>' : '');
+  }).join('');
+}
+
+async function toggleChildren(itemPath, table) {
+  const safeId = 'children-' + itemPath.replace(/[^a-zA-Z0-9]/g, '_');
+  const listEl = document.getElementById(safeId);
+  if (!listEl) return;
+  if (state.expanded[itemPath]) {
+    listEl.classList.remove('show');
+    state.expanded[itemPath] = false;
+    return;
+  }
+  if (state.childrenLoaded[itemPath]) {
+    listEl.classList.add('show');
+    state.expanded[itemPath] = true;
+    return;
+  }
+  // 懒加载
+  listEl.innerHTML = '<div style="padding: 8px; color: var(--text-tertiary);">加载中...</div>';
+  listEl.classList.add('show');
+  state.expanded[itemPath] = true;
+  try {
+    const d = await api('GET', '/api/clearable-files/children?table=' + encodeURIComponent(table));
+    if (!d || !d.ok) {
+      listEl.innerHTML = '<div style="padding: 8px; color: var(--state-error);">加载失败</div>';
+      return;
+    }
+    state.childrenLoaded[itemPath] = true;
+    state.childrenData[itemPath] = d.children || [];
+    renderChildren(listEl, itemPath, d.children || []);
+  } catch (e) {
+    listEl.innerHTML = '<div style="padding: 8px; color: var(--state-error);">加载异常: ' + escHtml(String(e)) + '</div>';
+  }
+}
+
+function renderChildren(listEl, parentPath, children) {
+  if (children.length === 0) {
+    listEl.innerHTML = '<div style="padding: 8px; color: var(--text-tertiary);">无子项</div>';
+    return;
+  }
+  listEl.innerHTML = children.map(c => {
+    const path = c.path || (parentPath + '/' + (c.id || c.name || ''));
+    return '<div class="cf-child-item">' +
+      '<input type="checkbox" class="cf-child-checkbox" data-path="' + escAttr(path) + '">' +
+      '<span>' + escHtml(c.name || c.id || '-') + '</span>' +
+      '<span style="margin-left: auto;">' + formatSize(c.size) + '</span>' +
+      '<span>' + formatTime(c.mtime) + '</span>' +
+    '</div>';
+  }).join('');
+  listEl.querySelectorAll('.cf-child-checkbox').forEach(cb => {
+    cb.addEventListener('change', updateSelectedCount);
+  });
+}
+
+// ════════════ 选择控制 ════════════
+
+function selectAll() {
+  document.querySelectorAll('.cf-group-checkbox').forEach(cb => { cb.checked = true; });
+  document.querySelectorAll('.cf-item-checkbox').forEach(cb => { cb.checked = true; });
+  document.querySelectorAll('.cf-child-checkbox').forEach(cb => { cb.checked = true; });
+  updateSelectedCount();
+}
+
+function deselectAll() {
+  document.querySelectorAll('.cf-group-checkbox').forEach(cb => { cb.checked = false; });
+  document.querySelectorAll('.cf-item-checkbox').forEach(cb => { cb.checked = false; });
+  document.querySelectorAll('.cf-child-checkbox').forEach(cb => { cb.checked = false; });
+  updateSelectedCount();
+}
+
+// ════════════ 执行清除 ════════════
+
+async function confirmClear() {
+  const paths = getSelectedPaths();
+  if (paths.length === 0 || state.clearing) return;
+  if (!(await A.confirm('确认清除选中的 ' + paths.length + ' 项数据？此操作不可撤销！', { danger: true }))) return;
+  state.clearing = true;
+  els.btnConfirmClear.disabled = true;
+  els.btnConfirmClear.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> 清除中...';
+
+  try {
+    const d = await api('POST', '/api/clear-files', { files: paths });
+    if (d && d.ok) {
+      const cleared = d.cleared || 0;
+      const errors = d.errors || 0;
+      appendLog('✅ 清除完成: 成功 ' + cleared + ' 项, 失败 ' + errors + ' 项');
+      A.toast('清除完成\n成功: ' + cleared + ' 项\n失败: ' + errors + ' 项', 'error');
+      // 重新加载
+      await loadClearableFiles();
+    } else {
+      A.toast('清除失败: ' + (d && d.error ? d.error : '未知错误'), 'error');
+      appendLog('⚠️ 清除失败: ' + (d && d.error ? d.error : '未知'));
+    }
+  } catch (e) {
+    A.toast('清除异常: ' + String(e), 'error');
+    appendLog('⚠️ 清除异常: ' + String(e));
+  } finally {
+    state.clearing = false;
+    els.btnConfirmClear.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> 确认清除选中';
+    updateSelectedCount();
+  }
+}
+
+// ════════════ 事件 ════════════
+
+function bindEvents() {
+  els.btnSelectAll.addEventListener('click', selectAll);
+  els.btnDeselectAll.addEventListener('click', deselectAll);
+  els.btnConfirmClear.addEventListener('click', confirmClear);
+  els.btnRefresh.addEventListener('click', loadClearableFiles);
+}
+
+// ════════════ 入口 ════════════
+
+A._onAuthOk = function() {
+  if (A._renderSidebarUser) A._renderSidebarUser();
+  if (A.applyPermissions) A.applyPermissions();
+  loadClearableFiles();
+  A._startStepBadgePolling();
+};
+
+bindEvents();
+
+if (A._currentUser) {
+  loadClearableFiles();
+}
+
+})();
+</script>
+{% endblock %}
